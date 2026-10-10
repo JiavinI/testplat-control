@@ -32,6 +32,17 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 
+// jsdom 未实现伪元素 getComputedStyle，antd 会刷警告；提供最小 stub
+const originalGetComputedStyle = window.getComputedStyle.bind(window)
+window.getComputedStyle = ((elt: Element, pseudoElt?: string | null) => {
+  if (pseudoElt) {
+    return {
+      getPropertyValue: () => '',
+    } as unknown as CSSStyleDeclaration
+  }
+  return originalGetComputedStyle(elt)
+}) as typeof window.getComputedStyle
+
 afterEach(() => {
   cleanup()
 })

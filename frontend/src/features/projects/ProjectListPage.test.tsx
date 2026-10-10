@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -35,19 +35,28 @@ function renderPage() {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   return render(
-    <ConfigProvider>
+    // motion:false 关掉 antd 进出场动画，避免 jsdom 下 Modal/路由切换拖到默认 5s 超时
+    <ConfigProvider theme={{ token: { motion: false } }}>
       <AntApp>
         <QueryClientProvider client={client}>
           <MemoryRouter initialEntries={['/projects']}>
             <Routes>
               <Route path="/projects" element={<ProjectListPage />} />
-              <Route path="/projects/:projectId" element={<div>workspace</div>} />
+              <Route
+                path="/projects/:projectId"
+                element={<div data-testid="workspace-route">workspace</div>}
+              />
             </Routes>
           </MemoryRouter>
         </QueryClientProvider>
       </AntApp>
     </ConfigProvider>,
   )
+}
+
+function setInputValue(element: HTMLElement, value: string) {
+  // 直接改受控值并触发 change，比 paste/type 更快且对 antd Form 可靠
+  fireEvent.change(element, { target: { value } })
 }
 
 beforeEach(() => {
@@ -78,33 +87,49 @@ describe('ProjectListPage CRUD', () => {
     expect(screen.queryByRole('columnheader', { name: /最后运行/ })).not.toBeInTheDocument()
   })
 
-  it('创建成功后进入工作台路由', async () => {
-    const user = userEvent.setup()
-    listProjects.mockResolvedValue([])
-    createProject.mockResolvedValue({ ...sample, id: 'new-1', name: 'beta' })
-    renderPage()
+  it(
+    '创建成功后进入工作台路由',
+    async () => {
+      const user = userEvent.setup({ delay: null })
+      listProjects.mockResolvedValue([])
+      createProject.mockImplementation(async (payload) => ({
+        ...sample,
+        id: 'new-1',
+        name: (payload as { name: string }).name,
+        assets_root: (payload as { assets_root: string }).assets_root,
+        config_root: (payload as { config_root: string }).config_root,
+      }))
+      renderPage()
 
-    await user.click(await screen.findByRole('button', { name: /新建项目/ }))
-    const dialog = await screen.findByRole('dialog')
-    await user.type(within(dialog).getByLabelText(/项目名称/), 'beta')
-    await user.type(within(dialog).getByLabelText(/资产目录/), '/assets/beta')
-    await user.type(within(dialog).getByLabelText(/配置目录/), '/config/beta')
-    await user.click(within(dialog).getByRole('button', { name: /确\s*定|OK/i }))
+      await screen.findByText(/还没有项目/)
+      // 空态下页头与 Empty 各有一个「新建项目」，避免 findByRole 多匹配抛错
+      const createButtons = screen.getAllByRole('button', { name: /新建项目/ })
+      await user.click(createButtons[0])
 
-    await waitFor(() => {
-      expect(createProject).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'beta',
-          assets_root: '/assets/beta',
-          config_root: '/config/beta',
-        }),
-      )
-    })
-    expect(await screen.findByText('workspace')).toBeInTheDocument()
-  })
+      const dialog = await screen.findByRole('dialog')
+      setInputValue(within(dialog).getByLabelText(/项目名称/), 'beta')
+      setInputValue(within(dialog).getByLabelText(/资产目录/), '/assets/beta')
+      setInputValue(within(dialog).getByLabelText(/配置目录/), '/config/beta')
+
+      await user.click(within(dialog).getByRole('button', { name: /确\s*定|OK/i }))
+
+      await waitFor(() => {
+        expect(createProject).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'beta',
+            assets_root: '/assets/beta',
+            config_root: '/config/beta',
+          }),
+        )
+      })
+
+      expect(await screen.findByTestId('workspace-route')).toBeInTheDocument()
+    },
+    15_000,
+  )
 
   it('删除需二次确认', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     listProjects.mockResolvedValue([sample])
     deleteProject.mockResolvedValue({ message: 'Project deleted successfully' })
     renderPage()
@@ -113,7 +138,6 @@ describe('ProjectListPage CRUD', () => {
     await user.click(screen.getByRole('button', { name: /删除项目 alpha/ }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent(/确认删除该项目/)
-    // 未点确认前不应调用删除 API
     expect(deleteProject).not.toHaveBeenCalled()
     await user.click(within(dialog).getByRole('button', { name: /删\s*除/ }))
 
@@ -123,7 +147,7 @@ describe('ProjectListPage CRUD', () => {
   })
 
   it('加载失败可重试', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     listProjects
       .mockRejectedValueOnce(new Error('boom'))
       .mockResolvedValueOnce([sample])
