@@ -4,9 +4,11 @@
  * 假设前端 http://127.0.0.1:5173 与后端 :8000 已启动（可用 FakeEngine）。
  *   pnpm exec node scripts/e2e-gate.mjs
  *
- * 允许（门禁主动构造）：
+ * 允许：
  *   - POST /api/projects/:id/assets/:asset/run → 422（门禁主动注入的错误展示用例）
- *   - 对应的 "Failed to load resource … 422" console
+ *   - POST/PUT /api/projects → 409（项目名冲突，前端表单已展示 detail）
+ *   - DELETE /api/projects/:id → 409（有执行记录不可删，前端已 message 提示）
+ *   - 对应的 "Failed to load resource … 422/409" console
  * 其余 console error / pageerror / 失败请求 / 横向溢出 → 门禁失败。
  */
 
@@ -32,7 +34,7 @@ function makeProjectName(suffix) {
 }
 
 function isAllowedFailedRequest(entry) {
-  // 失败请求统一记录为“状态码 方法 URL”，这里仅放行门禁主动构造的响应。
+  // 失败请求统一记录为“状态码 方法 URL”。
   const m = String(entry).match(/^(\d+)\s+(\S+)\s+(\S+)/)
   if (!m) return false
   const [, status, method, url] = m
@@ -43,13 +45,23 @@ function isAllowedFailedRequest(entry) {
   ) {
     return true
   }
+  // 后端 #33：重名与有执行记录删除均为 409；UI 已展示 detail，不视为门禁失败。
+  if (status === '409' && method === 'POST' && /\/api\/projects\/?$/.test(url)) {
+    return true
+  }
+  if (status === '409' && method === 'PUT' && /\/api\/projects\/[^/?]+$/.test(url)) {
+    return true
+  }
+  if (status === '409' && method === 'DELETE' && /\/api\/projects\/[^/?]+$/.test(url)) {
+    return true
+  }
   return false
 }
 
 function isAllowedConsoleError(text) {
   if (
     text.includes('Failed to load resource') &&
-    text.includes('422')
+    (text.includes('422') || text.includes('409'))
   ) {
     return true
   }

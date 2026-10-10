@@ -33,10 +33,19 @@ export function ProjectListPage() {
   const updateMutation = useUpdateProject(editing?.id ?? '')
 
   const handleCreate = async (values: ProjectCreate) => {
-    const created = await createMutation.mutateAsync(values)
-    message.success('项目已创建')
-    setCreateOpen(false)
-    navigate(`/projects/${created.id}`)
+    try {
+      const created = await createMutation.mutateAsync(values)
+      message.success('项目已创建')
+      setCreateOpen(false)
+      navigate(`/projects/${created.id}`)
+    } catch (error) {
+      // 409 重名等：交给表单展示 detail；其它错误 toast 后继续抛出
+      if (error instanceof ApiHttpError) {
+        throw error
+      }
+      message.error(formatErrorMessage(error))
+      throw error
+    }
   }
 
   const handleEdit = async (values: ProjectCreate) => {
@@ -70,7 +79,7 @@ export function ProjectListPage() {
           await deleteMutation.mutateAsync(project.id)
           message.success(`已删除「${project.name}」`)
         } catch (error) {
-          // 已提示业务错误（如有执行记录不可删的 500）；不再向外抛，避免 pageerror
+          // 已提示业务错误（如有执行记录不可删的 409）；不再向外抛，避免 pageerror
           message.error(formatErrorMessage(error))
         }
       },
