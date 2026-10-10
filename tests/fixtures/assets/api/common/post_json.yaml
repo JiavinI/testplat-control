@@ -1,0 +1,18 @@
+# POST JSON 请求测试
+id: api.common.post_json
+name: POST JSON 数据
+desc: 测试 POST 请求发送 JSON 数据
+host: httpbin
+method: POST
+url: /post
+request:
+  type: json
+  inputs:
+    username: str
+    email: str
+  body:
+    username: "${username}"
+    email: "${email}"
+success:
+  path: $.json.username
+  value: "${username}"
