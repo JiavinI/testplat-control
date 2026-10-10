@@ -1,0 +1,10 @@
+id: api.common.health_check
+name: 健康检查
+desc: 集成测试用无参数接口
+host: httpbin
+method: GET
+url: /health
+request:
+  inputs: {}
+success:
+  status_code: 200
