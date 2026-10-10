@@ -12,14 +12,19 @@ from uuid import uuid4
 
 from testplat_control.database.models import ExecutionRecord, Project
 
-# 动态导入 testplat-engine
+# 动态导入 testplat-engine（本地 sibling 仓库，未安装时不阻断控制面启动）
 _engine_path = Path(__file__).parent.parent.parent.parent / "testplat-engine" / "src"
 if str(_engine_path) not in sys.path:
     sys.path.insert(0, str(_engine_path))
 
-from testplat_engine import run_api
-from testplat_engine.adapters.filesystem import Registry
-from testplat_engine.domain.result import ApiResult
+try:
+    from testplat_engine import run_api
+    from testplat_engine.adapters.filesystem import Registry
+    from testplat_engine.domain.result import ApiResult
+except ImportError:
+    run_api = None
+    Registry = None
+    ApiResult = None
 
 
 class EngineAdapter:
@@ -78,7 +83,13 @@ class EngineAdapter:
             ... )
             >>> assert result.is_success
             >>> assert record.status == "success"
+
+        Raises:
+            RuntimeError: 未安装 testplat-engine，无法执行
         """
+        if run_api is None or Registry is None or ApiResult is None:
+            raise RuntimeError("testplat-engine is not installed; cannot execute API")
+
         # 1. 创建资产注册表
         registry = Registry(assets_root=Path(project.assets_root))
 
@@ -115,7 +126,7 @@ class EngineAdapter:
                 ),
                 "error": result.error,
             }
-            record.result_json = json.dumps(result_dict, default=str)
+            record.result_json = json.dumps(result_dict, default=str, ensure_ascii=False)
 
             return result, record
 
@@ -131,7 +142,7 @@ class EngineAdapter:
                 "response": None,
                 "error": error_msg,
             }
-            record.result_json = json.dumps(result_dict)
+            record.result_json = json.dumps(result_dict, ensure_ascii=False)
 
             # 返回失败的 ApiResult
             failed_result = ApiResult.failed(error=error_msg)

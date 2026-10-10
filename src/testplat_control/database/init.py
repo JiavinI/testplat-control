@@ -2,6 +2,7 @@
 from sqlalchemy import create_engine
 
 from .models import Base
+from .session import prepare_engine
 
 
 def init_database(db_path: str) -> None:
@@ -12,6 +13,6 @@ def init_database(db_path: str) -> None:
     Args:
         db_path: SQLite 数据库文件路径
     """
-    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    engine = prepare_engine(create_engine(f"sqlite:///{db_path}", echo=False))
     Base.metadata.create_all(engine)
     engine.dispose()
