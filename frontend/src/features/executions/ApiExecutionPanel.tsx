@@ -93,6 +93,7 @@ function ApiExecutionPanelReady({
   return (
     <Card
       size="small"
+      className="tp-pane-enter"
       title={
         <Space>
           <Typography.Text>执行</Typography.Text>
@@ -108,6 +109,7 @@ function ApiExecutionPanelReady({
       <Space style={{ marginTop: 8 }}>
         <Button
           type="primary"
+          className="tp-run-btn"
           icon={<PlayCircleOutlined />}
           loading={submitting}
           disabled={submitting}
@@ -132,13 +134,17 @@ function ApiExecutionPanelReady({
       ) : null}
 
       {runResult ? (
-        <>
+        <div
+          key={runResult.record_id}
+          className="tp-result-flash"
+          data-testid="execution-result-wrap"
+        >
           <Divider style={{ margin: '16px 0 12px' }} />
           <Typography.Title level={5} style={{ marginTop: 0 }}>
             执行结果
           </Typography.Title>
           <ExecutionResultCard result={runResult} />
-        </>
+        </div>
       ) : null}
     </Card>
   )

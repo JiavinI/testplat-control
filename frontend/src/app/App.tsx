@@ -8,29 +8,29 @@ import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
 
 const queryClient = createAppQueryClient()
 
-/** C3 暖沙工作室：暖灰沙底 + 赤陶强调，浅色长时操作友好 */
-const warmSandTheme = {
+/** P2 品牌编辑感：石色画布 + 白卡片 + 鼠尾草绿强调，产品平台而非工具 HUD。ConfigProvider 保持 antd 默认 motion；额外克制动效见 styles.css。 */
+const editorialBrandTheme = {
   token: {
-    colorPrimary: '#c2410c',
-    colorInfo: '#c2410c',
-    colorSuccess: '#3f6212',
-    colorWarning: '#a16207',
+    colorPrimary: '#6b7f6a',
+    colorInfo: '#6b7f6a',
+    colorSuccess: '#4d7c57',
+    colorWarning: '#b45309',
     colorError: '#b91c1c',
-    colorBgLayout: '#f5efe6',
-    colorBgContainer: '#fffdf8',
-    colorBgElevated: '#fffdf8',
-    colorBorder: '#e7e0d5',
-    colorBorderSecondary: '#efe8dc',
-    colorText: '#292524',
+    colorBgLayout: '#fafaf9',
+    colorBgContainer: '#ffffff',
+    colorBgElevated: '#ffffff',
+    colorBorder: '#e7e5e4',
+    colorBorderSecondary: '#f5f5f4',
+    colorText: '#1c1917',
     colorTextSecondary: '#78716c',
     colorTextTertiary: '#a8a29e',
-    colorLink: '#c2410c',
-    colorLinkHover: '#9a3412',
-    borderRadius: 10,
-    borderRadiusLG: 14,
-    borderRadiusSM: 8,
+    colorLink: '#6b7f6a',
+    colorLinkHover: '#5a6b59',
+    borderRadius: 12,
+    borderRadiusLG: 16,
+    borderRadiusSM: 10,
     fontSize: 14,
-    fontSizeHeading1: 36,
+    fontSizeHeading1: 38,
     fontSizeHeading2: 28,
     fontSizeHeading3: 22,
     fontSizeHeading4: 20,
@@ -39,42 +39,46 @@ const warmSandTheme = {
     controlHeight: 34,
     controlHeightSM: 28,
     controlHeightLG: 40,
-    padding: 14,
-    paddingSM: 10,
-    paddingLG: 20,
-    margin: 14,
+    padding: 16,
+    paddingSM: 12,
+    paddingLG: 24,
+    margin: 16,
     boxShadow:
-      '0 1px 2px rgba(41, 37, 36, 0.04), 0 4px 12px rgba(41, 37, 36, 0.06)',
+      '0 1px 2px rgba(28, 25, 23, 0.03), 0 4px 12px rgba(28, 25, 23, 0.04)',
     boxShadowSecondary:
-      '0 1px 2px rgba(41, 37, 36, 0.05), 0 6px 16px rgba(41, 37, 36, 0.08)',
+      '0 1px 2px rgba(28, 25, 23, 0.04), 0 6px 16px rgba(28, 25, 23, 0.06)',
     fontFamily:
       "'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif",
   },
   components: {
     Layout: {
       headerHeight: 56,
-      headerBg: '#44403c',
-      bodyBg: '#f5efe6',
-      siderBg: '#44403c',
+      headerBg: '#ffffff',
+      bodyBg: '#fafaf9',
+      siderBg: '#ffffff',
     },
     Card: {
-      paddingLG: 16,
-      borderRadiusLG: 14,
+      paddingLG: 20,
+      borderRadiusLG: 16,
     },
     Table: {
       cellPaddingBlockSM: 8,
       cellPaddingInlineSM: 10,
-      headerBg: '#faf6f0',
-      rowHoverBg: '#faf6f0',
+      headerBg: '#fafaf9',
+      rowHoverBg: '#f5f5f4',
     },
     Button: {
-      borderRadius: 10,
-      primaryShadow: '0 2px 6px rgba(194, 65, 12, 0.28)',
+      borderRadius: 12,
+      primaryShadow: '0 2px 6px rgba(107, 127, 106, 0.22)',
+      colorPrimaryHover: '#5a6b59',
+      colorPrimaryActive: '#4f5f4e',
     },
     Menu: {
-      darkItemBg: '#44403c',
-      darkSubMenuItemBg: '#3f3a36',
-      darkItemSelectedBg: '#c2410c',
+      itemBg: '#ffffff',
+      subMenuItemBg: '#fafaf9',
+      itemSelectedBg: 'rgba(107, 127, 106, 0.12)',
+      itemSelectedColor: '#5a6b59',
+      itemHoverBg: '#f5f5f4',
     },
     Typography: {
       titleMarginBottom: '0.35em',
@@ -88,7 +92,7 @@ export function App() {
     <ConfigProvider
       locale={zhCN}
       componentSize="middle"
-      theme={warmSandTheme}
+      theme={editorialBrandTheme}
     >
       <AntApp>
         <QueryClientProvider client={queryClient}>

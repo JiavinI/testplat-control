@@ -140,9 +140,10 @@ export function ProjectWorkspacePage() {
       }}
     >
       <section
+        key={selectedFromTree?.id ?? 'empty'}
         data-testid="workspace-asset-meta"
         aria-label="资产元信息"
-        className="tp-surface"
+        className="tp-surface tp-pane-enter"
         style={{
           padding: 14,
         }}
