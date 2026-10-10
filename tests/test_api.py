@@ -1,9 +1,17 @@
 """API 测试"""
 
-import pytest
-from fastapi.testclient import TestClient
-from testplat_control.main import app
+from datetime import datetime
+from uuid import uuid4
 
+from fastapi.testclient import TestClient
+
+from testplat_control.api.projects import (
+    DUPLICATE_PROJECT_NAME,
+    PROJECT_HAS_EXECUTION_RECORDS,
+)
+from testplat_control.database.models import ExecutionRecord
+from testplat_control.database.session import SessionLocal
+from testplat_control.main import app
 
 client = TestClient(app)
 
@@ -46,7 +54,7 @@ def test_list_projects() -> None:
             "config_root": f"/config{i}",
         }
         client.post("/projects", json=project_data)
-    
+
     response = client.get("/projects")
     assert response.status_code == 200
     data = response.json()
@@ -64,7 +72,7 @@ def test_get_project() -> None:
     }
     create_response = client.post("/projects", json=project_data)
     project_id = create_response.json()["id"]
-    
+
     # 获取项目
     response = client.get(f"/projects/{project_id}")
     assert response.status_code == 200
@@ -90,7 +98,7 @@ def test_update_project() -> None:
     }
     create_response = client.post("/projects", json=project_data)
     project_id = create_response.json()["id"]
-    
+
     # 更新项目
     update_data = {
         "name": "Updated Project",
@@ -122,12 +130,12 @@ def test_delete_project() -> None:
     }
     create_response = client.post("/projects", json=project_data)
     project_id = create_response.json()["id"]
-    
+
     # 删除项目
     response = client.delete(f"/projects/{project_id}")
     assert response.status_code == 200
     assert response.json()["message"] == "Project deleted successfully"
-    
+
     # 验证项目已删除
     get_response = client.get(f"/projects/{project_id}")
     assert get_response.status_code == 404
@@ -137,6 +145,98 @@ def test_delete_project_not_found() -> None:
     """测试删除不存在的项目"""
     response = client.delete("/projects/nonexistent-id")
     assert response.status_code == 404
+
+
+def test_create_project_duplicate_name() -> None:
+    """重名创建应返回 409，而不是未处理的完整性错误。"""
+    project_data = {
+        "name": "Duplicate Name",
+        "env": "test",
+        "assets_root": "/assets",
+        "config_root": "/config",
+    }
+    first = client.post("/projects", json=project_data)
+    assert first.status_code == 200
+
+    second = client.post("/projects", json=project_data)
+    assert second.status_code == 409
+    assert second.json()["detail"] == DUPLICATE_PROJECT_NAME
+
+    names = [item["name"] for item in client.get("/projects").json()]
+    assert names.count("Duplicate Name") == 1
+
+
+def test_update_project_duplicate_name() -> None:
+    """把项目改成已存在的名称应返回 409，且原名称保持不变。"""
+    source = client.post(
+        "/projects",
+        json={
+            "name": "Rename Source",
+            "env": "test",
+            "assets_root": "/assets",
+            "config_root": "/config",
+        },
+    )
+    target = client.post(
+        "/projects",
+        json={
+            "name": "Rename Target",
+            "env": "test",
+            "assets_root": "/assets",
+            "config_root": "/config",
+        },
+    )
+    assert source.status_code == 200
+    assert target.status_code == 200
+    project_id = source.json()["id"]
+
+    response = client.put(f"/projects/{project_id}", json={"name": "Rename Target"})
+    assert response.status_code == 409
+    assert response.json()["detail"] == DUPLICATE_PROJECT_NAME
+
+    current = client.get(f"/projects/{project_id}")
+    assert current.status_code == 200
+    assert current.json()["name"] == "Rename Source"
+
+
+def test_delete_project_with_execution_records() -> None:
+    """仍有执行记录时拒绝删除，返回 409，不级联清掉历史。"""
+    created = client.post(
+        "/projects",
+        json={
+            "name": "Has Executions",
+            "env": "test",
+            "assets_root": "/assets",
+            "config_root": "/config",
+        },
+    )
+    assert created.status_code == 200
+    project_id = created.json()["id"]
+
+    db = SessionLocal()
+    try:
+        db.add(
+            ExecutionRecord(
+                id=str(uuid4()),
+                project_id=project_id,
+                asset_type="api",
+                asset_id="api-kept",
+                status="success",
+                start_time=datetime.now(),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.delete(f"/projects/{project_id}")
+    assert response.status_code == 409
+    assert response.json()["detail"] == PROJECT_HAS_EXECUTION_RECORDS
+
+    assert client.get(f"/projects/{project_id}").status_code == 200
+    records = client.get(f"/projects/{project_id}/execution-records")
+    assert records.status_code == 200
+    assert [item["asset_id"] for item in records.json()] == ["api-kept"]
 
 
 def test_list_execution_records() -> None:
