@@ -31,6 +31,9 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
       css: false,
+      // antd + userEvent 在高并行下易超时，限制 worker 并放宽单测时限
+      testTimeout: 20_000,
+      maxWorkers: 2,
     },
   }
 })

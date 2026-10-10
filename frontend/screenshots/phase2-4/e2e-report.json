@@ -1,0 +1,30 @@
+[
+  {
+    "viewportLabel": "desktop-1440x900",
+    "consoleErrors": [
+      "Warning: [antd: compatible] antd v5 support React is 16 ~ 18. see https://u.ant.design/v5-for-19 for compatible.",
+      "Warning: Instance created by `useForm` is not connected to any Form element. Forget to pass `form` prop?",
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    ],
+    "failedRequests": [
+      "500 DELETE http://127.0.0.1:5173/api/projects/abb01735-01e9-4150-87c5-e1a8f23369cb"
+    ],
+    "overflow": false,
+    "scrollWidth": 1440,
+    "clientWidth": 1440
+  },
+  {
+    "viewportLabel": "mobile-390x844",
+    "consoleErrors": [
+      "Warning: [antd: compatible] antd v5 support React is 16 ~ 18. see https://u.ant.design/v5-for-19 for compatible.",
+      "Warning: Instance created by `useForm` is not connected to any Form element. Forget to pass `form` prop?",
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    ],
+    "failedRequests": [
+      "500 DELETE http://127.0.0.1:5173/api/projects/5f025ce8-ce1a-4278-99e1-1dd9e714d7e6"
+    ],
+    "overflow": true,
+    "scrollWidth": 532,
+    "clientWidth": 390
+  }
+]

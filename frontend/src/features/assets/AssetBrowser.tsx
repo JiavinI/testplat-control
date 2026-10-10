@@ -16,6 +16,8 @@ export type AssetBrowserProps = {
   projectId: string
   selectedAssetId?: string
   onSelectAsset: (asset: AssetNode) => void
+  /** full：树+详情；tree：仅树，供工作台左侧/抽屉挂载 */
+  layout?: 'full' | 'tree'
 }
 
 /**
@@ -26,6 +28,7 @@ export function AssetBrowser({
   projectId,
   selectedAssetId,
   onSelectAsset,
+  layout = 'full',
 }: AssetBrowserProps) {
   const treeQuery = useAssetsTree(projectId)
   const [filterQuery, setFilterQuery] = useState('')
@@ -82,9 +85,9 @@ export function AssetBrowser({
     return findAssetById(treeQuery.data, selectedAssetId)
   }, [treeQuery.data, selectedAssetId])
 
-  // 仅文件拉取详情；目录用树节点信息，避免多余请求
+  // 仅 full 布局且选中文件时拉取详情；tree 布局由工作台中央区负责
   const shouldFetchDetails = Boolean(
-    selectedFromTree && selectedFromTree.type === 'file',
+    layout === 'full' && selectedFromTree && selectedFromTree.type === 'file',
   )
   const detailsQuery = useAssetDetails(
     projectId,
@@ -151,9 +154,42 @@ export function AssetBrowser({
 
   const treeForDisplay = filteredTree ?? treeQuery.data
 
+  const treeCard = (
+    <Card
+      size="small"
+      title="资产树"
+      style={
+        layout === 'tree'
+          ? { width: '100%' }
+          : { flex: '1 1 260px', minWidth: 240, maxWidth: 420 }
+      }
+      styles={{ body: { padding: 12 } }}
+    >
+      <AssetTree
+        tree={treeForDisplay}
+        filterQuery={filterQuery}
+        onFilterQueryChange={setFilterQuery}
+        expandedKeys={expandedKeys}
+        onExpandedKeysChange={setExpandedKeys}
+        selectedAssetId={selectedFromTree?.id}
+        onSelectAsset={onSelectAsset}
+        findNode={(id) => findAssetById(treeQuery.data, id)}
+      />
+    </Card>
+  )
+
+  if (layout === 'tree') {
+    return (
+      <div data-testid="asset-browser" data-layout="tree">
+        {treeCard}
+      </div>
+    )
+  }
+
   return (
     <div
       data-testid="asset-browser"
+      data-layout="full"
       style={{
         display: 'flex',
         gap: 12,
@@ -162,24 +198,7 @@ export function AssetBrowser({
         flexWrap: 'wrap',
       }}
     >
-      <Card
-        size="small"
-        title="资产树"
-        style={{ flex: '1 1 260px', minWidth: 240, maxWidth: 420 }}
-        styles={{ body: { padding: 12 } }}
-      >
-        <AssetTree
-          tree={treeForDisplay}
-          filterQuery={filterQuery}
-          onFilterQueryChange={setFilterQuery}
-          expandedKeys={expandedKeys}
-          onExpandedKeysChange={setExpandedKeys}
-          selectedAssetId={selectedFromTree?.id}
-          onSelectAsset={onSelectAsset}
-          findNode={(id) => findAssetById(treeQuery.data, id)}
-        />
-      </Card>
-
+      {treeCard}
       <Card
         size="small"
         title="资产详情"

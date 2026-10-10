@@ -1,16 +1,89 @@
-import { Button, Card, Descriptions, Divider, Space, Typography } from 'antd'
-import { ArrowLeftOutlined } from '@ant-design/icons'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Button,
+  Collapse,
+  Descriptions,
+  Drawer,
+  Space,
+  Typography,
+} from 'antd'
+import {
+  ArrowLeftOutlined,
+  FolderOpenOutlined,
+  UnorderedListOutlined,
+} from '@ant-design/icons'
 import { Link, useParams } from 'react-router-dom'
+import {
+  AssetBrowser,
+  AssetDetailPanel,
+  findAssetById,
+  isRunnableApiAsset,
+  useAssetDetails,
+  useAssetsTree,
+  type AssetNode,
+} from '@/features/assets'
+import { ApiExecutionPanel, ExecutionHistory } from '@/features/executions'
 import { useProject } from '@/features/projects/hooks'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
 
+/** 窄屏用抽屉挂载资产树；jsdom stub 的 matchMedia 恒为 false，测试走桌面布局 */
+function useIsNarrowViewport(query = '(max-width: 767px)'): boolean {
+  const [narrow, setNarrow] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const update = () => setNarrow(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [query])
+  return narrow
+}
+
 /**
- * 项目工作台占位骨架。
- * 资产区 / 执行区仅提供空集成容器，具体能力由后续 Phase 实现。
+ * 项目工作台：组合资产浏览、单 API 执行与执行历史。
+ * 仅 api.* 文件挂载执行面板；目录/其他文件只读并说明能力边界。
  */
 export function ProjectWorkspacePage() {
   const { projectId = '' } = useParams()
   const projectQuery = useProject(projectId)
+  const isNarrow = useIsNarrowViewport()
+
+  const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>()
+  const [assetDrawerOpen, setAssetDrawerOpen] = useState(false)
+
+  // 项目切换时清空选中与抽屉，避免串数据
+  useEffect(() => {
+    setSelectedAssetId(undefined)
+    setAssetDrawerOpen(false)
+  }, [projectId])
+
+  const treeQuery = useAssetsTree(projectId)
+
+  const selectedFromTree = useMemo(() => {
+    if (!treeQuery.data || !selectedAssetId) {
+      return null
+    }
+    return findAssetById(treeQuery.data, selectedAssetId)
+  }, [treeQuery.data, selectedAssetId])
+
+  const shouldFetchDetails = Boolean(
+    selectedFromTree && selectedFromTree.type === 'file',
+  )
+  const detailsQuery = useAssetDetails(
+    projectId,
+    selectedFromTree?.type === 'file' ? selectedFromTree.id : undefined,
+    shouldFetchDetails,
+  )
+
+  const runnable =
+    selectedFromTree !== null && isRunnableApiAsset(selectedFromTree)
+
+  const handleSelectAsset = (asset: AssetNode) => {
+    setSelectedAssetId(asset.id)
+    if (isNarrow) {
+      setAssetDrawerOpen(false)
+    }
+  }
 
   if (projectQuery.isLoading) {
     return <LoadingState tip="加载项目…" />
@@ -46,94 +119,210 @@ export function ProjectWorkspacePage() {
     )
   }
 
-  return (
-    <div>
-      <Space
-        style={{ width: '100%', justifyContent: 'space-between', marginBottom: 12 }}
-        align="start"
+  const browser = (
+    <AssetBrowser
+      projectId={projectId}
+      selectedAssetId={selectedFromTree?.id}
+      onSelectAsset={handleSelectAsset}
+      layout="tree"
+    />
+  )
+
+  const centerColumn = (
+    <div
+      data-testid="workspace-main"
+      style={{
+        flex: '1 1 360px',
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <section
+        data-testid="workspace-asset-meta"
+        aria-label="资产元信息"
+        style={{
+          border: '1px solid #f0f0f0',
+          borderRadius: 4,
+          padding: 12,
+          background: '#fff',
+        }}
       >
-        <div>
-          <Space align="center" style={{ marginBottom: 4 }}>
-            <Link to="/projects">
-              <Button icon={<ArrowLeftOutlined />} aria-label="返回项目列表">
-                返回
-              </Button>
-            </Link>
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              {project.name}
-            </Typography.Title>
-            <Typography.Text code>{project.env}</Typography.Text>
-          </Space>
-          <Typography.Text type="secondary">项目工作台</Typography.Text>
-        </div>
+        <AssetDetailPanel
+          selectedFromTree={selectedFromTree}
+          details={detailsQuery.data}
+          detailsLoading={detailsQuery.isLoading || detailsQuery.isFetching}
+          detailsError={detailsQuery.error}
+          onRetryDetails={() => {
+            void detailsQuery.refetch()
+          }}
+        />
+      </section>
+
+      {runnable && selectedFromTree ? (
+        <ApiExecutionPanel
+          key={`${projectId}:${selectedFromTree.id}`}
+          projectId={projectId}
+          assetId={selectedFromTree.id}
+        />
+      ) : null}
+
+      {!runnable && selectedFromTree ? (
+        <Typography.Paragraph
+          type="secondary"
+          style={{ margin: 0 }}
+          data-testid="workspace-capability-note"
+        >
+          {selectedFromTree.type === 'directory'
+            ? '目录仅供浏览，不提供参数或运行。'
+            : '当前仅 api.* 文件支持参数与运行；本资产无执行面板。'}
+        </Typography.Paragraph>
+      ) : null}
+
+      {!selectedFromTree ? (
+        <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+          从左侧选择资产。选中 api.* 文件后可在此填写参数并执行。
+        </Typography.Paragraph>
+      ) : null}
+
+      <ExecutionHistory
+        projectId={projectId}
+        assetId={
+          selectedFromTree?.type === 'file' ? selectedFromTree.id : undefined
+        }
+      />
+    </div>
+  )
+
+  return (
+    <div
+      data-testid="project-workspace"
+      style={{ maxWidth: '100%', overflowX: 'hidden' }}
+    >
+      <Space
+        style={{ width: '100%', justifyContent: 'space-between', marginBottom: 8 }}
+        align="start"
+        wrap
+      >
+        <Space align="center" wrap>
+          <Link to="/projects">
+            <Button icon={<ArrowLeftOutlined />} aria-label="返回项目列表">
+              返回
+            </Button>
+          </Link>
+          <Typography.Title
+            level={4}
+            style={{
+              margin: 0,
+              maxWidth: isNarrow ? 180 : 480,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={project.name}
+          >
+            {project.name}
+          </Typography.Title>
+          <Typography.Text code>{project.env}</Typography.Text>
+        </Space>
+        {isNarrow ? (
+          <Button
+            icon={<FolderOpenOutlined />}
+            onClick={() => setAssetDrawerOpen(true)}
+            aria-label="打开资产浏览"
+          >
+            资产
+          </Button>
+        ) : null}
       </Space>
 
-      <Card size="small" title="项目摘要" style={{ marginBottom: 16 }}>
-        <Descriptions size="small" column={2}>
-          <Descriptions.Item label="项目 ID">
-            <Typography.Text copyable={{ text: project.id }} code>
-              {project.id}
-            </Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="环境">{project.env}</Descriptions.Item>
-          <Descriptions.Item label="资产目录" span={2}>
-            <Typography.Text code>{project.assets_root}</Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="配置目录" span={2}>
-            <Typography.Text code>{project.config_root}</Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="创建时间">{project.created_at}</Descriptions.Item>
-          <Descriptions.Item label="更新时间">{project.updated_at}</Descriptions.Item>
-        </Descriptions>
-      </Card>
+      <Collapse
+        size="small"
+        style={{ marginBottom: 12 }}
+        items={[
+          {
+            key: 'summary',
+            label: (
+              <Space size={8}>
+                <UnorderedListOutlined />
+                <span>项目摘要</span>
+              </Space>
+            ),
+            children: (
+              <Descriptions size="small" column={{ xs: 1, sm: 2 }}>
+                <Descriptions.Item label="项目 ID">
+                  <Typography.Text
+                    copyable={{ text: project.id }}
+                    code
+                    style={{ wordBreak: 'break-all' }}
+                  >
+                    {project.id}
+                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="环境">{project.env}</Descriptions.Item>
+                <Descriptions.Item label="资产目录" span={2}>
+                  <Typography.Text code style={{ wordBreak: 'break-all' }}>
+                    {project.assets_root}
+                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="配置目录" span={2}>
+                  <Typography.Text code style={{ wordBreak: 'break-all' }}>
+                    {project.config_root}
+                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="创建时间">
+                  {project.created_at}
+                </Descriptions.Item>
+                <Descriptions.Item label="更新时间">
+                  {project.updated_at}
+                </Descriptions.Item>
+              </Descriptions>
+            ),
+          },
+        ]}
+      />
 
-      <Divider style={{ margin: '12px 0 16px' }} />
-
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        {/* 后续 Agent 在此挂载 features/assets */}
-        <Card
-          size="small"
-          title="资产区"
-          extra={<Typography.Text type="secondary">待集成</Typography.Text>}
-        >
-          <div
-            data-testid="assets-slot"
-            role="region"
-            aria-label="资产区集成容器"
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          alignItems: 'flex-start',
+          flexWrap: isNarrow ? 'wrap' : 'nowrap',
+        }}
+      >
+        {!isNarrow ? (
+          <aside
+            data-testid="workspace-assets-aside"
+            aria-label="资产浏览"
             style={{
-              minHeight: 120,
-              border: '1px dashed #d9d9d9',
-              borderRadius: 4,
-              padding: 16,
-              color: 'rgba(0,0,0,0.45)',
+              flex: '0 0 300px',
+              maxWidth: 360,
+              minWidth: 240,
+              position: 'sticky',
+              top: 8,
+              alignSelf: 'flex-start',
+              maxHeight: 'calc(100vh - 120px)',
+              overflow: 'auto',
             }}
           >
-            资产树与资产详情将在此集成。当前无假数据。
-          </div>
-        </Card>
+            {browser}
+          </aside>
+        ) : null}
 
-        {/* 后续 Agent 在此挂载 features/executions */}
-        <Card
-          size="small"
-          title="执行区"
-          extra={<Typography.Text type="secondary">待集成</Typography.Text>}
-        >
-          <div
-            data-testid="executions-slot"
-            role="region"
-            aria-label="执行区集成容器"
-            style={{
-              minHeight: 120,
-              border: '1px dashed #d9d9d9',
-              borderRadius: 4,
-              padding: 16,
-              color: 'rgba(0,0,0,0.45)',
-            }}
-          >
-            执行触发与历史记录将在此集成。当前无假数据。
-          </div>
-        </Card>
-      </Space>
+        {centerColumn}
+      </div>
+
+      <Drawer
+        title="资产浏览"
+        placement="left"
+        width={Math.min(360, typeof window !== 'undefined' ? window.innerWidth - 24 : 360)}
+        open={isNarrow && assetDrawerOpen}
+        onClose={() => setAssetDrawerOpen(false)}
+        destroyOnClose={false}
+      >
+        {browser}
+      </Drawer>
     </div>
   )
 }

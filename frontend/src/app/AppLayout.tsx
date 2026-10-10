@@ -24,13 +24,15 @@ export function AppLayout() {
           通用接口自动化测试平台
         </Typography.Text>
       </Header>
-      <Content style={{ padding: 16, background: '#f5f5f5' }}>
+      <Content style={{ padding: 16, background: '#f5f5f5', overflowX: 'hidden' }}>
         <div
           style={{
             background: '#fff',
             padding: 16,
             borderRadius: 6,
             minHeight: 'calc(100vh - 80px)',
+            maxWidth: '100%',
+            overflowX: 'hidden',
           }}
         >
           <Outlet />

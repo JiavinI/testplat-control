@@ -126,6 +126,7 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       size="small"
       title="执行历史"
       data-testid="execution-history"
+      styles={{ body: { overflowX: 'auto', maxWidth: '100%' } }}
       extra={
         assetId ? (
           <Typography.Text type="secondary" code>

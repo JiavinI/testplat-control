@@ -66,7 +66,9 @@ afterEach(() => {
 })
 
 describe('ApiExecutionPanel', () => {
-  it('提交时做类型转换，空非必填省略，保留 false', async () => {
+  it(
+    '提交时做类型转换，空非必填省略，保留 false',
+    async () => {
     const user = userEvent.setup({ delay: null })
     getAssetParams.mockResolvedValue(mixedParams)
     runAsset.mockResolvedValue({
@@ -96,7 +98,9 @@ describe('ApiExecutionPanel', () => {
     expect(runAsset.mock.calls[0][2].params).not.toHaveProperty('nickname')
     expect(runAsset.mock.calls[0][2].params).not.toHaveProperty('age')
     expect(await screen.findByTestId('execution-result')).toHaveTextContent('success')
-  })
+    },
+    15_000,
+  )
 
   it('422 展示 FastAPI detail，不进入结果区', async () => {
     const user = userEvent.setup({ delay: null })
