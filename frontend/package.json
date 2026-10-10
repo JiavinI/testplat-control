@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "e2e:gate": "node scripts/e2e-gate.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
@@ -32,6 +33,7 @@
     "eslint-plugin-react-refresh": "^0.4.22",
     "globals": "^16.4.0",
     "jsdom": "^27.0.0",
+    "playwright": "1.55.0",
     "typescript": "~5.9.2",
     "typescript-eslint": "^8.44.1",
     "vite": "^7.1.7",

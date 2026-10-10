@@ -91,4 +91,22 @@ describe('executions api', () => {
       return true
     })
   })
+
+  it('列表响应非数组时抛 ApiParseError', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ items: [] }))
+    const { ApiParseError } = await import('@/shared/api/errors')
+    await expect(
+      listExecutionRecords('p1', {}, { baseUrl: '', fetchImpl }),
+    ).rejects.toBeInstanceOf(ApiParseError)
+  })
+
+  it('run 响应缺 record_id 时抛 ApiParseError', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({ status: 'success', duration: 1, result: {} }),
+    )
+    const { ApiParseError } = await import('@/shared/api/errors')
+    await expect(
+      runAsset('p1', 'api.user.login', { params: {} }, { baseUrl: '', fetchImpl }),
+    ).rejects.toBeInstanceOf(ApiParseError)
+  })
 })

@@ -174,6 +174,42 @@ describe('ExecutionHistory', () => {
     expect(await screen.findByText('暂无执行记录')).toBeInTheDocument()
   })
 
+
+  it('空白下一页仍可返回上一页', async () => {
+    const user = userEvent.setup({ delay: null })
+    const page1 = Array.from({ length: 20 }, (_, i) =>
+      makeItem({ id: `r-${i}`, start_time: `2026-10-10T08:${String(i).padStart(2, '0')}:00.000Z` }),
+    )
+
+    listExecutionRecords
+      .mockResolvedValueOnce(page1)
+      .mockResolvedValueOnce([]) // 恰好满页后再翻，得到空页
+      .mockResolvedValueOnce(page1)
+
+    renderHistory()
+    expect(await screen.findByRole('button', { name: '查看记录 r-0' })).toBeInTheDocument()
+    // 列表应展示运行 ID（表头可能与 title 属性各一份）
+    expect(screen.getAllByText('运行 ID').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('r-0').length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: '下一页' }))
+    expect(await screen.findByText('本页无记录，可返回上一页')).toBeInTheDocument()
+    expect(screen.getByText('第 2 页')).toBeInTheDocument()
+
+    const prev = screen.getByRole('button', { name: '上一页' })
+    expect(prev).not.toBeDisabled()
+    await user.click(prev)
+
+    await waitFor(() => {
+      expect(listExecutionRecords).toHaveBeenLastCalledWith(
+        'p1',
+        expect.objectContaining({ skip: 0, limit: 20 }),
+      )
+    })
+    expect(await screen.findByText('第 1 页')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '查看记录 r-0' })).toBeInTheDocument()
+  })
+
   it('空列表展示空态', async () => {
     listExecutionRecords.mockResolvedValue([])
     renderHistory()

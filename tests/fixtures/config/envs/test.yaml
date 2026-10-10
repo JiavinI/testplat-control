@@ -1,0 +1,13 @@
+# 测试环境配置
+api_hosts:
+  httpbin: https://httpbin.org
+  test_server: https://httpbin.org
+
+# 超时配置
+timeout:
+  default: 30
+
+# 重试配置
+retry:
+  max_attempts: 3
+  backoff: 1.0

@@ -70,8 +70,8 @@ export function ProjectListPage() {
           await deleteMutation.mutateAsync(project.id)
           message.success(`已删除「${project.name}」`)
         } catch (error) {
+          // 已提示业务错误（如有执行记录不可删的 500）；不再向外抛，避免 pageerror
           message.error(formatErrorMessage(error))
-          throw error
         }
       },
     })

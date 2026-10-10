@@ -36,16 +36,31 @@ const ORDER_OPTIONS = [
   { value: 'asset_id', label: '资产 ID' },
 ]
 
+function useDrawerWidth(preferred = 560): number {
+  const [width, setWidth] = useState(preferred)
+  useEffect(() => {
+    const update = () => {
+      const vw = window.innerWidth
+      setWidth(Math.min(preferred, Math.max(280, vw - 24)))
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [preferred])
+  return width
+}
+
 /**
  * 项目执行历史：筛选、分页（无 total，条数 < limit 判末页）、详情抽屉。
+ * 空白页（page>0 且 0 条）仍保留翻页，避免无法返回上一页。
  */
 export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) {
   const [status, setStatus] = useState<string>('')
   const [orderBy, setOrderBy] = useState('-start_time')
   const [page, setPage] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const drawerWidth = useDrawerWidth(560)
 
-  // 外部 assetId 变化时重置分页与选中，并同步筛选
   useEffect(() => {
     setPage(0)
     setSelectedId(null)
@@ -66,16 +81,33 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
   const detailQuery = useExecutionRecord(projectId, selectedId)
 
   const rows = listQuery.data ?? []
-  // 列表无 total：返回条数 < limit 即末页
+  // 列表无 total：返回条数 < limit 即末页；空页（越界）也视为末页
   const isLastPage = rows.length < DEFAULT_LIMIT
   const hasPrev = page > 0
+  const showPager = !listQuery.isLoading && !listQuery.isError && (rows.length > 0 || page > 0)
+  const showEmptyFirstPage =
+    !listQuery.isLoading && !listQuery.isError && rows.length === 0 && page === 0
+  const showEmptyBeyond =
+    !listQuery.isLoading && !listQuery.isError && rows.length === 0 && page > 0
 
   const columns: ColumnsType<ExecutionRecordListItem> = [
+    {
+      title: '运行 ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 120,
+      ellipsis: true,
+      render: (value: string) => (
+        <Typography.Text code copyable={{ text: value }} style={{ maxWidth: 110 }}>
+          {value}
+        </Typography.Text>
+      ),
+    },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 100,
+      width: 88,
       render: (value: string) => (
         <Tag color={value === 'success' ? 'success' : value === 'failed' ? 'error' : 'default'}>
           {value}
@@ -93,20 +125,21 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       title: '开始时间',
       dataIndex: 'start_time',
       key: 'start_time',
-      width: 180,
+      width: 160,
       render: (value: string) => formatTime(value),
     },
     {
       title: '耗时',
       dataIndex: 'duration',
       key: 'duration',
-      width: 90,
+      width: 80,
       render: (value: number | null) => formatDuration(value),
     },
     {
       title: '操作',
       key: 'actions',
-      width: 88,
+      width: 72,
+      fixed: 'right',
       render: (_: unknown, record) => (
         <Button
           type="link"
@@ -120,6 +153,29 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       ),
     },
   ]
+
+  const pager = (
+    <Space
+      style={{ marginTop: 12, width: '100%', justifyContent: 'flex-end' }}
+      data-testid="execution-history-pager"
+    >
+      <Button
+        disabled={!hasPrev || listQuery.isFetching}
+        onClick={() => setPage((p) => Math.max(0, p - 1))}
+        aria-label="上一页"
+      >
+        上一页
+      </Button>
+      <Typography.Text type="secondary">第 {page + 1} 页</Typography.Text>
+      <Button
+        disabled={isLastPage || listQuery.isFetching}
+        onClick={() => setPage((p) => p + 1)}
+        aria-label="下一页"
+      >
+        下一页
+      </Button>
+    </Space>
+  )
 
   return (
     <Card
@@ -166,8 +222,13 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
         />
       ) : null}
 
-      {!listQuery.isLoading && !listQuery.isError && rows.length === 0 ? (
-        <EmptyState description="暂无执行记录" />
+      {showEmptyFirstPage ? <EmptyState description="暂无执行记录" /> : null}
+
+      {showEmptyBeyond ? (
+        <>
+          <EmptyState description="本页无记录，可返回上一页" />
+          {pager}
+        </>
       ) : null}
 
       {!listQuery.isLoading && !listQuery.isError && rows.length > 0 ? (
@@ -178,25 +239,9 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
             columns={columns}
             dataSource={rows}
             pagination={false}
-            scroll={{ x: true }}
+            scroll={{ x: 640 }}
           />
-          <Space style={{ marginTop: 12, width: '100%', justifyContent: 'flex-end' }}>
-            <Button
-              disabled={!hasPrev || listQuery.isFetching}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              aria-label="上一页"
-            >
-              上一页
-            </Button>
-            <Typography.Text type="secondary">第 {page + 1} 页</Typography.Text>
-            <Button
-              disabled={isLastPage || listQuery.isFetching}
-              onClick={() => setPage((p) => p + 1)}
-              aria-label="下一页"
-            >
-              下一页
-            </Button>
-          </Space>
+          {showPager ? pager : null}
         </>
       ) : null}
 
@@ -204,8 +249,12 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
         title="执行详情"
         open={Boolean(selectedId)}
         onClose={() => setSelectedId(null)}
-        width={560}
+        width={drawerWidth}
         destroyOnClose
+        styles={{
+          body: { overflowX: 'auto', maxWidth: '100%' },
+          wrapper: { maxWidth: '100vw' },
+        }}
       >
         {detailQuery.isLoading ? <LoadingState tip="加载详情…" /> : null}
         {detailQuery.isError ? (
@@ -236,15 +285,17 @@ function DetailBody({
       : null
 
   return (
-    <div data-testid="execution-detail">
+    <div data-testid="execution-detail" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
       <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
-        <Descriptions.Item label="记录 ID">
-          <Typography.Text copyable code>
+        <Descriptions.Item label="运行 ID">
+          <Typography.Text copyable code style={{ wordBreak: 'break-all' }}>
             {detail.id}
           </Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label="资产 ID">
-          <Typography.Text code>{detail.asset_id}</Typography.Text>
+          <Typography.Text code style={{ wordBreak: 'break-all' }}>
+            {detail.asset_id}
+          </Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label="状态">
           <Tag color={detail.status === 'success' ? 'success' : 'error'}>

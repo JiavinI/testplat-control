@@ -10,27 +10,35 @@ export function AppLayout() {
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 16,
-          paddingInline: 20,
+          gap: 12,
+          paddingInline: 16,
           height: 48,
           lineHeight: '48px',
-          background: '#001529',
+          background: '#111827',
         }}
       >
-        <Typography.Text strong style={{ color: '#fff', fontSize: 15 }}>
+        <Typography.Text strong style={{ color: '#fff', fontSize: 14, letterSpacing: 0.2 }}>
           TestPlat Control
         </Typography.Text>
-        <Typography.Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
-          通用接口自动化测试平台
+        <Typography.Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
+          控制台
         </Typography.Text>
       </Header>
-      <Content style={{ padding: 16, background: '#f5f5f5', overflowX: 'hidden' }}>
+      <Content
+        style={{
+          padding: 12,
+          background: '#f0f2f5',
+          overflowX: 'hidden',
+          maxWidth: '100vw',
+        }}
+      >
         <div
           style={{
             background: '#fff',
-            padding: 16,
-            borderRadius: 6,
-            minHeight: 'calc(100vh - 80px)',
+            padding: 12,
+            borderRadius: 4,
+            border: '1px solid #e5e7eb',
+            minHeight: 'calc(100vh - 72px)',
             maxWidth: '100%',
             overflowX: 'hidden',
           }}
