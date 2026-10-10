@@ -1,7 +1,8 @@
 """FastAPI 主应用"""
 
 from fastapi import FastAPI
-from testplat_control.api import projects, execution, assets
+
+from testplat_control.api import assets, execution, projects, run
 
 app = FastAPI(
     title="testplat-control",
@@ -13,6 +14,7 @@ app = FastAPI(
 app.include_router(projects.router)
 app.include_router(execution.router)
 app.include_router(assets.router)
+app.include_router(run.router)
 
 
 @app.get("/health")

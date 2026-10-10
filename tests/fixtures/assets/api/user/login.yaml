@@ -1,0 +1,16 @@
+id: api.user.login
+name: 用户登录
+desc: 集成测试用登录接口
+host: httpbin
+method: POST
+url: /login
+request:
+  type: json
+  inputs:
+    username: 用户名
+    password: 密码 (required)
+  body:
+    username: "${username}"
+    password: "${password}"
+success:
+  status_code: 200

@@ -1,0 +1,19 @@
+id: api.user.create
+name: 创建用户
+desc: 集成测试用创建用户接口
+host: httpbin
+method: POST
+url: /users
+request:
+  type: json
+  inputs:
+    username:
+      type: string
+      required: true
+      description: 用户名
+    email:
+      type: string
+      required: true
+      description: 邮箱
+success:
+  status_code: 201

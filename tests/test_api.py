@@ -141,10 +141,26 @@ def test_delete_project_not_found() -> None:
 
 def test_list_execution_records() -> None:
     """测试列出执行记录"""
-    response = client.get("/projects/test-project/execution-records")
+    project_data = {
+        "name": "Execution List",
+        "env": "test",
+        "assets_root": "/assets",
+        "config_root": "/config",
+    }
+    create_response = client.post("/projects", json=project_data)
+    project_id = create_response.json()["id"]
+
+    response = client.get(f"/projects/{project_id}/execution-records")
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
+
+
+def test_list_execution_records_project_not_found() -> None:
+    """不存在的项目没有执行记录可列"""
+    response = client.get("/projects/test-project/execution-records")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
 
 
 def test_get_execution_record_not_found() -> None:
