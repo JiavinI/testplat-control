@@ -1,0 +1,15 @@
+# 测试用的 Case YAML
+id: case.test.login
+name: 测试登录流程
+desc: 测试用例 - 登录流程
+tags: [smoke, login]
+steps:
+  - api_id: api.user.login
+    name: 用户登录
+    params:
+      username: test_user
+      password: test_pass
+  - api_id: api.user.get_info
+    name: 获取用户信息
+    params:
+      user_id: "${steps.0.response.user_id}"

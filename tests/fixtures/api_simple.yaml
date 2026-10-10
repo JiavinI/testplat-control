@@ -1,0 +1,16 @@
+# 测试用的 API YAML
+id: api.test.simple
+name: 简单测试
+desc: 测试 API 解析
+host: httpbin
+method: GET
+url: /status/200
+request:
+  type: json
+  inputs:
+    username: 用户名
+    password: 密码 (required)
+  body:
+    username: "${username}"
+success:
+  status_code: 200

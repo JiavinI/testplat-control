@@ -1,0 +1,5 @@
+# 无效的 YAML 文件
+id: invalid
+name: broken yaml
+  this is not valid: yaml content:
+    - broken
