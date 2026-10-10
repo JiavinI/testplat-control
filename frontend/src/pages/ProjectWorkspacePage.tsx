@@ -142,11 +142,9 @@ export function ProjectWorkspacePage() {
       <section
         data-testid="workspace-asset-meta"
         aria-label="资产元信息"
+        className="tp-surface"
         style={{
-          border: '1px solid #f0f0f0',
-          borderRadius: 4,
-          padding: 12,
-          background: '#fff',
+          padding: 14,
         }}
       >
         <AssetDetailPanel
@@ -201,7 +199,7 @@ export function ProjectWorkspacePage() {
       style={{ maxWidth: '100%', overflowX: 'hidden' }}
     >
       <Space
-        style={{ width: '100%', justifyContent: 'space-between', marginBottom: 8 }}
+        style={{ width: '100%', justifyContent: 'space-between', marginBottom: 12 }}
         align="start"
         wrap
       >
@@ -212,7 +210,8 @@ export function ProjectWorkspacePage() {
             </Button>
           </Link>
           <Typography.Title
-            level={4}
+            level={3}
+            className="tp-page-title"
             style={{
               margin: 0,
               maxWidth: isNarrow ? 180 : 480,
@@ -295,6 +294,7 @@ export function ProjectWorkspacePage() {
           <aside
             data-testid="workspace-assets-aside"
             aria-label="资产浏览"
+            className="tp-surface"
             style={{
               flex: '0 0 300px',
               maxWidth: 360,
@@ -304,6 +304,7 @@ export function ProjectWorkspacePage() {
               alignSelf: 'flex-start',
               maxHeight: 'calc(100vh - 120px)',
               overflow: 'auto',
+              padding: 10,
             }}
           >
             {browser}

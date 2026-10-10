@@ -6,7 +6,7 @@
     ],
     "pageErrors": [],
     "failedRequests": [
-      "500 DELETE http://127.0.0.1:5173/api/projects/24b69ea5-6671-4012-824d-e082831ae8c9"
+      "500 DELETE http://127.0.0.1:5173/api/projects/778e629f-0cda-4ff3-b8b6-336801dbe13a"
     ],
     "unexpectedConsole": [],
     "unexpectedPageErrors": [],
@@ -23,7 +23,7 @@
     ],
     "pageErrors": [],
     "failedRequests": [
-      "500 DELETE http://127.0.0.1:5173/api/projects/7e7ad1ce-842e-434e-b023-582dcda7492d"
+      "500 DELETE http://127.0.0.1:5173/api/projects/565e47ad-44a8-4006-b3d4-259180c2dac9"
     ],
     "unexpectedConsole": [],
     "unexpectedPageErrors": [],

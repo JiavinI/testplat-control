@@ -123,14 +123,15 @@ export function ProjectListPage() {
   return (
     <div>
       <Space
-        style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}
+        style={{ width: '100%', justifyContent: 'space-between', marginBottom: 20 }}
         align="center"
       >
         <div>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+          <span className="tp-page-kicker">Projects</span>
+          <Typography.Title level={3} className="tp-page-title" style={{ margin: 0 }}>
             项目列表
           </Typography.Title>
-          <Typography.Text type="secondary">
+          <Typography.Text type="secondary" style={{ fontSize: 14 }}>
             管理测试项目配置（名称、环境、资产目录、更新时间）。
           </Typography.Text>
         </div>

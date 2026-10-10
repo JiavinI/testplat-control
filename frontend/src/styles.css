@@ -15,21 +15,58 @@ body,
 
 body {
   font-family:
+    'Segoe UI',
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Noto Sans SC',
     -apple-system,
     BlinkMacSystemFont,
-    'Segoe UI',
     Roboto,
     'Helvetica Neue',
     Arial,
-    'Noto Sans',
     sans-serif;
-  background: #f0f2f5;
-  color: rgba(0, 0, 0, 0.88);
+  background: #f5efe6;
+  color: #292524;
+  -webkit-font-smoothing: antialiased;
 }
 
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.92em;
+}
+
+/* C3：展示感标题字阶，正文保持可扫读 */
+.tp-page-title.ant-typography,
+h1.tp-page-title,
+h2.tp-page-title,
+h3.tp-page-title,
+h4.tp-page-title {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: #292524;
+  line-height: 1.25;
+}
+
+.tp-page-kicker {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c2410c;
+}
+
+.tp-shell__brand {
+  font-weight: 650;
+}
+
+/* 轻阴影卡片面（工作台区块可复用） */
+.tp-surface {
+  background: #fffdf8;
+  border: 1px solid #e7e0d5;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(41, 37, 36, 0.04);
 }
 
 /* 抽屉/表格在窄屏不撑破视口 */
@@ -39,4 +76,25 @@ code {
 
 .ant-table-wrapper {
   max-width: 100%;
+}
+
+/* 主按钮赤陶，避免冷蓝残留 */
+.ant-btn-primary:not(:disabled):not(.ant-btn-dangerous) {
+  box-shadow: 0 2px 6px rgba(194, 65, 12, 0.22);
+}
+
+.ant-card {
+  border-color: #e7e0d5;
+}
+
+.ant-collapse {
+  background: #fffdf8;
+  border-color: #e7e0d5;
+  border-radius: 12px;
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selector {
+  border-radius: 10px !important;
 }
