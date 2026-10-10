@@ -1,0 +1,208 @@
+import { Card, Empty, Input, Typography } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { ApiHttpError } from '@/shared/api/errors'
+import { EmptyState, ErrorState, LoadingState } from '@/shared/ui/AsyncState'
+import { AssetDetailPanel } from './AssetDetailPanel'
+import { AssetTree } from './AssetTree'
+import { useAssetDetails, useAssetsTree } from './hooks'
+import type { AssetNode } from './types'
+import {
+  collectDirectoryKeys,
+  filterTreeKeepingAncestors,
+  findAssetById,
+} from './treeUtils'
+
+export type AssetBrowserProps = {
+  projectId: string
+  selectedAssetId?: string
+  onSelectAsset: (asset: AssetNode) => void
+}
+
+/**
+ * 只读资产工作台入口：树浏览 + 本地过滤 + 文件详情。
+ * 不发起 params/run；不提供上传/编辑/删除。
+ */
+export function AssetBrowser({
+  projectId,
+  selectedAssetId,
+  onSelectAsset,
+}: AssetBrowserProps) {
+  const treeQuery = useAssetsTree(projectId)
+  const [filterQuery, setFilterQuery] = useState('')
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([])
+  const [expandedInitializedFor, setExpandedInitializedFor] = useState<string | null>(
+    null,
+  )
+
+  // 项目切换时清空本地过滤与展开态，避免短暂残留上一项目的交互状态
+  useEffect(() => {
+    setFilterQuery('')
+    setExpandedKeys([])
+    setExpandedInitializedFor(null)
+  }, [projectId])
+
+  const filteredTree = useMemo(() => {
+    if (!treeQuery.data) {
+      return null
+    }
+    return filterTreeKeepingAncestors(treeQuery.data, filterQuery)
+  }, [treeQuery.data, filterQuery])
+
+  useEffect(() => {
+    if (!treeQuery.data) {
+      return
+    }
+    if (filterQuery.trim()) {
+      if (filteredTree) {
+        setExpandedKeys(collectDirectoryKeys(filteredTree))
+      }
+      return
+    }
+    // 无过滤时仅在首次加载该项目树时默认展开第一层目录
+    if (expandedInitializedFor !== projectId) {
+      const firstLevel = (treeQuery.data.children ?? [])
+        .filter((n) => n.type === 'directory')
+        .map((n) => n.id)
+      setExpandedKeys(firstLevel)
+      setExpandedInitializedFor(projectId)
+    }
+  }, [
+    treeQuery.data,
+    filterQuery,
+    filteredTree,
+    projectId,
+    expandedInitializedFor,
+  ])
+
+  const selectedFromTree = useMemo(() => {
+    if (!treeQuery.data || !selectedAssetId) {
+      return null
+    }
+    // 新项目树尚未包含该 id 时视为未选中，防止串数据显示旧详情
+    return findAssetById(treeQuery.data, selectedAssetId)
+  }, [treeQuery.data, selectedAssetId])
+
+  // 仅文件拉取详情；目录用树节点信息，避免多余请求
+  const shouldFetchDetails = Boolean(
+    selectedFromTree && selectedFromTree.type === 'file',
+  )
+  const detailsQuery = useAssetDetails(
+    projectId,
+    selectedFromTree?.type === 'file' ? selectedFromTree.id : undefined,
+    shouldFetchDetails,
+  )
+
+  if (!projectId) {
+    return <EmptyState description="缺少项目 ID" />
+  }
+
+  if (treeQuery.isLoading) {
+    return <LoadingState tip="加载资产树…" />
+  }
+
+  if (treeQuery.isError) {
+    const is404 =
+      treeQuery.error instanceof ApiHttpError && treeQuery.error.status === 404
+    return (
+      <ErrorState
+        title={is404 ? '项目不存在' : '加载资产树失败'}
+        error={treeQuery.error}
+        onRetry={() => {
+          void treeQuery.refetch()
+        }}
+      />
+    )
+  }
+
+  if (!treeQuery.data) {
+    return (
+      <ErrorState
+        error={new Error('资产树为空响应')}
+        onRetry={() => {
+          void treeQuery.refetch()
+        }}
+      />
+    )
+  }
+
+  const hasAnyChild = (treeQuery.data.children ?? []).length > 0
+  if (!hasAnyChild) {
+    return <EmptyState description="该项目资产目录为空，无可展示节点" />
+  }
+
+  if (filterQuery.trim() && !filteredTree) {
+    return (
+      <div data-testid="asset-browser">
+        <Input.Search
+          allowClear
+          placeholder="按名称 / 路径 / ID 过滤"
+          value={filterQuery}
+          onChange={(e) => setFilterQuery(e.target.value)}
+          aria-label="过滤资产"
+          style={{ marginBottom: 8, maxWidth: 420 }}
+        />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={`未找到匹配「${filterQuery.trim()}」的资产`}
+        />
+      </div>
+    )
+  }
+
+  const treeForDisplay = filteredTree ?? treeQuery.data
+
+  return (
+    <div
+      data-testid="asset-browser"
+      style={{
+        display: 'flex',
+        gap: 12,
+        alignItems: 'stretch',
+        minHeight: 280,
+        flexWrap: 'wrap',
+      }}
+    >
+      <Card
+        size="small"
+        title="资产树"
+        style={{ flex: '1 1 260px', minWidth: 240, maxWidth: 420 }}
+        styles={{ body: { padding: 12 } }}
+      >
+        <AssetTree
+          tree={treeForDisplay}
+          filterQuery={filterQuery}
+          onFilterQueryChange={setFilterQuery}
+          expandedKeys={expandedKeys}
+          onExpandedKeysChange={setExpandedKeys}
+          selectedAssetId={selectedFromTree?.id}
+          onSelectAsset={onSelectAsset}
+          findNode={(id) => findAssetById(treeQuery.data, id)}
+        />
+      </Card>
+
+      <Card
+        size="small"
+        title="资产详情"
+        style={{ flex: '2 1 320px', minWidth: 260 }}
+        styles={{ body: { padding: 12 } }}
+        extra={
+          selectedFromTree ? (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {selectedFromTree.type === 'file' ? '文件' : '目录'}
+            </Typography.Text>
+          ) : null
+        }
+      >
+        <AssetDetailPanel
+          selectedFromTree={selectedFromTree}
+          details={detailsQuery.data}
+          detailsLoading={detailsQuery.isLoading || detailsQuery.isFetching}
+          detailsError={detailsQuery.error}
+          onRetryDetails={() => {
+            void detailsQuery.refetch()
+          }}
+        />
+      </Card>
+    </div>
+  )
+}
