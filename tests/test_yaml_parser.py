@@ -46,12 +46,12 @@ class TestYamlParserApiYaml:
 
     def test_parse_api_yaml_empty_inputs(self):
         """测试: 处理空 inputs"""
-        # 使用项目中的真实 YAML 文件
+        # 仓库 fixture 是回归契约的一部分；缺失必须失败，不能把资源遗漏伪装成绿灯。
         api_file = FIXTURES_DIR / "assets" / "api" / "common" / "get_status.yaml"
-        if api_file.exists():
-            result = YamlParser.parse_api_yaml(api_file)
-            assert "inputs" in result
-            assert isinstance(result["inputs"], dict)
+        assert api_file.is_file(), f"required test fixture not found: {api_file}"
+        result = YamlParser.parse_api_yaml(api_file)
+        assert "inputs" in result
+        assert isinstance(result["inputs"], dict)
 
 
 class TestYamlParserCaseYaml:
@@ -179,8 +179,7 @@ class TestYamlParserRealFiles:
     def test_parse_real_api_get_status(self):
         """测试: 解析真实的 get_status.yaml"""
         api_file = FIXTURES_DIR / "assets" / "api" / "common" / "get_status.yaml"
-        if not api_file.exists():
-            pytest.skip(f"Test asset not found: {api_file}")
+        assert api_file.is_file(), f"required test fixture not found: {api_file}"
 
         result = YamlParser.parse_api_yaml(api_file)
 
@@ -192,8 +191,7 @@ class TestYamlParserRealFiles:
     def test_parse_real_api_post_json(self):
         """测试: 解析真实的 post_json.yaml"""
         api_file = FIXTURES_DIR / "assets" / "api" / "common" / "post_json.yaml"
-        if not api_file.exists():
-            pytest.skip(f"Test asset not found: {api_file}")
+        assert api_file.is_file(), f"required test fixture not found: {api_file}"
 
         result = YamlParser.parse_api_yaml(api_file)
 
@@ -207,8 +205,7 @@ class TestYamlParserRealFiles:
     def test_auto_detect_real_api_file(self):
         """测试: 自动检测真实 API 文件类型"""
         api_file = FIXTURES_DIR / "assets" / "api" / "common" / "get_status.yaml"
-        if not api_file.exists():
-            pytest.skip(f"Test asset not found: {api_file}")
+        assert api_file.is_file(), f"required test fixture not found: {api_file}"
 
         result = YamlParser.parse_yaml(api_file)
 

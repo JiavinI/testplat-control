@@ -13,8 +13,9 @@ class TestAssetService(unittest.TestCase):
     def setUpClass(cls):
         """设置测试环境。样例资产使用仓库内 tests/fixtures/assets。"""
         cls.test_assets_path = Path(__file__).resolve().parent / "fixtures" / "assets"
-        if not cls.test_assets_path.is_dir():
-            raise unittest.SkipTest(f"test assets not found: {cls.test_assets_path}")
+        assert cls.test_assets_path.is_dir(), (
+            f"required test assets not found: {cls.test_assets_path}"
+        )
         cls.asset_service = AssetService(cls.test_assets_path)
 
     def test_01_scan_root_directory_structure(self):

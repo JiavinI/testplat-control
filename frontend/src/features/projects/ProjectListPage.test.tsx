@@ -87,6 +87,18 @@ describe('ProjectListPage CRUD', () => {
     expect(screen.queryByRole('columnheader', { name: /最后运行/ })).not.toBeInTheDocument()
   })
 
+  it('窄屏项目卡片保留项目字段和全部操作', async () => {
+    listProjects.mockResolvedValue([sample])
+    renderPage()
+
+    const row = await screen.findByTestId('project-row')
+    expect(within(row).getByText('/assets/alpha')).toBeInTheDocument()
+    expect(within(row).getByText(/更新时间/)).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: '打开工作台 alpha' })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: '编辑项目 alpha' })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: '删除项目 alpha' })).toBeInTheDocument()
+  })
+
   it(
     '创建成功后进入工作台路由',
     async () => {

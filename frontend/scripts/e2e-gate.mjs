@@ -4,10 +4,9 @@
  * 假设前端 http://127.0.0.1:5173 与后端 :8000 已启动（可用 FakeEngine）。
  *   pnpm exec node scripts/e2e-gate.mjs
  *
- * 允许（后端既有业务，不改契约）：
- *   - DELETE /api/projects/:id → 500（有执行记录不可删）
- *   - POST /api/projects → 500（项目名 UNIQUE）
- *   - 对应的 "Failed to load resource … 500" console
+ * 允许（门禁主动构造）：
+ *   - POST /api/projects/:id/assets/:asset/run → 422（门禁主动注入的错误展示用例）
+ *   - 对应的 "Failed to load resource … 422" console
  * 其余 console error / pageerror / 失败请求 / 横向溢出 → 门禁失败。
  */
 
@@ -33,21 +32,25 @@ function makeProjectName(suffix) {
 }
 
 function isAllowedFailedRequest(entry) {
-  // "500 DELETE http://..."
+  // 失败请求统一记录为“状态码 方法 URL”，这里仅放行门禁主动构造的响应。
   const m = String(entry).match(/^(\d+)\s+(\S+)\s+(\S+)/)
   if (!m) return false
   const [, status, method, url] = m
-  if (status === '500' && method === 'DELETE' && /\/api\/projects\/[^/?]+$/.test(url)) {
-    return true
-  }
-  if (status === '500' && method === 'POST' && /\/api\/projects\/?$/.test(url)) {
+  if (
+    status === '422' &&
+    method === 'POST' &&
+    /\/api\/projects\/[^/?]+\/assets\/[^/?]+\/run$/.test(url)
+  ) {
     return true
   }
   return false
 }
 
 function isAllowedConsoleError(text) {
-  if (text.includes('Failed to load resource') && text.includes('500')) {
+  if (
+    text.includes('Failed to load resource') &&
+    text.includes('422')
+  ) {
     return true
   }
   if (text.includes('Download the React DevTools')) {
@@ -69,6 +72,83 @@ async function fillByLabel(page, label, value) {
   await input.fill(value)
 }
 
+async function openAssetBrowser(page) {
+  const filter = page.getByLabel('过滤资产')
+  if (await filter.isVisible().catch(() => false)) {
+    return
+  }
+  const button = page.getByRole('button', { name: '打开资产浏览' })
+  if (await button.isVisible().catch(() => false)) {
+    await button.click()
+    await page.waitForTimeout(300)
+  }
+}
+
+async function selectAsset(page, filterText, assetId) {
+  await openAssetBrowser(page)
+  const filter = page.getByLabel('过滤资产')
+  await filter.waitFor({ timeout: 10000 })
+  await filter.fill(filterText)
+  await page.waitForTimeout(300)
+  const node = page.locator(`[data-asset-id="${assetId}"]`)
+  await node.waitFor({ timeout: 10000 })
+  await node.click()
+  await page.getByTestId('api-execution-panel').waitFor({ timeout: 10000 })
+}
+
+async function expectExecutionStatus(page, status) {
+  const result = page.getByTestId('execution-result')
+  await result.waitFor({ timeout: 15000 })
+  await result.getByText(status, { exact: true }).waitFor({ timeout: 10000 })
+}
+
+async function findProjectRow(page, projectName) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const row = page
+      .locator('.ant-table-row, [data-testid="project-row"]')
+      .filter({ hasText: projectName })
+    if ((await row.count()) > 0) {
+      return row.first()
+    }
+
+    const next = page.locator('.ant-pagination-next')
+    const nextClass = (await next.getAttribute('class').catch(() => '')) || ''
+    if ((await next.count()) === 0 || nextClass.includes('ant-pagination-disabled')) {
+      break
+    }
+    await next.click()
+    await page.waitForTimeout(300)
+  }
+  throw new Error(`项目列表中未找到 ${projectName}`)
+}
+
+async function ensureExecutionProject(page, viewportLabel) {
+  const projectName = `e2e-execution-${viewportLabel}`
+  const listResponse = await page.request.get(`${BASE}/api/projects?limit=10000`)
+  if (!listResponse.ok()) {
+    throw new Error(`读取门禁执行项目失败：HTTP ${listResponse.status()}`)
+  }
+  const projects = await listResponse.json()
+  const existing = projects.find((project) => project.name === projectName)
+  if (existing) {
+    return existing
+  }
+
+  // 执行记录会阻止项目删除，因此每个视口复用固定项目，避免门禁反复污染联调库。
+  const createResponse = await page.request.post(`${BASE}/api/projects`, {
+    data: {
+      name: projectName,
+      env: 'test',
+      assets_root: ASSETS_ROOT,
+      config_root: CONFIG_ROOT,
+    },
+  })
+  if (!createResponse.ok()) {
+    throw new Error(`创建门禁执行项目失败：HTTP ${createResponse.status()}`)
+  }
+  return createResponse.json()
+}
+
 async function runFlow(page, viewportLabel, projectName) {
   console.log('--- viewport', viewportLabel, page.viewportSize())
   const consoleErrors = []
@@ -87,6 +167,8 @@ async function runFlow(page, viewportLabel, projectName) {
     }
   })
 
+  const executionProject = await ensureExecutionProject(page, viewportLabel)
+
   await page.goto(`${BASE}/projects`, { waitUntil: 'networkidle' })
   await page.getByRole('button', { name: /新建项目/ }).first().click()
   const dialog = page.getByRole('dialog')
@@ -99,28 +181,78 @@ async function runFlow(page, viewportLabel, projectName) {
   await page.getByTestId('project-workspace').waitFor({ timeout: 15000 })
   await shot(page, `${viewportLabel}-01-workspace-after-create.png`)
 
-  const assetsBtn = page.getByRole('button', { name: '打开资产浏览' })
-  if (await assetsBtn.isVisible().catch(() => false)) {
-    await assetsBtn.click()
-    await page.waitForTimeout(400)
-  }
+  await page.getByRole('button', { name: '返回项目列表' }).click()
+  await page.waitForURL((url) => url.pathname === '/projects', { timeout: 10000 })
+  // HMR/抽屉动画下路由内容可能短暂滞后；重新进入同一路由后再验列表交互。
+  await page.goto(`${BASE}/projects`, { waitUntil: 'networkidle' })
+  const row = await findProjectRow(page, projectName)
+  await shot(page, `${viewportLabel}-07-list.png`)
 
+  await row.getByRole('button', { name: /工作台/ }).waitFor()
+  await row.getByRole('button', { name: /编辑/ }).waitFor()
+  await row.getByRole('button', { name: /删除/ }).waitFor()
+  await row.getByRole('button', { name: /编辑/ }).click()
+  const editDialog = page.getByRole('dialog').filter({ hasText: '编辑项目' })
+  await editDialog.waitFor()
+  const editedName = `${projectName}-edited`
+  await editDialog.getByLabel('项目名称').fill(editedName)
+  await editDialog.getByRole('button', { name: /确\s*定|OK/i }).click()
+  await page.getByText(editedName).waitFor({ timeout: 10000 })
+  await shot(page, `${viewportLabel}-08-after-edit.png`)
+
+  const deleteButton = page.getByRole('button', {
+    name: new RegExp(`删除项目 ${editedName}`),
+  })
+  await deleteButton.click()
+  const delDialog = page.getByRole('dialog')
+  await delDialog.waitFor()
+  await delDialog.getByRole('button', { name: /删\s*除/ }).click()
+  await deleteButton.waitFor({ state: 'detached', timeout: 10000 })
+  await shot(page, `${viewportLabel}-09-after-delete.png`)
+
+  await page.goto(`${BASE}/projects/${executionProject.id}`, { waitUntil: 'networkidle' })
+  await page.getByTestId('project-workspace').waitFor({ timeout: 15000 })
+
+  await openAssetBrowser(page)
   const filter = page.getByLabel('过滤资产')
   await filter.waitFor({ timeout: 10000 })
   await filter.fill('login')
   await page.waitForTimeout(300)
   await shot(page, `${viewportLabel}-02-asset-search.png`)
 
-  const loginNode = page.locator('[data-asset-id="api.user.login"]')
-  await loginNode.waitFor({ timeout: 10000 })
-  await loginNode.click()
-  await page.getByTestId('api-execution-panel').waitFor({ timeout: 10000 })
+  // 无参数 API 必须能直接执行，证明动态表单不会把空参数误判为异常。
+  await selectAsset(page, 'get_status', 'api.common.get_status')
+  await page.getByTestId('params-empty').waitFor({ timeout: 10000 })
+  await page.getByRole('button', { name: '执行 API' }).click()
+  await expectExecutionStatus(page, 'success')
+
+  await selectAsset(page, 'login', 'api.user.login')
   await shot(page, `${viewportLabel}-03-api-selected.png`)
 
   await page.getByTestId('param-username').fill('alice')
+
+  // 用一次性 422 响应验证前端错误态；随后恢复真实后端继续验证业务 failed/success。
+  const runPattern = '**/api/projects/*/assets/api.user.login/run'
+  await page.route(runPattern, async (route) => {
+    await route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'password 参数不合法' }),
+    })
+  }, { times: 1 })
+  await page.getByTestId('param-password').fill('invalid-for-422')
+  await page.getByRole('button', { name: '执行 API' }).click()
+  await page.getByRole('alert').filter({ hasText: '执行失败' }).waitFor({ timeout: 10000 })
+  await page.getByText('password 参数不合法').waitFor({ timeout: 10000 })
+  await page.unroute(runPattern)
+
+  await page.getByTestId('param-password').fill('wrong-password')
+  await page.getByRole('button', { name: '执行 API' }).click()
+  await expectExecutionStatus(page, 'failed')
+
   await page.getByTestId('param-password').fill('secret')
   await page.getByRole('button', { name: '执行 API' }).click()
-  await page.getByTestId('execution-result').waitFor({ timeout: 15000 })
+  await expectExecutionStatus(page, 'success')
   await shot(page, `${viewportLabel}-04-run-result.png`)
 
   const history = page.getByTestId('execution-history')
@@ -138,35 +270,6 @@ async function runFlow(page, viewportLabel, projectName) {
   const drawerClient = await page.evaluate(() => document.documentElement.clientWidth)
   const drawerOverflow = drawerScroll > drawerClient + 2
   await page.keyboard.press('Escape')
-
-  await page.getByRole('button', { name: '返回项目列表' }).click()
-  await page.getByText(projectName).waitFor({ timeout: 10000 })
-  await shot(page, `${viewportLabel}-07-list.png`)
-
-  const row = page.locator('.ant-table-row').filter({ hasText: projectName })
-  await row.getByRole('button', { name: '编辑' }).click()
-  const editDialog = page.getByRole('dialog').filter({ hasText: '编辑项目' })
-  await editDialog.waitFor()
-  await editDialog.getByLabel('项目名称').fill(`${projectName}-edited`)
-  await editDialog.getByRole('button', { name: /确\s*定|OK/i }).click()
-  await page.getByText(`${projectName}-edited`).waitFor({ timeout: 10000 })
-  await shot(page, `${viewportLabel}-08-after-edit.png`)
-
-  await page
-    .getByRole('button', { name: new RegExp(`删除项目 ${projectName}-edited`) })
-    .click()
-  const delDialog = page.getByRole('dialog')
-  await delDialog.waitFor()
-  await delDialog.getByRole('button', { name: /删\s*除/ }).click()
-  await page.waitForTimeout(1000)
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(300)
-  const okBtn = page.getByRole('button', { name: /确\s*定|OK/i })
-  if (await okBtn.isVisible().catch(() => false)) {
-    await okBtn.click().catch(() => {})
-  }
-  await page.keyboard.press('Escape')
-  await shot(page, `${viewportLabel}-09-after-delete.png`)
 
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
   const clientWidth = await page.evaluate(() => document.documentElement.clientWidth)

@@ -2,11 +2,11 @@
   {
     "viewportLabel": "desktop-1440x900",
     "consoleErrors": [
-      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"
     ],
     "pageErrors": [],
     "failedRequests": [
-      "500 DELETE http://127.0.0.1:5173/api/projects/6405cd43-d7d1-4dbf-ac06-cc2700f18a46"
+      "422 POST http://127.0.0.1:5173/api/projects/3c975d74-9315-4ab3-9190-4d71bb75457f/assets/api.user.login/run"
     ],
     "unexpectedConsole": [],
     "unexpectedPageErrors": [],
@@ -19,11 +19,11 @@
   {
     "viewportLabel": "mobile-390x844",
     "consoleErrors": [
-      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"
     ],
     "pageErrors": [],
     "failedRequests": [
-      "500 DELETE http://127.0.0.1:5173/api/projects/d8c38668-2b34-4022-8c13-eb4f89d38ec6"
+      "422 POST http://127.0.0.1:5173/api/projects/0684a45e-0405-41fd-b82e-399644e33a49/assets/api.user.login/run"
     ],
     "unexpectedConsole": [],
     "unexpectedPageErrors": [],

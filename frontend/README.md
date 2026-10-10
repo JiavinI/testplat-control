@@ -31,7 +31,7 @@ pnpm dev
 pnpm lint
 pnpm test --run
 pnpm build
-# 浏览器门禁（需后端 + 前端已启动，或由脚本拉起）
+# 浏览器门禁：先分别启动本机 8000 端口后端和 5173 端口前端
 node scripts/e2e-gate.mjs
 ```
 
