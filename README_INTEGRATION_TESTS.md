@@ -65,5 +65,5 @@ pytest tests/integration --cov=testplat_control.api --cov=testplat_control.servi
 - **参数 422**：`password` 在登录接口上必填；`username` 和 `email` 在创建用户接口上必填且必须是字符串。未在 YAML `inputs` 里声明的字段会被拒绝。
 - **执行 500**：说明请求打到了真正的 `EngineAdapter`，而本机没有 `testplat-engine`。确认测试启用了 `engine` fixture，替身挂在 `testplat_control.api.run.EngineAdapter`。
 - **列表是空的**：执行若返回 422，记录不会写入。先看执行响应的 `status`，再用同一个 `project_id` 查询。
-- **全量 `pytest` 里有 skip**：`tests/test_asset_service.py` 和部分 YAML 解析用例依赖仓库外的 `testplat1/test_assets`。目录不存在时会跳过。集成测试不使用那个目录。
+- **全量 `pytest` 里有 skip**：资产与 YAML 回归用例使用仓库内 `tests/fixtures/assets`。该目录属于测试契约，缺失时测试会直接失败；若出现 skip，应检查具体用例和 skip 原因，不能把 fixture 缺失当作可接受状态。
 - **并发用例失败**：它通过一个事件循环同时发出请求，并在替身里短暂等待，让请求重叠。不要改成多个进程共享这个内存库。

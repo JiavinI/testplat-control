@@ -25,13 +25,15 @@ pnpm dev
 
 后端需在本机 `8000` 端口启动；资产与配置路径在创建项目时填写（可用仓库内 `tests/fixtures/assets` 与 `tests/fixtures/config`）。
 
+完整的单 API 执行还要求后端能够加载 sibling `testplat-engine`，或由验收 harness 显式注入 `FakeEngineAdapter`。缺少 Engine 时，项目 CRUD 和资产浏览仍可用，但执行接口会返回 500。FakeEngine 的替换 seam 与排查方式见 [`../README_INTEGRATION_TESTS.md`](../README_INTEGRATION_TESTS.md)。
+
 ## 脚本
 
 ```bash
 pnpm lint
 pnpm test --run
 pnpm build
-# 浏览器门禁：先分别启动本机 8000 端口后端和 5173 端口前端
+# 浏览器门禁：先启动可执行 API 的后端（真实 Engine 或 FakeEngine harness）和 5173 前端
 node scripts/e2e-gate.mjs
 ```
 
