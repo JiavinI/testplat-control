@@ -1,0 +1,314 @@
+"""执行记录过滤、排序和详情测试。"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from uuid import uuid4
+
+from fastapi.testclient import TestClient
+
+from testplat_control.api.schemas import (
+    ExecutionRecordDetailResponse,
+    ExecutionRecordListResponse,
+    parse_result_json,
+)
+from testplat_control.database.models import ExecutionRecord
+from testplat_control.database.session import SessionLocal
+from testplat_control.main import app
+
+client = TestClient(app)
+
+
+def _create_project() -> str:
+    response = client.post(
+        "/projects",
+        json={
+            "name": f"exec-{uuid4().hex[:8]}",
+            "env": "test",
+            "assets_root": "/assets",
+            "config_root": "/config",
+        },
+    )
+    assert response.status_code == 200
+    return response.json()["id"]
+
+
+def _add_record(
+    project_id: str,
+    *,
+    asset_id: str,
+    status: str,
+    start_time: datetime,
+    end_time: datetime | None = None,
+    duration: float | None = None,
+    result: object | None = None,
+    result_json: str | None = None,
+    asset_type: str = "api",
+) -> str:
+    record_id = str(uuid4())
+    if result_json is None and result is not None:
+        result_json = json.dumps(result)
+    db = SessionLocal()
+    try:
+        db.add(
+            ExecutionRecord(
+                id=record_id,
+                project_id=project_id,
+                asset_type=asset_type,
+                asset_id=asset_id,
+                status=status,
+                start_time=start_time,
+                end_time=end_time,
+                duration=duration,
+                result_json=result_json,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    return record_id
+
+
+def test_list_filters_by_status_and_asset_id() -> None:
+    """status 与 asset_id 可单独或同时过滤。"""
+    project_id = _create_project()
+    login_ok = _add_record(
+        project_id,
+        asset_id="api.user.login",
+        status="success",
+        start_time=datetime(2026, 10, 10, 8, 0, 0),
+        duration=1.0,
+    )
+    _add_record(
+        project_id,
+        asset_id="api.user.login",
+        status="failed",
+        start_time=datetime(2026, 10, 10, 9, 0, 0),
+        duration=0.5,
+    )
+    create_ok = _add_record(
+        project_id,
+        asset_id="api.user.create",
+        status="success",
+        start_time=datetime(2026, 10, 10, 10, 0, 0),
+        duration=2.0,
+    )
+
+    by_status = client.get(
+        f"/projects/{project_id}/execution-records",
+        params={"status": "success"},
+    )
+    assert by_status.status_code == 200
+    assert {item["id"] for item in by_status.json()} == {login_ok, create_ok}
+    assert all(item["status"] == "success" for item in by_status.json())
+
+    by_asset = client.get(
+        f"/projects/{project_id}/execution-records",
+        params={"asset_id": "api.user.login"},
+    )
+    assert by_asset.status_code == 200
+    assert len(by_asset.json()) == 2
+    assert {item["asset_id"] for item in by_asset.json()} == {"api.user.login"}
+
+    both = client.get(
+        f"/projects/{project_id}/execution-records",
+        params={"status": "failed", "asset_id": "api.user.login"},
+    )
+    assert both.status_code == 200
+    assert len(both.json()) == 1
+    assert both.json()[0]["status"] == "failed"
+    assert both.json()[0]["asset_id"] == "api.user.login"
+    assert set(both.json()[0]) == {"id", "asset_id", "status", "start_time", "duration"}
+
+
+def test_list_defaults_to_start_time_desc_and_can_sort_asc() -> None:
+    """默认按开始时间从新到旧，start_time_asc 反过来。"""
+    project_id = _create_project()
+    early = _add_record(
+        project_id,
+        asset_id="api.a",
+        status="success",
+        start_time=datetime(2026, 10, 1, 8, 0, 0),
+        duration=1.0,
+    )
+    middle = _add_record(
+        project_id,
+        asset_id="api.b",
+        status="success",
+        start_time=datetime(2026, 10, 2, 8, 0, 0),
+        duration=2.0,
+    )
+    late = _add_record(
+        project_id,
+        asset_id="api.c",
+        status="failed",
+        start_time=datetime(2026, 10, 3, 8, 0, 0),
+        duration=3.0,
+    )
+
+    default = client.get(f"/projects/{project_id}/execution-records")
+    assert [item["id"] for item in default.json()] == [late, middle, early]
+
+    explicit = client.get(
+        f"/projects/{project_id}/execution-records",
+        params={"order_by": "start_time"},
+    )
+    assert [item["id"] for item in explicit.json()] == [late, middle, early]
+
+    ascending = client.get(
+        f"/projects/{project_id}/execution-records",
+        params={"order_by": "start_time_asc"},
+    )
+    assert [item["id"] for item in ascending.json()] == [early, middle, late]
+
+    by_duration = client.get(
+        f"/projects/{project_id}/execution-records",
+        params={"order_by": "-duration"},
+    )
+    assert [item["id"] for item in by_duration.json()] == [late, middle, early]
+
+
+def test_list_paginates_after_sorting() -> None:
+    """skip/limit 作用在排序之后。"""
+    project_id = _create_project()
+    ids = [
+        _add_record(
+            project_id,
+            asset_id="api.page",
+            status="success",
+            start_time=datetime(2026, 10, day, 0, 0, 0),
+            duration=1.0,
+        )
+        for day in (1, 2, 3)
+    ]
+
+    page = client.get(
+        f"/projects/{project_id}/execution-records",
+        params={"skip": 1, "limit": 1},
+    )
+    assert page.status_code == 200
+    assert [item["id"] for item in page.json()] == [ids[1]]
+
+
+def test_list_rejects_unknown_order_and_missing_project() -> None:
+    """无法识别的排序返回 422，项目不存在返回 404。"""
+    project_id = _create_project()
+    bad_order = client.get(
+        f"/projects/{project_id}/execution-records",
+        params={"order_by": "name"},
+    )
+    assert bad_order.status_code == 422
+    assert "order_by" in bad_order.json()["detail"]
+
+    missing = client.get("/projects/missing-project/execution-records")
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "Project not found"
+
+
+def test_detail_returns_parsed_result_request_and_display() -> None:
+    """详情解析 result_json，抽出 request/response，并格式化时间与耗时。"""
+    project_id = _create_project()
+    payload = {
+        "status": "success",
+        "request": {"method": "POST", "url": "/users", "body": {"username": "alice"}},
+        "response": {"status_code": 201, "body": {"id": "u1"}},
+        "error": None,
+    }
+    record_id = _add_record(
+        project_id,
+        asset_id="api.user.create",
+        status="success",
+        start_time=datetime(2026, 10, 10, 8, 30, 0),
+        end_time=datetime(2026, 10, 10, 8, 30, 2),
+        duration=1.5,
+        result=payload,
+        asset_type="api",
+    )
+
+    response = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == record_id
+    assert body["project_id"] == project_id
+    assert body["asset_id"] == "api.user.create"
+    assert body["asset_type"] == "api"
+    assert body["status"] == "success"
+    assert body["duration"] == 1.5
+    assert body["result"] == payload
+    assert body["request"] == payload["request"]
+    assert body["response"] == payload["response"]
+    assert body["display"] == {
+        "start_time": "2026-10-10 08:30:00",
+        "end_time": "2026-10-10 08:30:02",
+        "duration": "1.50s",
+    }
+
+
+def test_detail_handles_invalid_json() -> None:
+    """损坏的 result_json 仍返回详情，并在 result 中标记解析失败。"""
+    project_id = _create_project()
+    record_id = _add_record(
+        project_id,
+        asset_id="api.user.login",
+        status="failed",
+        start_time=datetime(2026, 10, 10, 1, 0, 0),
+        duration=0.25,
+        result_json="{not-json",
+    )
+
+    response = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"]["parse_error"] == "invalid JSON"
+    assert body["result"]["raw"] == "{not-json"
+    assert body["request"] is None
+    assert body["response"] is None
+    assert body["display"]["duration"] == "250ms"
+    assert parse_result_json("{not-json") == body["result"]
+
+
+def test_detail_not_found_and_other_project() -> None:
+    """记录不存在，或属于其他项目时返回 404。"""
+    project_id = _create_project()
+    other_id = _create_project()
+    record_id = _add_record(
+        other_id,
+        asset_id="api.user.login",
+        status="success",
+        start_time=datetime(2026, 10, 10, 1, 0, 0),
+    )
+
+    missing = client.get(f"/projects/{project_id}/execution-records/missing-record")
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "Execution record not found"
+
+    foreign = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    assert foreign.status_code == 404
+    assert foreign.json()["detail"] == "Execution record not found"
+
+
+def test_from_model_helpers_parse_result() -> None:
+    """from_model / from_orm 直接解析模型，不经过 HTTP。"""
+    record = ExecutionRecord(
+        id="rec-1",
+        project_id="proj-1",
+        asset_type="case",
+        asset_id="case.login",
+        status="success",
+        start_time=datetime(2026, 10, 10, 12, 0, 0),
+        end_time=None,
+        duration=None,
+        result_json=json.dumps(["not", "a", "dict"]),
+    )
+
+    listed = ExecutionRecordListResponse.from_orm(record)
+    assert listed.id == "rec-1"
+    assert listed.duration is None
+
+    detail = ExecutionRecordDetailResponse.from_model(record)
+    assert detail.result == {"value": ["not", "a", "dict"]}
+    assert detail.display.start_time == "2026-10-10 12:00:00"
+    assert detail.display.end_time is None
+    assert detail.display.duration is None
+    assert detail.request is None

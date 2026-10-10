@@ -331,7 +331,8 @@ def test_run_success_persists_record(project_id: str, monkeypatch: pytest.Monkey
     assert saved["asset_type"] == "api"
     assert saved["asset_id"] == asset_id
     assert saved["status"] == "success"
-    assert json.loads(saved["result_json"]) == result
+    assert saved["result"] == result
+    assert saved["response"] == result["response"]
 
 
 def test_run_failure_persists_record(project_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
