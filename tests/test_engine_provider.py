@@ -112,4 +112,3 @@ def test_ensure_engine_compatible_fail_fast_on_bad_create_engine(
     monkeypatch.setattr(eng, "create_engine", lambda: _Bad())
     with pytest.raises(EngineBootstrapError, match="async"):
         ensure_engine_compatible()
-
