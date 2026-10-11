@@ -11,24 +11,23 @@ Control 通过 Python 包依赖调用 `testplat-engine`，**禁止**运行时 `s
 - 默认 DI 提供 `PackageEngineAdapter`（仅解析已安装包的官方 `create_engine()`）
 - 测试 / 浏览器 Fake 门禁通过 `app.dependency_overrides[get_engine_port]` 或 `harness_fake` 注入 `FakeEngineAdapter`
 
-### 本地开发安装（Agent 4 验收）
+### 安装（git commit 锁定）
 
-本集成分支用 uv path editable 指向 **Engine 集成 worktree**（相对路径，含 runtime）：
+`testplat-engine` 通过 `[tool.uv.sources]` **锁定到远程 git commit**（非本地 path editable）：
 
 ```toml
 # pyproject.toml 中的 [tool.uv.sources]
-testplat-engine = { path = "../phase2-5-integration", editable = true }
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "942a66dd127de3647deab88611ada2a9bcc06c90" }
 ```
 
-对应 Engine 候选：`codex/phase2-5-integration`（基于 Agent 2 `dfdec69`，并补充 `create_engine`）。
+- 版本约束：`>=0.1.0,<0.2`（与依赖声明一致）
+- 对应远程分支：`codex/phase2-5-integration`（安装以 **rev/commit** 为准，不依赖分支名漂移）
+- 换机 / clean-machine：只需能访问该仓库与 commit；**不需要** sibling Engine worktree，也**禁止** `sys.path` 注入
 
 ```bash
 uv sync --extra dev
 uv run uvicorn testplat_control.main:app --host 127.0.0.1 --port 8000
 ```
-
-正式 git commit / tag 锁定为推送 Engine 远程后的 follow-up（**本修复阶段仍保持 path editable，不要求远程 tag lock；亦不宣称 clean-machine final**）。
-在未推送前，换机验收需同时 checkout 两个 worktree 并保持上述相对路径。
 
 ### FakeEngine 门禁启动
 
@@ -72,7 +71,7 @@ cd frontend && pnpm e2e:gate
 
 ## 故障排查
 
-- **启动报未安装 / 版本不兼容 / 缺少 runtime**：按上方 uv sources 安装 Engine 集成 worktree，或等待正式 git 锁定。
+- **启动报未安装 / 版本不兼容 / 缺少 runtime**：执行 `uv sync --extra dev`，确认能拉取 `testplat-engine` 的锁定 commit；勿用 `sys.path` 或本地 sibling path 绕过。
 - **启动即失败 / 不再延迟 503**：包只有 Interface、没有可用的 `create_engine()`，或返回值不是 EnginePort 时，lifespan 直接 fail-fast。
 - **业务 failed 却不是 200**：不应发生；检查是否把断言失败误映射成系统错误。
 - **e2e 打到真实网络**：门禁用 `harness_fake:app`；真实冒烟才用 `main:app` + 本地目标。

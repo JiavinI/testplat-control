@@ -14,7 +14,7 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "packaging>=24.0",
-    # Phase 2.5：正式锁定由 Agent 4 改为 git commit；本地开发用下方 uv sources 覆盖。
+    # Phase 2.5：testplat-engine 由 [tool.uv.sources] 锁定到远程 git commit。
     "testplat-engine>=0.1.0,<0.2",
 ]
 
@@ -35,9 +35,9 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 本地验收：相对路径指向 Engine 集成分支 worktree（官方入口 create_engine）。
-# 勿把绝对路径写进运行时。正式 git commit/tag 锁定为推送后的 follow-up；本阶段保持 editable。
-testplat-engine = { path = "../phase2-5-integration", editable = true }
+# Phase 2.5：锁定远程 Engine 集成分支 commit（官方入口 create_engine）。
+# 勿把本地 path / sys.path 写进运行时；换机仅需能访问该 git rev。
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "942a66dd127de3647deab88611ada2a9bcc06c90" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

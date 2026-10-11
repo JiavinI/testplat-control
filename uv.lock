@@ -691,7 +691,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "testplat-engine", editable = "../phase2-5-integration" },
+    { name = "testplat-engine", git = "https://github.com/JiavinI/testplat-engine.git?rev=942a66dd127de3647deab88611ada2a9bcc06c90" },
     { name = "uvicorn", specifier = ">=0.24" },
 ]
 provides-extras = ["dev"]
@@ -699,29 +699,10 @@ provides-extras = ["dev"]
 [[package]]
 name = "testplat-engine"
 version = "0.1.0"
-source = { editable = "../phase2-5-integration" }
+source = { git = "https://github.com/JiavinI/testplat-engine.git?rev=942a66dd127de3647deab88611ada2a9bcc06c90#942a66dd127de3647deab88611ada2a9bcc06c90" }
 dependencies = [
     { name = "httpx" },
     { name = "pyyaml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
-]
-provides-extras = ["dev"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23" },
-    { name = "pytest-cov", specifier = ">=4.1" },
-    { name = "ruff", specifier = ">=0.6" },
 ]
 
 [[package]]
