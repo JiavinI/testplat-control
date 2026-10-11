@@ -691,7 +691,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "testplat-engine", editable = "../phase2-5-engine-interface" },
+    { name = "testplat-engine", editable = "../phase2-5-integration" },
     { name = "uvicorn", specifier = ">=0.24" },
 ]
 provides-extras = ["dev"]
@@ -699,7 +699,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "testplat-engine"
 version = "0.1.0"
-source = { editable = "../phase2-5-engine-interface" }
+source = { editable = "../phase2-5-integration" }
 dependencies = [
     { name = "httpx" },
     { name = "pyyaml" },

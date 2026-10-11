@@ -2,7 +2,7 @@
 id: api.common.post_json
 name: POST JSON 数据
 desc: 测试 POST 请求发送 JSON 数据
-host: httpbin
+host: test_server
 method: POST
 url: /post
 request:

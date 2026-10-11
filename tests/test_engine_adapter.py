@@ -9,6 +9,7 @@ from testplat_engine import (
     ApiExecutionOutcome,
     ApiExecutionRequest,
     EngineUnavailableError,
+    SingleApiEngine,
 )
 
 from testplat_control.adapters.package_engine import PackageEngineAdapter, resolve_package_engine
@@ -55,19 +56,43 @@ async def test_package_adapter_delegates_to_injected_engine() -> None:
     assert stub.calls[0].api_id == "api.common.health_check"
 
 
-@pytest.mark.asyncio
-async def test_package_adapter_raises_unavailable_when_runtime_missing() -> None:
-    """bee429d 仅有 Interface 时，无 delegate 的真实适配器在 execute 时抛 unavailable。"""
-    # 当前 Interface worktree 未导出 create_engine/execute
-    with pytest.raises(EngineUnavailableError) as exc_info:
-        resolve_package_engine()
-    assert exc_info.value.kind == "unavailable"
-    assert exc_info.value.stage == "preflight"
+def test_resolve_package_engine_returns_runtime() -> None:
+    """已安装 runtime 时解析出可执行的 EnginePort（create_engine / SingleApiEngine）。"""
+    engine = resolve_package_engine()
+    assert callable(engine.execute)
+    # 当前集成分支应解析为 SingleApiEngine
+    assert isinstance(engine, SingleApiEngine)
 
+
+@pytest.mark.asyncio
+async def test_package_adapter_uses_resolved_runtime() -> None:
+    """无 delegate 时默认适配器委托已安装 runtime，不再抛 unavailable。"""
+    adapter = PackageEngineAdapter()
+    assert adapter._delegate is not None  # noqa: SLF001
+    assert adapter._resolve_error is None  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_package_adapter_raises_unavailable_when_runtime_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """模拟仅有 Interface、无 runtime 入口时，execute 抛 unavailable。"""
+
+    def _boom() -> None:
+        raise EngineUnavailableError(
+            public_message="执行引擎不可用：已安装包，但缺少公开 execute 入口",
+            log_reason="simulated missing runtime",
+        )
+
+    monkeypatch.setattr(
+        "testplat_control.adapters.package_engine.resolve_package_engine",
+        _boom,
+    )
     adapter = PackageEngineAdapter()
     with pytest.raises(EngineUnavailableError) as raised:
         await adapter.execute(_request())
     assert raised.value.kind == "unavailable"
+    assert raised.value.stage == "preflight"
 
 
 def test_package_adapter_is_default_concrete_type() -> None:

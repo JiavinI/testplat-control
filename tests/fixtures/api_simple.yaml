@@ -2,7 +2,7 @@
 id: api.test.simple
 name: 简单测试
 desc: 测试 API 解析
-host: httpbin
+host: test_server
 method: GET
 url: /status/200
 request:

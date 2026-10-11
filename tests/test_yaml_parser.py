@@ -24,7 +24,7 @@ class TestYamlParserApiYaml:
         assert result["desc"] == "测试 API 解析"
         assert result["method"] == "GET"
         assert result["url"] == "/status/200"
-        assert result["host"] == "httpbin"
+        assert result["host"] == "test_server"
 
     def test_parse_api_yaml_extracts_inputs(self):
         """测试: 提取 inputs 字段"""

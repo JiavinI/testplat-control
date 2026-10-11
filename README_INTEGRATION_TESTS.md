@@ -55,7 +55,7 @@ uv run pytest tests/integration --cov=testplat_control.api --cov=testplat_contro
 - `httpx`（`AsyncClient` 发并发请求，`TestClient` 走其余请求）
 - `pytest-cov`（只在查看覆盖率时需要）
 
-运行时依赖是 FastAPI、SQLAlchemy、Pydantic、PyYAML，以及 `testplat-engine`（0.1.x）。本地开发可用 uv path editable 指向 Interface worktree。集成测试通过 `app.dependency_overrides[get_engine_port]` 注入 `FakeEngineAdapter`，不 monkeypatch 路由全局符号，也不访问真实网络。
+运行时依赖是 FastAPI、SQLAlchemy、Pydantic、PyYAML，以及 `testplat-engine`（0.1.x）。本地开发可用 uv path editable 指向 Engine 集成 worktree（`../phase2-5-integration`）。集成测试通过 `app.dependency_overrides[get_engine_port]` 注入 `FakeEngineAdapter`，不 monkeypatch 路由全局符号，也不访问真实网络。
 
 数据库用的是应用启动时的共享内存 SQLite（`StaticPool`）。每个用例创建自己的项目，记录按 `project_id` 隔离。
 
@@ -63,7 +63,8 @@ uv run pytest tests/integration --cov=testplat_control.api --cov=testplat_contro
 
 - **资产 404**：项目的 `assets_root` 必须是 `tests/fixtures/assets`。资产 ID 来自目录，例如 `api/user/login.yaml` 对应 `api.user.login`。
 - **参数 422**：`password` 在登录接口上必填；`username` 和 `email` 在创建用户接口上必填且必须是字符串。未在 YAML `inputs` 里声明的字段会被拒绝。
-- **执行 503/unavailable**：说明请求打到了默认 `PackageEngineAdapter`，而 Interface 尚未提供 runtime execute。确认测试启用了 `engine` fixture，并通过 `dependency_overrides[get_engine_port]` 注入 Fake。
+- **执行 503/unavailable**：说明请求打到了默认 `PackageEngineAdapter`，但已安装包缺少 runtime。确认 Fake 用例启用了 `engine` fixture；真实用例应安装 Engine 集成 worktree。
+- **真实 Engine 矩阵**：`tests/integration/test_real_engine_flow.py`（本地 HTTP，覆盖 success/failed/timeout/transport/invalid environment）。
 - **列表是空的**：执行若返回 422，记录不会写入。先看执行响应的 `status`，再用同一个 `project_id` 查询。
 - **全量 `pytest` 里有 skip**：`tests/test_asset_service.py` 和部分 YAML 解析用例依赖仓库外的 `testplat1/test_assets`。目录不存在时会跳过。集成测试不使用那个目录。
 - **并发用例失败**：它通过一个事件循环同时发出请求，并在替身里短暂等待，让请求重叠。不要改成多个进程共享这个内存库。

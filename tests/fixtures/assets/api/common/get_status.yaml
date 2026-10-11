@@ -2,7 +2,7 @@
 id: api.common.get_status
 name: 获取状态码
 desc: 测试简单的 GET 请求,验证返回指定状态码
-host: httpbin
+host: test_server
 method: GET
 url: /status/200
 request:

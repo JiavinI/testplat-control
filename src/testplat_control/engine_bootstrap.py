@@ -23,6 +23,8 @@ _REQUIRED_EXPORTS = (
     "EnginePort",
     "__version__",
 )
+# runtime 入口：至少具备其一，否则只装了 Interface 契约无法真正执行。
+_REQUIRED_RUNTIME_EXPORTS = ("create_engine", "SingleApiEngine")
 
 
 class EngineBootstrapError(RuntimeError):
@@ -83,6 +85,13 @@ def ensure_engine_compatible() -> str:
             "testplat-engine Interface 不兼容，缺少公开符号: "
             + ", ".join(missing)
             + f"。当前版本 {check_version}。"
+        )
+
+    if not any(hasattr(eng, name) for name in _REQUIRED_RUNTIME_EXPORTS):
+        raise EngineBootstrapError(
+            "testplat-engine 缺少 runtime 入口（需要 create_engine 或 SingleApiEngine）。"
+            f"当前版本 {check_version} 可能只安装了 Interface 契约；"
+            "请安装含真实执行实现的 0.1.x（见 README）。"
         )
 
     logger.info("Engine 依赖就绪: %s==%s", ENGINE_DISTRIBUTION, check_version)

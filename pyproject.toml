@@ -35,9 +35,9 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 本地开发覆盖：指向已审查的 Interface worktree（bee429d）。勿把绝对路径写进运行时。
-# Agent 4 将改为正式 git 依赖锁定。
-testplat-engine = { path = "../phase2-5-engine-interface", editable = true }
+# 本地 Agent 4 验收：相对路径指向 Engine 集成分支 worktree（含 create_engine / SingleApiEngine）。
+# 勿把绝对路径写进运行时。正式 git commit 锁定为推送后的 follow-up。
+testplat-engine = { path = "../phase2-5-integration", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

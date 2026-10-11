@@ -36,14 +36,12 @@ class _CallableEngine:
 def resolve_package_engine() -> EnginePort:
     """从已安装的 testplat-engine 解析公开 EnginePort 实现。
 
-    解析顺序（兼容 Agent 2 可能落地的导出形态）：
+    解析顺序：
 
     1. ``testplat_engine.create_engine()``
     2. ``testplat_engine.application.create_engine()``
-    3. 模块级 ``testplat_engine.execute(request)``
-
-    bee429d 仅有 Interface 契约、尚无 runtime execute 时抛出 ``EngineUnavailableError``，
-    由 Control 映射为启动诊断或运行期 503；Agent 4 在 runtime 合入后应能直接解析成功。
+    3. ``testplat_engine.SingleApiEngine()``
+    4. 模块级 ``testplat_engine.execute(request)``
 
     Returns:
         可调用的 EnginePort。
@@ -68,15 +66,21 @@ def resolve_package_engine() -> EnginePort:
         _assert_engine_port(engine, "testplat_engine.application.create_engine()")
         return engine  # type: ignore[no-any-return]
 
+    single_cls = getattr(eng, "SingleApiEngine", None)
+    if callable(single_cls):
+        engine = single_cls()
+        _assert_engine_port(engine, "testplat_engine.SingleApiEngine()")
+        return engine  # type: ignore[no-any-return]
+
     execute_fn = getattr(eng, "execute", None)
     if callable(execute_fn):
         return _CallableEngine(execute_fn)
 
     raise EngineUnavailableError(
-        public_message="执行引擎不可用：已安装 Interface，但缺少公开 execute 入口",
+        public_message="执行引擎不可用：已安装包，但缺少公开 execute 入口",
         log_reason=(
-            "testplat-engine 已安装且版本兼容，但未导出 create_engine/execute；"
-            "Interface worktree（bee429d）仅含契约，等待 Agent 2 runtime 落地"
+            "testplat-engine 已安装且版本兼容，但未导出 create_engine/"
+            "SingleApiEngine/execute；请安装含 runtime 的 0.1.x 包"
         ),
     )
 
