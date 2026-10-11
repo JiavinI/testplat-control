@@ -86,3 +86,30 @@ def test_lifespan_fail_fast_when_engine_incompatible(
     with pytest.raises(EngineBootstrapError, match="版本不兼容"):
         with TestClient(broken_app):
             pass
+
+
+def test_ensure_engine_compatible_requires_callable_create_engine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """缺少 create_engine 时启动诊断 fail-fast。"""
+    import testplat_engine as eng
+
+    monkeypatch.delattr(eng, "create_engine", raising=False)
+    with pytest.raises(EngineBootstrapError, match="create_engine"):
+        ensure_engine_compatible()
+
+
+def test_ensure_engine_compatible_fail_fast_on_bad_create_engine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """create_engine 返回无 async execute 的对象时启动失败。"""
+    import testplat_engine as eng
+
+    class _Bad:
+        def execute(self, request):  # noqa: ANN001, ANN201
+            return None
+
+    monkeypatch.setattr(eng, "create_engine", lambda: _Bad())
+    with pytest.raises(EngineBootstrapError, match="async"):
+        ensure_engine_compatible()
+

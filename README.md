@@ -7,8 +7,8 @@
 Control 通过 Python 包依赖调用 `testplat-engine`，**禁止**运行时 `sys.path` 注入。
 
 - 兼容版本：`testplat-engine>=0.1.0,<0.2`（0.1.x）
-- 启动时校验：包是否安装、版本是否兼容、Interface 符号与 runtime 入口（`create_engine` 或 `SingleApiEngine`）是否齐全；失败则 fail-fast
-- 默认 DI 提供 `PackageEngineAdapter`（解析已安装包的 `create_engine()`）
+- 启动时校验：包是否安装、版本是否兼容、Interface 符号齐全，并**实际调用**公开 `create_engine()`，验证返回对象具备 async `execute`；失败则 fail-fast（不再把无效 runtime 延迟到首次执行 503）
+- 默认 DI 提供 `PackageEngineAdapter`（仅解析已安装包的官方 `create_engine()`）
 - 测试 / 浏览器 Fake 门禁通过 `app.dependency_overrides[get_engine_port]` 或 `harness_fake` 注入 `FakeEngineAdapter`
 
 ### 本地开发安装（Agent 4 验收）
@@ -27,7 +27,8 @@ uv sync --extra dev
 uv run uvicorn testplat_control.main:app --host 127.0.0.1 --port 8000
 ```
 
-正式 git commit / tag 锁定为推送 Engine 远程后的 follow-up；在未推送前，换机验收需同时 checkout 两个 worktree 并保持上述相对路径。
+正式 git commit / tag 锁定为推送 Engine 远程后的 follow-up（**本修复阶段仍保持 path editable，不要求远程 tag lock；亦不宣称 clean-machine final**）。
+在未推送前，换机验收需同时 checkout 两个 worktree 并保持上述相对路径。
 
 ### FakeEngine 门禁启动
 
@@ -72,6 +73,6 @@ cd frontend && pnpm e2e:gate
 ## 故障排查
 
 - **启动报未安装 / 版本不兼容 / 缺少 runtime**：按上方 uv sources 安装 Engine 集成 worktree，或等待正式 git 锁定。
-- **执行 503 unavailable**：包只有 Interface、没有 `create_engine`/`SingleApiEngine`。
+- **启动即失败 / 不再延迟 503**：包只有 Interface、没有可用的 `create_engine()`，或返回值不是 EnginePort 时，lifespan 直接 fail-fast。
 - **业务 failed 却不是 200**：不应发生；检查是否把断言失败误映射成系统错误。
 - **e2e 打到真实网络**：门禁用 `harness_fake:app`；真实冒烟才用 `main:app` + 本地目标。

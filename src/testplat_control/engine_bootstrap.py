@@ -1,10 +1,11 @@
 """启动期 Engine 依赖诊断。
 
-缺包或版本不兼容时 fail-fast，避免用户点击「执行」才遇到模糊 500。
+缺包、版本不兼容或 runtime 入口无效时 fail-fast，避免用户点击「执行」才遇到模糊 500/503。
 """
 
 from __future__ import annotations
 
+import inspect
 import logging
 from importlib.metadata import PackageNotFoundError, version
 
@@ -23,8 +24,6 @@ _REQUIRED_EXPORTS = (
     "EnginePort",
     "__version__",
 )
-# runtime 入口：至少具备其一，否则只装了 Interface 契约无法真正执行。
-_REQUIRED_RUNTIME_EXPORTS = ("create_engine", "SingleApiEngine")
 
 
 class EngineBootstrapError(RuntimeError):
@@ -32,13 +31,20 @@ class EngineBootstrapError(RuntimeError):
 
 
 def ensure_engine_compatible() -> str:
-    """校验 testplat-engine 已安装、版本兼容且公开 Interface 符号齐全。
+    """校验 testplat-engine 已安装、版本兼容，并实际调用公开 ``create_engine()``。
+
+    启动期会：
+    1. 确认发行版与 Interface 符号齐全；
+    2. 解析且调用唯一官方入口 ``create_engine()``；
+    3. 验证返回对象具备 async ``execute``。
+
+    任一步失败则 fail-fast，不再把无效 runtime 延迟到首次执行的 503。
 
     Returns:
         已解析的 Engine 版本字符串。
 
     Raises:
-        EngineBootstrapError: 缺包、版本不兼容或 Interface 符号缺失。
+        EngineBootstrapError: 缺包、版本不兼容、入口缺失或 runtime 无效。
     """
     try:
         import testplat_engine as eng
@@ -87,12 +93,37 @@ def ensure_engine_compatible() -> str:
             + f"。当前版本 {check_version}。"
         )
 
-    if not any(hasattr(eng, name) for name in _REQUIRED_RUNTIME_EXPORTS):
+    factory = getattr(eng, "create_engine", None)
+    if not callable(factory):
         raise EngineBootstrapError(
-            "testplat-engine 缺少 runtime 入口（需要 create_engine 或 SingleApiEngine）。"
+            "testplat-engine 缺少公开 runtime 入口 create_engine()。"
             f"当前版本 {check_version} 可能只安装了 Interface 契约；"
             "请安装含真实执行实现的 0.1.x（见 README）。"
         )
 
-    logger.info("Engine 依赖就绪: %s==%s", ENGINE_DISTRIBUTION, check_version)
+    try:
+        runtime = factory()
+    except Exception as exc:
+        raise EngineBootstrapError(
+            "testplat-engine.create_engine() 调用失败，无法在启动期构造执行引擎："
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+    execute = getattr(runtime, "execute", None)
+    if execute is None or not callable(execute):
+        raise EngineBootstrapError(
+            "testplat-engine.create_engine() 返回值缺少可调用的 execute；"
+            "无法作为 EnginePort 使用。"
+        )
+    if not inspect.iscoroutinefunction(execute):
+        raise EngineBootstrapError(
+            "testplat-engine.create_engine() 返回值的 execute 不是 async 协程函数；"
+            "无法作为 EnginePort 使用。"
+        )
+
+    logger.info(
+        "Engine 依赖就绪: %s==%s（create_engine 已验证）",
+        ENGINE_DISTRIBUTION,
+        check_version,
+    )
     return check_version

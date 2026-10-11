@@ -70,14 +70,25 @@ def _build_record(
 
 
 def _persist(db: Session, record: ExecutionRecord) -> ExecutionRecord:
-    """写入执行记录；失败时回滚并返回 500。"""
+    """写入执行记录；失败时回滚并返回 500。
+
+    并发共享 SQLite（StaticPool）下 ``commit`` 后 ``refresh`` 易竞态失败；
+    且默认 ``expire_on_commit`` 后再读 ORM 属性会触发隐式 SELECT。
+    因此：提交前捕获 id；提交时关闭 expire；绝不在 except 中读已过期属性。
+    """
+    record_id = record.id
     try:
         db.add(record)
-        db.commit()
-        db.refresh(record)
+        # 保留内存中已赋值字段，避免 commit 后 refresh/lazy-load 竞态。
+        previous_expire = db.expire_on_commit
+        db.expire_on_commit = False
+        try:
+            db.commit()
+        finally:
+            db.expire_on_commit = previous_expire
     except SQLAlchemyError as exc:
         db.rollback()
-        logger.exception("Failed to persist execution record %s", getattr(record, "id", None))
+        logger.exception("Failed to persist execution record %s", record_id)
         raise HTTPException(
             status_code=500,
             detail="Failed to persist execution record",

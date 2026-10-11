@@ -2,12 +2,15 @@
 
 把已安装的 ``testplat-engine`` 解析为 ``EnginePort``，供默认 DI 使用。
 不修改 ``sys.path``；依赖必须通过包安装（正式 git 锁定或本地 editable 覆盖）。
+
+仅认可官方公开入口 ``testplat_engine.create_engine()``，不再猜测
+``application.create_engine`` / ``SingleApiEngine`` / 模块级 ``execute``。
 """
 
 from __future__ import annotations
 
+import inspect
 import logging
-from collections.abc import Awaitable, Callable
 from typing import Any
 
 from testplat_engine import (
@@ -20,69 +23,40 @@ from testplat_control.ports.engine import EnginePort
 
 logger = logging.getLogger(__name__)
 
-_ExecuteFn = Callable[[ApiExecutionRequest], Awaitable[ApiExecutionOutcome]]
-
-
-class _CallableEngine:
-    """把模块级 ``async def execute(request)`` 包装成 EnginePort。"""
-
-    def __init__(self, execute_fn: _ExecuteFn) -> None:
-        self._execute_fn = execute_fn
-
-    async def execute(self, request: ApiExecutionRequest) -> ApiExecutionOutcome:
-        return await self._execute_fn(request)
-
 
 def resolve_package_engine() -> EnginePort:
     """从已安装的 testplat-engine 解析公开 EnginePort 实现。
 
-    解析顺序：
-
-    1. ``testplat_engine.create_engine()``
-    2. ``testplat_engine.application.create_engine()``
-    3. ``testplat_engine.SingleApiEngine()``
-    4. 模块级 ``testplat_engine.execute(request)``
+    唯一入口：``testplat_engine.create_engine()``，返回值须具备 async ``execute``。
 
     Returns:
         可调用的 EnginePort。
 
     Raises:
-        EngineUnavailableError: 包已安装但缺少公开 execute 入口。
+        EngineUnavailableError: 包已安装但缺少或不符合公开 create_engine 契约。
     """
     import testplat_engine as eng
 
     factory = getattr(eng, "create_engine", None)
-    if callable(factory):
-        engine = factory()
-        _assert_engine_port(engine, "testplat_engine.create_engine()")
-        return engine  # type: ignore[no-any-return]
+    if not callable(factory):
+        raise EngineUnavailableError(
+            public_message="执行引擎不可用：已安装包，但缺少公开 create_engine 入口",
+            log_reason=(
+                "testplat-engine 已安装且版本兼容，但未导出 create_engine；"
+                "请安装含 runtime 的 0.1.x 包"
+            ),
+        )
 
     try:
-        from testplat_engine.application import create_engine as app_factory
-    except ImportError:
-        app_factory = None
-    if callable(app_factory):
-        engine = app_factory()
-        _assert_engine_port(engine, "testplat_engine.application.create_engine()")
-        return engine  # type: ignore[no-any-return]
+        engine = factory()
+    except Exception as exc:
+        raise EngineUnavailableError(
+            public_message="执行引擎不可用：create_engine 调用失败",
+            log_reason=f"testplat_engine.create_engine() raised {type(exc).__name__}: {exc}",
+        ) from exc
 
-    single_cls = getattr(eng, "SingleApiEngine", None)
-    if callable(single_cls):
-        engine = single_cls()
-        _assert_engine_port(engine, "testplat_engine.SingleApiEngine()")
-        return engine  # type: ignore[no-any-return]
-
-    execute_fn = getattr(eng, "execute", None)
-    if callable(execute_fn):
-        return _CallableEngine(execute_fn)
-
-    raise EngineUnavailableError(
-        public_message="执行引擎不可用：已安装包，但缺少公开 execute 入口",
-        log_reason=(
-            "testplat-engine 已安装且版本兼容，但未导出 create_engine/"
-            "SingleApiEngine/execute；请安装含 runtime 的 0.1.x 包"
-        ),
-    )
+    _assert_engine_port(engine, "testplat_engine.create_engine()")
+    return engine  # type: ignore[no-any-return]
 
 
 def _assert_engine_port(engine: Any, source: str) -> None:
@@ -93,6 +67,11 @@ def _assert_engine_port(engine: Any, source: str) -> None:
             public_message="执行引擎不可用：create_engine 返回值不是 EnginePort",
             log_reason=f"{source} 未提供可调用的 execute 方法",
         )
+    if not inspect.iscoroutinefunction(execute):
+        raise EngineUnavailableError(
+            public_message="执行引擎不可用：create_engine 返回值不是 EnginePort",
+            log_reason=f"{source} 的 execute 不是 async 协程函数",
+        )
 
 
 class PackageEngineAdapter:
@@ -100,6 +79,9 @@ class PackageEngineAdapter:
 
     可通过 ``delegate`` 注入替身（单测 PackageEngineAdapter 自身时使用）；
     路由层不得直接 ``PackageEngineAdapter()``，应走 ``get_engine_port``。
+
+    无 delegate 时构造即解析 ``create_engine()``；解析失败直接抛出，
+    不再延迟到首次 execute 才以 503 暴露（启动期由 bootstrap fail-fast）。
     """
 
     def __init__(self, delegate: EnginePort | None = None) -> None:
@@ -107,21 +89,15 @@ class PackageEngineAdapter:
 
         Args:
             delegate: 显式注入的 EnginePort；为 None 时从已安装包解析。
+
+        Raises:
+            EngineUnavailableError: 无法从包解析出合法 EnginePort。
         """
-        self._delegate: EnginePort | None = delegate
-        self._resolve_error: EngineUnavailableError | None = None
-        if self._delegate is None:
-            try:
-                self._delegate = resolve_package_engine()
-            except EngineUnavailableError as exc:
-                # 延迟到 execute：provider 默认仍能返回本适配器实例，便于类型断言；
-                # 真正执行时再以 unavailable 系统错误暴露，映射为 503。
-                logger.warning("PackageEngineAdapter 未能解析 runtime：%s", exc.log_reason)
-                self._resolve_error = exc
+        if delegate is not None:
+            self._delegate: EnginePort = delegate
+        else:
+            self._delegate = resolve_package_engine()
 
     async def execute(self, request: ApiExecutionRequest) -> ApiExecutionOutcome:
-        """转发到包内 EnginePort；解析失败时抛出 unavailable。"""
-        if self._delegate is None:
-            assert self._resolve_error is not None
-            raise self._resolve_error
+        """转发到包内 EnginePort。"""
         return await self._delegate.execute(request)

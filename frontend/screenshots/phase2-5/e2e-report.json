@@ -1,0 +1,36 @@
+[
+  {
+    "viewportLabel": "desktop-1440x900",
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"
+    ],
+    "pageErrors": [],
+    "failedRequests": [
+      "422 POST http://127.0.0.1:5173/api/projects/90eda1c5-17d0-4713-a3db-2cc688838fa2/assets/api.user.login/run"
+    ],
+    "unexpectedConsole": [],
+    "unexpectedPageErrors": [],
+    "unexpectedFailed": [],
+    "overflow": false,
+    "drawerOverflow": false,
+    "scrollWidth": 1440,
+    "clientWidth": 1440
+  },
+  {
+    "viewportLabel": "mobile-390x844",
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"
+    ],
+    "pageErrors": [],
+    "failedRequests": [
+      "422 POST http://127.0.0.1:5173/api/projects/73ea7db0-16d3-4f56-a5a2-504c10928f64/assets/api.user.login/run"
+    ],
+    "unexpectedConsole": [],
+    "unexpectedPageErrors": [],
+    "unexpectedFailed": [],
+    "overflow": false,
+    "drawerOverflow": false,
+    "scrollWidth": 390,
+    "clientWidth": 390
+  }
+]
