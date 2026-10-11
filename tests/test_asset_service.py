@@ -70,7 +70,7 @@ class TestAssetService(unittest.TestCase):
     def test_04_get_single_asset(self):
         """测试: 获取单个资产"""
         # 先扫描获取树
-        tree = self.asset_service.scan_assets()
+        tree = self.asset_service.scan_assets()  # noqa: F841
 
         # 获取 API 节点
         api_asset = self.asset_service.get_asset("api")
@@ -85,7 +85,7 @@ class TestAssetService(unittest.TestCase):
 
     def test_05_get_nonexistent_asset_returns_none(self):
         """测试: 不存在的资产返回 None"""
-        tree = self.asset_service.scan_assets()
+        tree = self.asset_service.scan_assets()  # noqa: F841
 
         nonexistent = self.asset_service.get_asset("nonexistent.asset")
         self.assertIsNone(nonexistent)
@@ -115,7 +115,7 @@ class TestAssetService(unittest.TestCase):
 
     def test_07_asset_id_generation(self):
         """测试: 资产 ID 生成正确"""
-        tree = self.asset_service.scan_assets()
+        tree = self.asset_service.scan_assets()  # noqa: F841
 
         # 验证 api.common.get_status ID
         get_status_asset = self.asset_service.get_asset("api.common.get_status")
@@ -125,7 +125,7 @@ class TestAssetService(unittest.TestCase):
 
     def test_08_file_path_is_relative(self):
         """测试: 文件路径相对于根目录"""
-        tree = self.asset_service.scan_assets()
+        tree = self.asset_service.scan_assets()  # noqa: F841
 
         # 获取一个文件
         get_status = self.asset_service.get_asset("api.common.get_status")
@@ -134,7 +134,7 @@ class TestAssetService(unittest.TestCase):
 
     def test_09_metadata_present_for_files(self):
         """测试: 文件有元数据"""
-        tree = self.asset_service.scan_assets()
+        tree = self.asset_service.scan_assets()  # noqa: F841
 
         # 获取一个文件
         get_status = self.asset_service.get_asset("api.common.get_status")

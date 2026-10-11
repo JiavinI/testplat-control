@@ -35,7 +35,7 @@ class YamlParser:
             FileNotFoundError: 文件不存在
             yaml.YAMLError: YAML 解析错误
         """
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if data is None:
@@ -86,7 +86,7 @@ class YamlParser:
             FileNotFoundError: 文件不存在
             yaml.YAMLError: YAML 解析错误
         """
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if data is None:
@@ -119,7 +119,7 @@ class YamlParser:
             FileNotFoundError: 文件不存在
             yaml.YAMLError: YAML 解析错误
         """
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if data is None:

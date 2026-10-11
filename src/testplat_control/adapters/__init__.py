@@ -1,8 +1,6 @@
-"""适配器模块
+"""适配器模块：Engine 等外部系统的集成实现。"""
 
-提供与其他系统的集成适配层。
-"""
+from testplat_control.adapters.fake_engine import FakeEngineAdapter
+from testplat_control.adapters.package_engine import PackageEngineAdapter
 
-from testplat_control.adapters.engine_adapter import EngineAdapter
-
-__all__ = ["EngineAdapter"]
+__all__ = ["FakeEngineAdapter", "PackageEngineAdapter"]

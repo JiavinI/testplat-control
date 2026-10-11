@@ -10,14 +10,15 @@ from typing import Any, Literal
 import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from testplat_control.adapters.engine_adapter import EngineAdapter
 from testplat_control.database.models import ExecutionRecord, Project
 from testplat_control.database.session import get_db
+from testplat_control.deps import get_engine_port
 from testplat_control.parsers.yaml_parser import YamlParser
+from testplat_control.ports.engine import EnginePort
 from testplat_control.services.asset_service import AssetNode, AssetService
+from testplat_control.services.execution_service import run_single_api
 
 logger = logging.getLogger(__name__)
 
@@ -307,33 +308,6 @@ def _load_param_form(project: Project, asset_id: str) -> list[ParamInfo]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-def _persist_record(db: Session, record: ExecutionRecord) -> ExecutionRecord:
-    """保存执行记录。
-
-    Args:
-        db: 数据库会话。
-        record: EngineAdapter 返回的记录。
-
-    Returns:
-        提交后的执行记录。
-
-    Raises:
-        HTTPException: 写入失败时返回 500。
-    """
-    try:
-        db.add(record)
-        db.commit()
-        db.refresh(record)
-    except SQLAlchemyError as exc:
-        db.rollback()
-        logger.exception("Failed to persist execution record %s", getattr(record, "id", None))
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to persist execution record",
-        ) from exc
-    return record
-
-
 def _run_response(record: ExecutionRecord) -> RunResponse:
     """把执行记录转成响应。结果 JSON 无法解析时返回 500。"""
     if record.status not in ("success", "failed"):
@@ -391,46 +365,36 @@ async def run_asset(
     asset_id: str,
     body: RunRequest,
     db: Session = Depends(get_db),
+    engine: EnginePort = Depends(get_engine_port),
 ) -> RunResponse:
-    """用 EngineAdapter 执行单个 API，并保存执行记录。
+    """执行单个 API，并保存执行记录。
 
-    引擎判定失败时仍返回 200，``status`` 为 ``failed``。未安装引擎、适配器
-    抛错或记录写库失败时返回 500。
+    EnginePort 由依赖注入提供（默认 PackageEngineAdapter；测试注入 Fake）。
+    业务断言失败仍返回 HTTP 200 且 ``status=failed``。系统错误按 kind/stage
+    映射为 404/422/502/503/504/500；``preflight`` 不写记录，``execution`` 写 failed。
 
     Args:
         project_id: 项目 ID。
         asset_id: 资产 ID。
         body: 执行参数，形状为 ``{"params": {...}}``。
         db: 数据库会话。
+        engine: 注入的 EnginePort。
 
     Returns:
         记录 ID、状态、耗时和执行结果。
 
     Raises:
-        HTTPException: 项目或资产不存在返回 404；参数不合法返回 422；
-            执行或持久化出现意外错误返回 500。
+        HTTPException: 项目/资产 404；参数 422；系统错误按错误表映射。
     """
     project = _get_project(db, project_id)
     form = _load_param_form(project, asset_id)
     _validate_run_params(form, body.params)
 
-    if EngineAdapter is None:
-        raise HTTPException(status_code=500, detail="testplat-engine is not available")
-
-    adapter = EngineAdapter()
-    try:
-        outcome = await adapter.run_api(api_id=asset_id, project=project, params=body.params)
-    except Exception as exc:
-        logger.exception("API execution failed for project %s asset %s", project.id, asset_id)
-        detail = f"Failed to execute API: {type(exc).__name__}: {exc}"
-        raise HTTPException(status_code=500, detail=detail) from exc
-
-    if not isinstance(outcome, tuple) or len(outcome) != 2:
-        raise HTTPException(status_code=500, detail="EngineAdapter returned an invalid result")
-
-    _result, record = outcome
-    if not isinstance(record, ExecutionRecord):
-        raise HTTPException(status_code=500, detail="EngineAdapter returned an invalid record")
-
-    saved = _persist_record(db, record)
-    return _run_response(saved)
+    record = await run_single_api(
+        db=db,
+        project=project,
+        asset_id=asset_id,
+        params=body.params,
+        engine=engine,
+    )
+    return _run_response(record)

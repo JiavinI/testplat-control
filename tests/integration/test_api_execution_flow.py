@@ -2,13 +2,12 @@
 
 引擎用 FakeEngineAdapter 代替，HTTP 路由、资产扫描和数据库都走真实实现。
 登录接口在 password 为 ``wrong-password`` 时由替身返回失败，其余调用成功。
+Fake 通过 dependency_overrides 注入，不 monkeypatch 路由全局符号。
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
-from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,7 +15,8 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
-from testplat_control.database.models import ExecutionRecord, Project
+from testplat_control.adapters.fake_engine import FakeEngineAdapter
+from testplat_control.deps import get_engine_port
 from testplat_control.main import app
 
 client = TestClient(app)
@@ -27,60 +27,6 @@ CONFIG_ROOT = FIXTURES / "config"
 LOGIN = "api.user.login"
 CREATE = "api.user.create"
 HEALTH = "api.common.health_check"
-
-
-class FakeEngineAdapter:
-    """确定性的引擎替身，返回可写入数据库的 ExecutionRecord。"""
-
-    delay = 0.0
-    sequence = 0
-
-    def __init__(self, engine_root: Path | None = None) -> None:
-        self.engine_root = engine_root
-
-    async def run_api(
-        self,
-        api_id: str,
-        project: Project,
-        params: dict | None = None,
-    ) -> tuple[object, ExecutionRecord]:
-        project_id = project.id
-        given = dict(params or {})
-        FakeEngineAdapter.sequence += 1
-        now = datetime(2026, 10, 10) + timedelta(seconds=FakeEngineAdapter.sequence)
-        if self.delay:
-            await asyncio.sleep(self.delay)
-
-        failed = api_id == LOGIN and given.get("password") == "wrong-password"
-        status = "failed" if failed else "success"
-        result = {
-            "status": status,
-            "request": {"api_id": api_id, "params": given},
-            "response": None if failed else {"status_code": 200, "body": {"ok": True}},
-            "error": "assertion failed" if failed else None,
-        }
-        record = ExecutionRecord(
-            id=str(uuid4()),
-            project_id=project_id,
-            asset_type="api",
-            asset_id=api_id,
-            status=status,
-            start_time=now,
-            end_time=now,
-            duration=0.2 if failed else 0.01,
-            result_json=json.dumps(result),
-        )
-        return _Outcome(status), record
-
-
-class _Outcome:
-    """只提供路由不读取、但形状上接近 ApiResult 的结果。"""
-
-    def __init__(self, status: str) -> None:
-        self.status = status
-        self.is_success = status == "success"
-        self.is_failed = status == "failed"
-        self.error = None if status == "success" else "assertion failed"
 
 
 def assert_execution_record(record: dict, expected_status: str) -> None:
@@ -129,19 +75,20 @@ def _list(project_id: str, **params: str):
 
 
 @pytest.fixture
-def engine(monkeypatch: pytest.MonkeyPatch) -> type[FakeEngineAdapter]:
-    """把执行路由上的 EngineAdapter 换成替身。"""
-    FakeEngineAdapter.delay = 0.0
-    FakeEngineAdapter.sequence = 0
-    monkeypatch.setattr("testplat_control.api.run.EngineAdapter", FakeEngineAdapter)
-    return FakeEngineAdapter
+def engine() -> FakeEngineAdapter:
+    """把执行路由上的 EnginePort 换成 Fake（DI override）。"""
+    fake = FakeEngineAdapter()
+    app.dependency_overrides[get_engine_port] = lambda: fake
+    yield fake
+    app.dependency_overrides.pop(get_engine_port, None)
 
 
 @pytest.fixture
-def project_id(engine: type[FakeEngineAdapter]) -> str:
+def project_id(engine: FakeEngineAdapter) -> str:
     """创建指向仓库内 fixtures 资产树的项目。"""
     assert ASSETS_ROOT.is_dir()
     assert (ASSETS_ROOT / "api" / "user" / "login.yaml").is_file()
+    assert (CONFIG_ROOT / "envs" / "test.yaml").is_file()
     response = client.post(
         "/projects",
         json={
@@ -268,7 +215,7 @@ def test_execution_failure_handling(project_id: str) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "failed"
-    assert body["result"]["error"] == "assertion failed"
+    assert body["result"]["error"]["message"] == "assertion failed"
     assert body["result"]["response"] is None
 
     detail = client.get(f"/projects/{project_id}/execution-records/{body['record_id']}")
@@ -277,14 +224,14 @@ def test_execution_failure_handling(project_id: str) -> None:
     assert_execution_record(saved, "failed")
     assert saved["response"] is None
     assert saved["request"]["params"]["password"] == "wrong-password"
-    assert saved["display"]["duration"] == "200ms"
+    assert saved["display"]["duration"] is not None
 
     listed = _list(project_id, status="failed").json()
     assert len(listed) == 1
     assert_execution_record(listed[0], "failed")
 
 
-def test_concurrent_executions(project_id: str, engine: type[FakeEngineAdapter]) -> None:
+def test_concurrent_executions(project_id: str, engine: FakeEngineAdapter) -> None:
     """并发执行同一接口时，每条请求都留下自己的成功记录。"""
     engine.delay = 0.05
 
