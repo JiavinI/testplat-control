@@ -5,11 +5,9 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 
 from testplat_control.database.init import init_database
-from testplat_control.database.models import Base, ExecutionRecord, Project
+from testplat_control.database.models import ExecutionRecord, Project
 from testplat_control.database.session import create_session, get_engine
 
 
@@ -49,8 +47,8 @@ class TestProjectModel:
     def test_insert_project(self, temp_db: str) -> None:
         """测试插入 Project 记录"""
         init_database(temp_db)
-        SessionLocal = create_session(temp_db)
-        session = SessionLocal()
+        session_factory = create_session(temp_db)
+        session = session_factory()
 
         project = Project(
             id=str(uuid.uuid4()),
@@ -73,8 +71,8 @@ class TestProjectModel:
     def test_project_unique_name(self, temp_db: str) -> None:
         """测试 Project name 唯一性"""
         init_database(temp_db)
-        SessionLocal = create_session(temp_db)
-        session = SessionLocal()
+        session_factory = create_session(temp_db)
+        session = session_factory()
 
         project1 = Project(
             id=str(uuid.uuid4()),
@@ -128,8 +126,8 @@ class TestExecutionRecordModel:
     def test_insert_execution_record(self, temp_db: str) -> None:
         """测试插入 ExecutionRecord 记录"""
         init_database(temp_db)
-        SessionLocal = create_session(temp_db)
-        session = SessionLocal()
+        session_factory = create_session(temp_db)
+        session = session_factory()
 
         # 先插入 Project
         project_id = str(uuid.uuid4())
@@ -174,8 +172,8 @@ class TestExecutionRecordModel:
     def test_execution_record_foreign_key(self, temp_db: str) -> None:
         """测试 ExecutionRecord 外键约束"""
         init_database(temp_db)
-        SessionLocal = create_session(temp_db)
-        session = SessionLocal()
+        session_factory = create_session(temp_db)
+        session = session_factory()
 
         # 尝试插入不存在的 project_id
         record = ExecutionRecord(
@@ -220,8 +218,8 @@ class TestQueryRecords:
     def test_query_projects(self, temp_db: str) -> None:
         """测试查询 Project 记录"""
         init_database(temp_db)
-        SessionLocal = create_session(temp_db)
-        session = SessionLocal()
+        session_factory = create_session(temp_db)
+        session = session_factory()
 
         # 插入多条记录
         for i in range(3):
@@ -251,8 +249,8 @@ class TestQueryRecords:
     def test_query_execution_records(self, temp_db: str) -> None:
         """测试查询 ExecutionRecord 记录"""
         init_database(temp_db)
-        SessionLocal = create_session(temp_db)
-        session = SessionLocal()
+        session_factory = create_session(temp_db)
+        session = session_factory()
 
         # 插入 Project
         project_id = str(uuid.uuid4())

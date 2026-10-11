@@ -13,6 +13,9 @@ dependencies = [
     "sqlalchemy>=2.0",
     "pydantic>=2.0",
     "pyyaml>=6.0",
+    "packaging>=24.0",
+    # Phase 2.5：testplat-engine 由 [tool.uv.sources] 锁定到远程 git commit。
+    "testplat-engine>=0.1.0,<0.2",
 ]
 
 [project.optional-dependencies]
@@ -28,8 +31,17 @@ dev = [
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+# Phase 2.5：锁定远程 Engine 集成分支 commit（官方入口 create_engine）。
+# 勿把本地 path / sys.path 写进运行时；换机仅需能访问该 git rev。
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "942a66dd127de3647deab88611ada2a9bcc06c90" }
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100

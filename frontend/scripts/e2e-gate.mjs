@@ -1,5 +1,6 @@
 /**
- * Phase 2.4 浏览器门禁：联调截图 + 横向溢出 + console/page/failed request。
+ * Phase 2.5 浏览器门禁：联调截图 + 横向溢出 + console/page/failed request。
+ * 截图写入 screenshots/phase2-5/，不覆盖 phase2-4 基线。
  *
  * 假设前端 http://127.0.0.1:5173 与后端 :8000 已启动（可用 FakeEngine）。
  *   pnpm exec node scripts/e2e-gate.mjs
@@ -25,7 +26,7 @@ const ASSETS_ROOT = path.join(repoRoot, 'tests', 'fixtures', 'assets')
 const CONFIG_ROOT = path.join(repoRoot, 'tests', 'fixtures', 'config')
 const OUT = process.env.E2E_OUT_DIR
   ? path.resolve(process.env.E2E_OUT_DIR)
-  : path.join(frontendRoot, 'screenshots', 'phase2-4')
+  : path.join(frontendRoot, 'screenshots', 'phase2-5')
 
 fs.mkdirSync(OUT, { recursive: true })
 

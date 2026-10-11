@@ -2,13 +2,12 @@
 
 import tempfile
 from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
+from testplat_control.database.session import SessionLocal
 from testplat_control.main import app
-from testplat_control.database.models import Project
-from testplat_control.database.session import get_db, SessionLocal
-
 
 client = TestClient(app)
 

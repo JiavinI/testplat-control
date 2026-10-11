@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from testplat_engine import (
+    AssetNotFoundError,
+    EngineInternalError,
+    EngineTimeoutError,
+    EngineTransportError,
+    EngineUnavailableError,
+    InvalidAssetError,
+    InvalidEnvironmentError,
+)
 
-from testplat_control.database.models import ExecutionRecord, Project
+from testplat_control.adapters.fake_engine import FakeEngineAdapter
+from testplat_control.deps import get_engine_port
 from testplat_control.main import app
 
 client = TestClient(app)
@@ -99,6 +106,13 @@ request:
       description: 请求体
 """
 
+ENV_YAML = """\
+api_hosts:
+  main: http://127.0.0.1:9
+timeout:
+  default: 30
+"""
+
 
 def _write(root: Path, relative: str, content: str) -> None:
     path = root / relative
@@ -124,57 +138,37 @@ def assets_dir() -> Path:
 
 
 @pytest.fixture
-def project_id(assets_dir: Path) -> str:
-    """创建指向临时资产目录的项目。"""
+def config_dir() -> Path:
+    """临时环境配置目录。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "config"
+        _write(root, "envs/test.yaml", ENV_YAML)
+        yield root
+
+
+@pytest.fixture
+def fake_engine() -> FakeEngineAdapter:
+    """通过 DI 注入 Fake，避免 monkeypatch 路由全局。"""
+    fake = FakeEngineAdapter()
+    app.dependency_overrides[get_engine_port] = lambda: fake
+    yield fake
+    app.dependency_overrides.pop(get_engine_port, None)
+
+
+@pytest.fixture
+def project_id(assets_dir: Path, config_dir: Path, fake_engine: FakeEngineAdapter) -> str:
+    """创建指向临时资产与配置目录的项目。"""
     response = client.post(
         "/projects",
         json={
             "name": f"run-api-{uuid4().hex[:8]}",
             "env": "test",
             "assets_root": str(assets_dir),
-            "config_root": "/config",
+            "config_root": str(config_dir),
         },
     )
     assert response.status_code == 200
     return response.json()["id"]
-
-
-def _record(
-    project_id: str,
-    asset_id: str,
-    status: str,
-    result: dict,
-    duration: float = 1.5,
-) -> ExecutionRecord:
-    now = datetime.utcnow()
-    return ExecutionRecord(
-        id=str(uuid4()),
-        project_id=project_id,
-        asset_type="api",
-        asset_id=asset_id,
-        status=status,
-        start_time=now,
-        end_time=now,
-        duration=duration,
-        result_json=json.dumps(result),
-    )
-
-
-def _patch_adapter(
-    monkeypatch: pytest.MonkeyPatch,
-    record: ExecutionRecord | None = None,
-    error: Exception | None = None,
-) -> MagicMock:
-    adapter = MagicMock()
-    if error is not None:
-        adapter.run_api = AsyncMock(side_effect=error)
-    else:
-        adapter.run_api = AsyncMock(return_value=(MagicMock(), record))
-    monkeypatch.setattr(
-        "testplat_control.api.run.EngineAdapter",
-        MagicMock(return_value=adapter),
-    )
-    return adapter
 
 
 def test_get_params_from_structured_inputs(project_id: str) -> None:
@@ -242,7 +236,7 @@ def test_get_params_empty_inputs(project_id: str) -> None:
     assert response.json()["params"] == []
 
 
-def test_get_params_project_not_found() -> None:
+def test_get_params_project_not_found(fake_engine: FakeEngineAdapter) -> None:
     """项目不存在时获取参数表单返回 404。"""
     response = client.get("/projects/missing-project/assets/api.user.login/params")
     assert response.status_code == 404
@@ -279,29 +273,9 @@ def test_get_params_rejects_non_api_assets(project_id: str) -> None:
     assert "unsupported param type" in bad_type.json()["detail"]
 
 
-def test_run_success_persists_record(project_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """执行成功时调用 EngineAdapter，返回结果并写入执行记录。"""
+def test_run_success_persists_record(project_id: str, fake_engine: FakeEngineAdapter) -> None:
+    """执行成功时经 EnginePort 返回结果并写入执行记录。"""
     asset_id = "api.user.create"
-    result = {
-        "status": "success",
-        "response": {"status_code": 201, "body": {"id": "u1"}},
-        "error": None,
-    }
-    record = _record(project_id, asset_id, "success", result)
-    captured: dict[str, object] = {}
-
-    async def _run_api(
-        api_id: str,
-        project: Project,
-        params: dict,
-    ) -> tuple[MagicMock, ExecutionRecord]:
-        captured["api_id"] = api_id
-        captured["project_id"] = project.id
-        captured["params"] = params
-        return MagicMock(), record
-
-    adapter = _patch_adapter(monkeypatch, record=record)
-    adapter.run_api = AsyncMock(side_effect=_run_api)
     payload = {
         "username": "alice",
         "email": "alice@example.com",
@@ -316,57 +290,51 @@ def test_run_success_persists_record(project_id: str, monkeypatch: pytest.Monkey
 
     assert response.status_code == 200
     body = response.json()
-    assert body["record_id"] == record.id
     assert body["status"] == "success"
-    assert body["duration"] == 1.5
-    assert body["result"] == result
+    assert isinstance(body["record_id"], str) and body["record_id"]
+    assert body["duration"] is not None
+    assert body["result"]["status"] == "success"
+    assert body["result"]["response"]["status_code"] == 200
+    assert len(fake_engine.calls) == 1
+    assert fake_engine.calls[0].api_id == asset_id
+    assert dict(fake_engine.calls[0].params) == payload
+    assert "api_hosts" in fake_engine.calls[0].environment
 
-    adapter.run_api.assert_awaited_once()
-    assert captured == {"api_id": asset_id, "project_id": project_id, "params": payload}
-
-    detail = client.get(f"/projects/{project_id}/execution-records/{record.id}")
+    detail = client.get(f"/projects/{project_id}/execution-records/{body['record_id']}")
     assert detail.status_code == 200
     saved = detail.json()
     assert saved["project_id"] == project_id
     assert saved["asset_type"] == "api"
     assert saved["asset_id"] == asset_id
     assert saved["status"] == "success"
-    assert saved["result"] == result
-    assert saved["response"] == result["response"]
+    assert saved["result"]["status"] == "success"
+    assert saved["response"] == body["result"]["response"]
 
 
-def test_run_failure_persists_record(project_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """引擎判定失败时返回 failed，并仍然保存执行记录。"""
+def test_run_failure_persists_record(project_id: str, fake_engine: FakeEngineAdapter) -> None:
+    """引擎判定业务失败时返回 failed，并仍然保存执行记录。"""
     asset_id = "api.user.login"
-    result = {"status": "failed", "response": None, "error": "assertion failed"}
-    record = _record(project_id, asset_id, "failed", result, duration=0.2)
-    _patch_adapter(monkeypatch, record=record)
 
     response = client.post(
         f"/projects/{project_id}/assets/{asset_id}/run",
-        json={"params": {"password": "secret"}},
+        json={"params": {"password": "wrong-password"}},
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "failed"
-    assert body["record_id"] == record.id
-    assert body["duration"] == 0.2
-    assert body["result"]["error"] == "assertion failed"
+    assert body["result"]["error"]["message"] == "assertion failed"
 
-    detail = client.get(f"/projects/{project_id}/execution-records/{record.id}")
+    detail = client.get(f"/projects/{project_id}/execution-records/{body['record_id']}")
     assert detail.status_code == 200
     assert detail.json()["status"] == "failed"
 
 
 def test_run_rejects_missing_required_param(
     project_id: str,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_engine: FakeEngineAdapter,
 ) -> None:
     """缺少必填参数时返回 422，且不调用引擎。"""
-    record = _record(project_id, "api.user.create", "success", {})
-    adapter = _patch_adapter(monkeypatch, record=record)
-
     response = client.post(
         f"/projects/{project_id}/assets/api.user.create/run",
         json={"params": {"username": "alice"}},
@@ -374,13 +342,11 @@ def test_run_rejects_missing_required_param(
 
     assert response.status_code == 422
     assert "email" in response.json()["detail"]
-    adapter.run_api.assert_not_called()
+    assert fake_engine.calls == []
 
 
-def test_run_rejects_wrong_param_type(project_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_rejects_wrong_param_type(project_id: str, fake_engine: FakeEngineAdapter) -> None:
     """参数类型与表单不一致时返回 422。"""
-    adapter = _patch_adapter(monkeypatch)
-
     response = client.post(
         f"/projects/{project_id}/assets/api.user.create/run",
         json={
@@ -399,13 +365,11 @@ def test_run_rejects_wrong_param_type(project_id: str, monkeypatch: pytest.Monke
     assert "number" in detail
     assert "active" in detail
     assert "boolean" in detail
-    adapter.run_api.assert_not_called()
+    assert fake_engine.calls == []
 
 
-def test_run_rejects_unknown_param(project_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_rejects_unknown_param(project_id: str, fake_engine: FakeEngineAdapter) -> None:
     """未在 inputs 中声明的参数返回 422。"""
-    adapter = _patch_adapter(monkeypatch)
-
     response = client.post(
         f"/projects/{project_id}/assets/api.common.health_check/run",
         json={"params": {"extra": 1}},
@@ -413,7 +377,7 @@ def test_run_rejects_unknown_param(project_id: str, monkeypatch: pytest.MonkeyPa
 
     assert response.status_code == 422
     assert "unknown param 'extra'" in response.json()["detail"]
-    adapter.run_api.assert_not_called()
+    assert fake_engine.calls == []
 
 
 def test_run_rejects_invalid_body(project_id: str) -> None:
@@ -425,45 +389,122 @@ def test_run_rejects_invalid_body(project_id: str) -> None:
     assert response.status_code == 422
 
 
-def test_run_project_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_project_not_found(fake_engine: FakeEngineAdapter) -> None:
     """项目不存在时执行返回 404。"""
-    adapter = _patch_adapter(monkeypatch)
     response = client.post(
         "/projects/missing-project/assets/api.user.login/run",
         json={"params": {}},
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Project not found"
-    adapter.run_api.assert_not_called()
+    assert fake_engine.calls == []
 
 
-def test_run_asset_not_found(project_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_asset_not_found(project_id: str, fake_engine: FakeEngineAdapter) -> None:
     """资产不存在时执行返回 404。"""
-    adapter = _patch_adapter(monkeypatch)
     response = client.post(
         f"/projects/{project_id}/assets/api.missing/run",
         json={"params": {}},
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Asset not found"
-    adapter.run_api.assert_not_called()
+    assert fake_engine.calls == []
 
 
-def test_run_engine_error_returns_500_without_record(
+@pytest.mark.parametrize(
+    ("error", "status", "creates_record"),
+    [
+        (AssetNotFoundError("资产不存在"), 404, False),
+        (InvalidAssetError("资产无效"), 422, False),
+        (InvalidEnvironmentError("环境无效"), 422, False),
+        (EngineUnavailableError("引擎不可用"), 503, False),
+        (EngineInternalError("preflight", "内部错误"), 500, False),
+        (EngineTimeoutError("超时"), 504, True),
+        (EngineTransportError("传输失败"), 502, True),
+        (EngineInternalError("execution", "内部错误"), 500, True),
+    ],
+)
+def test_run_system_errors_map_and_record_by_stage(
     project_id: str,
-    monkeypatch: pytest.MonkeyPatch,
+    fake_engine: FakeEngineAdapter,
+    error: object,
+    status: int,
+    creates_record: bool,
 ) -> None:
-    """适配器抛错时返回 500，且不写入执行记录。"""
-    _patch_adapter(monkeypatch, error=RuntimeError("boom"))
+    """系统错误按 kind/stage 映射 HTTP，并遵守记录规则。"""
+    fake_engine.system_error = error  # type: ignore[assignment]
 
+    before = client.get(f"/projects/{project_id}/execution-records").json()
     response = client.post(
         f"/projects/{project_id}/assets/api.common.health_check/run",
         json={"params": {}},
     )
 
+    assert response.status_code == status
+    assert error.public_message in response.json()["detail"]  # type: ignore[attr-defined]
+
+    after = client.get(f"/projects/{project_id}/execution-records").json()
+    if creates_record:
+        assert len(after) == len(before) + 1
+        assert after[0]["status"] == "failed"
+        detail = client.get(f"/projects/{project_id}/execution-records/{after[0]['id']}")
+        assert detail.status_code == 200
+        assert detail.json()["result"]["error"]["kind"] == error.kind  # type: ignore[attr-defined]
+    else:
+        assert after == before
+
+
+def test_run_unexpected_exception_returns_500_without_record(
+    project_id: str,
+    fake_engine: FakeEngineAdapter,
+) -> None:
+    """未分类异常返回 500，且不写入执行记录。"""
+
+    class BoomEngine:
+        async def execute(self, request):  # noqa: ANN001
+            raise RuntimeError("boom")
+
+    app.dependency_overrides[get_engine_port] = lambda: BoomEngine()
+    try:
+        response = client.post(
+            f"/projects/{project_id}/assets/api.common.health_check/run",
+            json={"params": {}},
+        )
+    finally:
+        app.dependency_overrides[get_engine_port] = lambda: fake_engine
+
     assert response.status_code == 500
-    assert "boom" in response.json()["detail"]
+    assert "RuntimeError" in response.json()["detail"]
 
     listed = client.get(f"/projects/{project_id}/execution-records")
     assert listed.status_code == 200
     assert listed.json() == []
+
+
+def test_run_missing_env_config_returns_422_without_record(
+    assets_dir: Path,
+    fake_engine: FakeEngineAdapter,
+) -> None:
+    """config_root 缺少环境文件时 422，不调用引擎、不写记录。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        empty_config = Path(tmp)
+        created = client.post(
+            "/projects",
+            json={
+                "name": f"no-env-{uuid4().hex[:8]}",
+                "env": "test",
+                "assets_root": str(assets_dir),
+                "config_root": str(empty_config),
+            },
+        )
+        assert created.status_code == 200
+        pid = created.json()["id"]
+
+        response = client.post(
+            f"/projects/{pid}/assets/api.common.health_check/run",
+            json={"params": {}},
+        )
+        assert response.status_code == 422
+        assert "环境配置不存在" in response.json()["detail"]
+        assert fake_engine.calls == []
+        assert client.get(f"/projects/{pid}/execution-records").json() == []

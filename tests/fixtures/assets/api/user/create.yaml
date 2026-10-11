@@ -1,7 +1,7 @@
 id: api.user.create
 name: 创建用户
 desc: 集成测试用创建用户接口
-host: httpbin
+host: test_server
 method: POST
 url: /users
 request:
