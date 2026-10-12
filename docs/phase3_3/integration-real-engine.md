@@ -1,6 +1,6 @@
 # Phase 3.3a 跨仓集成：真实 Engine 鉴权矩阵与泄密验收
 
-日期：2026-10-12　基线：Engine `f631e2e`（0.3.0）+ Control `d80cf63`（file:// 临时锁定 Engine `f631e2e`）
+日期：2026-10-12　基线：Engine `f631e2e`（0.3.0）+ Control `d80cf63`（file:// 临时锁定 Engine `f631e2e`）。当前锁定：已改为远程精确锁定 Engine main `8564040`（tag v0.3.0），并已在该锁定下重跑全部门禁与真实 Engine 矩阵
 
 ## 运行
 

@@ -1,6 +1,6 @@
 # Phase 3.3a Control 后端：静态 header 凭证
 
-权威设计：`notes/phase3.3-auth-design-draft.md`（D1–D6、§6.1、§6.2）。Engine 依赖：`f631e2e`（0.3.0）。
+权威设计：`notes/phase3.3-auth-design-draft.md`（D1–D6、§6.1、§6.2）。Engine 依赖：远程精确锁定 `8564040`（v0.3.0，https://github.com/JiavinI/testplat-engine.git main；内容由已审查的 `f631e2e` 合并而来）。
 
 ## 配置
 

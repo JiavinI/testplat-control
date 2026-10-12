@@ -36,11 +36,8 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 临时本地锁定（Phase 3.3a 开发期）：指向已审查的 Engine commit f631e2e
-# （分支 codex/phase3-3-engine-auth，尚未推送）。锁定的是精确 rev，不是分支名，也不是 path editable。
-# ！！合并前必须改为远程精确锁定（https://github.com/JiavinI/testplat-engine.git + 合并后的 rev），
-# 并重新执行 `uv lock`。切勿改成 path editable 或在运行时修改 sys.path。
-testplat-engine = { git = "file:///Users/jiavin/Developer/products/testplat1/testplat-engine", rev = "f631e2e3f9e2bad146a9182062ae0d99ea5c62b5" }
+# 远程精确锁定：Engine main 合并 commit 8564040（tag v0.3.0）。锁定精确 rev，不是分支名，也不是 path editable。
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "8564040add59c027e5d2aa7edb8f56b6693a5960" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
