@@ -1,0 +1,8 @@
+schema_version: "0.2"
+id: case.demo.undeclared_alias
+steps:
+  - step_id: only
+    type: api
+    api_id: api.demo.get
+    params:
+      resource_id: "${missing.body.id}"

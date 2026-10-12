@@ -1,0 +1,16 @@
+schema_version: "0.2"
+id: case.demo.transport
+steps:
+  - step_id: create
+    type: api
+    api_id: api.demo.create
+    params:
+      name: demo
+  - step_id: dead
+    type: api
+    api_id: api.demo.dead
+  - step_id: after
+    type: api
+    api_id: api.demo.get
+    params:
+      resource_id: "x"

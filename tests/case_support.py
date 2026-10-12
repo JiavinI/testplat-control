@@ -198,6 +198,13 @@ steps:
     params:
       resource_id: "x"
 """,
+    "scenarios/demo/legacy_v1.case.yaml": """\
+id: case.demo.legacy_v1
+name: legacy
+kind: scenario
+steps:
+  - use: api.common.get_status
+""",
 }
 
 

@@ -374,7 +374,7 @@ async function runFlow(page, viewportLabel, projectName) {
   await shot(page, `${viewportLabel}-case-failed.png`)
   await page.unroute(caseRunPattern)
 
-  // 422 preflight
+  // 422 预检失败（route mock，仅 Fake UI 门禁）
   await page.route(caseRunPattern, async (route) => {
     await route.fulfill({
       status: 422,

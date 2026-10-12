@@ -296,3 +296,138 @@ def test_real_case_tree_and_detail_ids_agree_with_engine(real: dict[str, Any]) -
         # 运行时 Engine 不会报 asset_not_found（可能是其他 preflight 或业务/系统结果）。
         resp = _run(real, case_id, {"missing": "x", "resource_name": "x"})
         assert resp.status_code != 404, (case_id, resp.text)
+
+
+def test_real_case_legacy_schema_is_preflight_422(real: dict[str, Any]) -> None:
+    """旧 kind/use 语法：真实 Engine invalid_asset → 422，不写记录、不发 HTTP。"""
+    resp = _run(real, "case.demo.legacy_v1")
+
+    assert resp.status_code == 422, resp.text
+    assert real["requests"] == []
+    assert _records(real) == []
+
+
+@pytest.mark.parametrize(
+    ("relative", "snippet", "detail_contains"),
+    [
+        (
+            "scenarios/demo/mut_dup_step.case.yaml",
+            'schema_version: "0.2"\nid: case.demo.mut_dup_step\nsteps:\n'
+            "  - step_id: same\n    type: api\n    api_id: api.demo.get\n"
+            "    params: {resource_id: x}\n"
+            "  - step_id: same\n    type: api\n    api_id: api.demo.get\n"
+            "    params: {resource_id: x}\n",
+            "step_id",
+        ),
+        (
+            "scenarios/demo/mut_unknown_type.case.yaml",
+            'schema_version: "0.2"\nid: case.demo.mut_unknown_type\nsteps:\n'
+            "  - step_id: only\n    type: redis\n    api_id: api.demo.get\n",
+            "type",
+        ),
+        (
+            "scenarios/demo/mut_forward_ref.case.yaml",
+            'schema_version: "0.2"\nid: case.demo.mut_forward_ref\nsteps:\n'
+            "  - step_id: first\n    type: api\n    api_id: api.demo.get\n"
+            "    params:\n      resource_id: \"${later.body.id}\"\n"
+            "  - step_id: later\n    type: api\n    api_id: api.demo.create\n"
+            "    params:\n      name: x\n    output: later\n",
+            "alias",
+        ),
+    ],
+)
+def test_real_case_mutations_rejected_precisely(
+    real: dict[str, Any],
+    relative: str,
+    snippet: str,
+    detail_contains: str,
+) -> None:
+    """mutation：重复 step_id / 未知 type / 前向引用 → 真实 Engine 精确 422。"""
+    # real fixture 的 assets 已写入；在同一 assets_root 追加变异文件。
+    project = real["client"].get(f"/projects/{real['project_id']}").json()
+    assets_root = Path(project["assets_root"])
+    path = assets_root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(snippet, encoding="utf-8")
+    case_id = path.name.replace(".case.yaml", "")
+    # 规范 id 在文件内；从相对路径推导
+    case_id = "case." + relative.removeprefix("scenarios/").removesuffix(".case.yaml").replace(
+        "/", "."
+    )
+
+    resp = _run(real, case_id)
+    assert resp.status_code == 422, resp.text
+    assert detail_contains in resp.json()["detail"]
+    assert real["requests"] == []
+    assert _records(real) == []
+
+
+def test_real_case_ignores_fail_fast_and_timeout_overrides(real: dict[str, Any]) -> None:
+    """移除 fail-fast / 覆盖 timeout：多余字段被忽略，仍固定 fail-fast 与 Control 超时。
+
+    契约：调用方不可覆盖；Pydantic 忽略未知字段，Engine 仍按 fail-fast 执行。
+    """
+    # 业务失败路径：即使请求声称 fail_fast=False，后续步骤仍必须 skipped。
+    resp = real["client"].post(
+        f"/projects/{real['project_id']}/cases/case.demo.assert_failed/run",
+        json={"params": {}, "fail_fast": False, "timeout_seconds": 1},
+    )
+    assert resp.status_code == 200, resp.text
+    result = resp.json()["result"]
+    assert result["summary"] == {"total": 2, "success": 0, "failed": 1, "skipped": 1}
+    assert result["steps"][1]["status"] == "skipped"
+    assert result["steps"][1]["skip_reason"] == "fail_fast"
+    assert len(real["requests"]) == 1  # after 未发出
+
+
+def test_real_case_nested_secrets_redacted_in_public_and_store(real: dict[str, Any]) -> None:
+    """嵌套秘密：响应 access_token 在 HTTP 与落库中均脱敏。"""
+    resp = _run(real, "case.demo.create_then_get", {"resource_name": "secret-check"})
+    assert resp.status_code == 200, resp.text
+    assert SERVER_SECRET not in resp.text
+    body = resp.json()["result"]["steps"][0]["response"]["body"]
+    assert body["id"] == "res-42"
+    assert body.get("access_token") == "***"
+    assert SERVER_SECRET not in json.dumps(resp.json())
+    saved = _stored(resp.json()["record_id"])
+    assert SERVER_SECRET not in saved.result_json
+
+
+def test_real_case_5xx_serial_history_locate_uses_newest_failed(
+    real: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """5xx 后按 status=failed 列表 items[0] 定位：单次串行路径下最新失败即本次。
+
+    模拟前端：先跑一次 transport（502），再跑一次 timeout（504）；
+    分别按 asset_id 过滤后 items[0] 必须对应该次记录，不能串台。
+    """
+    # 先跑 transport（502）
+    transport = _run(real, "case.demo.transport")
+    assert transport.status_code == 502, transport.text
+    (t_item,) = _records(
+        real, asset_type="case", asset_id="case.demo.transport", status="failed"
+    )
+    t_detail = real["client"].get(
+        f"/projects/{real['project_id']}/case-execution-records/{t_item['id']}"
+    ).json()
+    assert t_detail["result"]["error"]["kind"] == "transport"
+
+    # timeout（短超时）
+    _short_step_timeout(monkeypatch, 0.2)
+    timeout = _run(real, "case.demo.timeout")
+    assert timeout.status_code == 504, timeout.text
+    timeout_items = _records(
+        real, asset_type="case", asset_id="case.demo.timeout", status="failed"
+    )
+    assert len(timeout_items) == 1
+    assert timeout_items[0]["id"] != t_item["id"]
+    to_detail = real["client"].get(
+        f"/projects/{real['project_id']}/case-execution-records/{timeout_items[0]['id']}"
+    ).json()
+    assert to_detail["result"]["error"]["kind"] == "timeout"
+
+    # 再用 asset_id=transport 过滤：items[0] 仍是 transport，不被 timeout 污染
+    again = _records(
+        real, asset_type="case", asset_id="case.demo.transport", status="failed"
+    )
+    assert again[0]["id"] == t_item["id"]

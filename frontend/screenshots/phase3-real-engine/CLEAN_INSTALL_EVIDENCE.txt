@@ -1,0 +1,6 @@
+clean_dir=/tmp/phase3-clean-install-26997
+engine_wheel_install=OK version=0.2.0
+control_uv_sync_locked=OK
+engine_source=file:///Users/jiavin/Developer/products/testplat1/testplat-engine@aff3ca6a26d3a2b5bae9449008a9b911124e31aa
+remote_sha_lock=BLOCKED (GitHub 422)
+sibling_path_editable=NOT used (git file:// rev)

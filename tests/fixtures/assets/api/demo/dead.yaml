@@ -1,0 +1,8 @@
+id: api.demo.dead
+name: 不可达主机
+host: dead
+method: GET
+url: /demo/dead
+request: {}
+success:
+  status_code: 200

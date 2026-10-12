@@ -9,10 +9,10 @@
     ],
     "pageErrors": [],
     "failedRequests": [
-      "422 POST http://127.0.0.1:5173/api/projects/99ec104e-e48f-46d4-a6fd-6a326772d887/assets/api.user.login/run",
-      "422 POST http://127.0.0.1:5173/api/projects/99ec104e-e48f-46d4-a6fd-6a326772d887/cases/case.demo.create_then_get/run",
-      "504 POST http://127.0.0.1:5173/api/projects/99ec104e-e48f-46d4-a6fd-6a326772d887/cases/case.demo.create_then_get/run",
-      "422 POST http://127.0.0.1:5173/api/projects/99ec104e-e48f-46d4-a6fd-6a326772d887/cases/case.demo.legacy_v1/run"
+      "422 POST http://127.0.0.1:5173/api/projects/a6d9583c-8329-46f0-97b7-77477aab3e68/assets/api.user.login/run",
+      "422 POST http://127.0.0.1:5173/api/projects/a6d9583c-8329-46f0-97b7-77477aab3e68/cases/case.demo.create_then_get/run",
+      "504 POST http://127.0.0.1:5173/api/projects/a6d9583c-8329-46f0-97b7-77477aab3e68/cases/case.demo.create_then_get/run",
+      "422 POST http://127.0.0.1:5173/api/projects/a6d9583c-8329-46f0-97b7-77477aab3e68/cases/case.demo.legacy_v1/run"
     ],
     "unexpectedConsole": [],
     "unexpectedPageErrors": [],
@@ -32,10 +32,10 @@
     ],
     "pageErrors": [],
     "failedRequests": [
-      "422 POST http://127.0.0.1:5173/api/projects/4bb1dbe3-ee54-489a-81ef-5ae8748baaf4/assets/api.user.login/run",
-      "422 POST http://127.0.0.1:5173/api/projects/4bb1dbe3-ee54-489a-81ef-5ae8748baaf4/cases/case.demo.create_then_get/run",
-      "504 POST http://127.0.0.1:5173/api/projects/4bb1dbe3-ee54-489a-81ef-5ae8748baaf4/cases/case.demo.create_then_get/run",
-      "422 POST http://127.0.0.1:5173/api/projects/4bb1dbe3-ee54-489a-81ef-5ae8748baaf4/cases/case.demo.legacy_v1/run"
+      "422 POST http://127.0.0.1:5173/api/projects/2b1b77b7-2354-426d-aa39-1a2fe99f97c4/assets/api.user.login/run",
+      "422 POST http://127.0.0.1:5173/api/projects/2b1b77b7-2354-426d-aa39-1a2fe99f97c4/cases/case.demo.create_then_get/run",
+      "504 POST http://127.0.0.1:5173/api/projects/2b1b77b7-2354-426d-aa39-1a2fe99f97c4/cases/case.demo.create_then_get/run",
+      "422 POST http://127.0.0.1:5173/api/projects/2b1b77b7-2354-426d-aa39-1a2fe99f97c4/cases/case.demo.legacy_v1/run"
     ],
     "unexpectedConsole": [],
     "unexpectedPageErrors": [],

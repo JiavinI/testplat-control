@@ -20,9 +20,14 @@ Control 通过 Python 包依赖调用 `testplat-engine`，**禁止**运行时 `s
 testplat-engine = { git = "file:///Users/jiavin/Developer/products/testplat1/testplat-engine", rev = "aff3ca6a26d3a2b5bae9449008a9b911124e31aa" }
 ```
 
-> **临时方案**：Engine 0.2 的 commit `aff3ca6` 尚未推送，远程 URL 无法解析，所以暂时指向本机 `file://` 仓库。
-> 这条依赖**只在本机可用**。Engine 推送并合并后必须改回远程 URL + 合并后的 rev，再执行 `uv lock`：
-> `testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "<合并后的 main commit>" }`。
+> **临时方案 / BLOCKED（远程 SHA 锁定）**：Engine 0.2 的 commit `aff3ca6` **尚未出现在 GitHub**
+>（`gh api repos/JiavinI/testplat-engine/commits/aff3ca6…` → 422）。因此暂时指向本机
+> `file://…/testplat-engine` **精确 rev**（非 path editable）。
+>
+> - 干净机「无 sibling 的远程 git 安装」**当前 BLOCKED**，需主线程授权推送 Engine 集成分支后才能关闭。
+> - `file://` 精确 rev 的干净目录复装仍可作为本机证据（见交付报告）。
+> - Engine 推送并合并后必须改回远程 URL + 合并后的 rev，再执行 `uv lock`：
+>   `testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "<合并后的 main commit>" }`。
 
 - 版本约束：`>=0.2.0,<0.3`（与依赖声明一致）
 - 安装以 **rev/commit** 为准，不依赖分支名漂移；**禁止** `sys.path` 注入与 path editable
@@ -45,12 +50,28 @@ cd frontend && pnpm install && pnpm dev
 cd frontend && pnpm e2e:gate
 ```
 
-### 真实 Engine 冒烟
+### 真实 Engine 冒烟 / 浏览器矩阵
 
-1. 启动本地目标 HTTP（或使用测试里的 ThreadingHTTPServer 模式）。
-2. 项目 `config/envs/{env}.yaml` 的 `api_hosts` 指向 `http://127.0.0.1:<port>`（不要写公网）。
-3. 使用默认 `main:app`（PackageEngineAdapter）启动 Control。
-4. 浏览器执行 → 历史详情应看到真实请求/响应快照。
+失败 / 422 / 5xx / legacy **必须**走真实 Engine（`PackageEngineAdapter`），不能只靠前端
+`e2e-gate.mjs` 的 `route.fulfill` mock。Fake 门禁只覆盖 UI 壳与横向溢出。
+
+一键矩阵（本地 target + 短超时 harness + 前端，不访问公网）：
+
+```bash
+./scripts/run_real_engine_matrix.sh
+# 截图与报告：frontend/screenshots/phase3-real-engine/
+```
+
+手动步骤：
+
+1. `uv run python scripts/local_target_server.py --port 18099`
+2. 确认 `tests/fixtures/config/envs/test.yaml` 的 `api_hosts.local` 指向该端口（`dead` 保持 `127.0.0.1:1`）。
+3. `uv run uvicorn testplat_control.harness_real_matrix:app --host 127.0.0.1 --port 8000`
+   （与 `main:app` 相同真实 Engine；仅将每步骤超时缩短为 0.5s 以便触发 504。）
+4. `cd frontend && pnpm dev`
+5. `cd frontend && pnpm e2e:real-engine`
+
+API 层证据：`uv run pytest -q tests/integration/test_real_engine_case_flow.py`。
 
 ## 项目接口错误
 
