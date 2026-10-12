@@ -69,10 +69,13 @@ url: /health
 """
 
 CASE_YAML = """\
+schema_version: "0.2"
 id: case.user.login
 name: 登录流程
 steps:
-  - api_id: api.user.login
+  - step_id: login
+    type: api
+    api_id: api.user.login
     name: 登录
 """
 

@@ -1,5 +1,7 @@
 """执行记录路由"""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import ColumnElement
 from sqlalchemy.orm import Session
@@ -90,13 +92,15 @@ async def list_execution_records(
     limit: int = Query(100, ge=1, le=500),
     status: str | None = None,
     asset_id: str | None = None,
+    asset_type: Literal["api", "case"] | None = None,
     order_by: str = "-start_time",
     db: Session = Depends(get_db),
 ) -> list[ExecutionRecordListResponse]:
     """获取项目的执行记录。
 
-    可按 ``status``、``asset_id`` 过滤。默认按 ``start_time`` 降序，并用
-    ``skip`` / ``limit`` 分页。
+    可按 ``status``、``asset_id``、``asset_type``（``api`` / ``case``）过滤。
+    不传 ``asset_type`` 时 API 与 Case 记录混合返回（Phase 2.5 行为）。
+    默认按 ``start_time`` 降序，并用 ``skip`` / ``limit`` 分页。
 
     Args:
         project_id: 项目 ID。
@@ -104,6 +108,7 @@ async def list_execution_records(
         limit: 返回的最大记录数。
         status: 按执行状态精确过滤，例如 ``success``。
         asset_id: 按资产 ID 精确过滤。
+        asset_type: 按资产类型精确过滤：``api`` 或 ``case``（Phase 3 新增，可选）。
         order_by: 排序，默认 ``-start_time``。
         db: 数据库会话。
 
@@ -119,6 +124,8 @@ async def list_execution_records(
         query = query.filter(ExecutionRecord.status == status)
     if asset_id:
         query = query.filter(ExecutionRecord.asset_id == asset_id)
+    if asset_type:
+        query = query.filter(ExecutionRecord.asset_type == asset_type)
 
     records = query.order_by(_resolve_order(order_by)).offset(skip).limit(limit).all()
     return [ExecutionRecordListResponse.from_model(record) for record in records]

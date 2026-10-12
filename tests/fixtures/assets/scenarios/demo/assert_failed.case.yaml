@@ -1,0 +1,12 @@
+schema_version: "0.2"
+id: case.demo.assert_failed
+name: 断言失败样例
+steps:
+  - step_id: bad_assert
+    type: api
+    api_id: api.demo.always_fail_assert
+  - step_id: after
+    type: api
+    api_id: api.demo.get
+    params:
+      resource_id: "x"

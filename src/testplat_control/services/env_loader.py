@@ -61,13 +61,16 @@ def load_project_environment(config_root: str | Path, env: str) -> dict[str, Jso
     except yaml.YAMLError as exc:
         raise InvalidEnvironmentError(
             public_message=f"环境配置 YAML 无效: {env}",
-            log_reason=f"{path}: {exc}",
+            # YAML 异常原文会带出出错行的片段，环境文件里可能是 password/token，
+            # 因此 log_reason 只保留类型名与文件路径。
+            log_reason=f"{path}: {type(exc).__name__}",
         ) from exc
     except OSError as exc:
-        logger.exception("读取环境配置失败: %s", path)
+        # 日志硬约束：不用 logger.exception / exc_info，只记异常类型名。
+        logger.error("读取环境配置失败 exc_type=%s", type(exc).__name__)
         raise InvalidEnvironmentError(
             public_message=f"无法读取环境配置: {env}",
-            log_reason=f"{path}: {type(exc).__name__}: {exc}",
+            log_reason=f"{path}: {type(exc).__name__}",
         ) from exc
 
     if loaded is None:

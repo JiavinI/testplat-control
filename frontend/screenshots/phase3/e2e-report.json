@@ -1,0 +1,48 @@
+[
+  {
+    "viewportLabel": "desktop-1440x900",
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+      "Failed to load resource: the server responded with a status of 504 (Gateway Timeout)",
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"
+    ],
+    "pageErrors": [],
+    "failedRequests": [
+      "422 POST http://127.0.0.1:5173/api/projects/a6d9583c-8329-46f0-97b7-77477aab3e68/assets/api.user.login/run",
+      "422 POST http://127.0.0.1:5173/api/projects/a6d9583c-8329-46f0-97b7-77477aab3e68/cases/case.demo.create_then_get/run",
+      "504 POST http://127.0.0.1:5173/api/projects/a6d9583c-8329-46f0-97b7-77477aab3e68/cases/case.demo.create_then_get/run",
+      "422 POST http://127.0.0.1:5173/api/projects/a6d9583c-8329-46f0-97b7-77477aab3e68/cases/case.demo.legacy_v1/run"
+    ],
+    "unexpectedConsole": [],
+    "unexpectedPageErrors": [],
+    "unexpectedFailed": [],
+    "overflow": false,
+    "drawerOverflow": false,
+    "scrollWidth": 1440,
+    "clientWidth": 1440
+  },
+  {
+    "viewportLabel": "mobile-390x844",
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+      "Failed to load resource: the server responded with a status of 504 (Gateway Timeout)",
+      "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"
+    ],
+    "pageErrors": [],
+    "failedRequests": [
+      "422 POST http://127.0.0.1:5173/api/projects/2b1b77b7-2354-426d-aa39-1a2fe99f97c4/assets/api.user.login/run",
+      "422 POST http://127.0.0.1:5173/api/projects/2b1b77b7-2354-426d-aa39-1a2fe99f97c4/cases/case.demo.create_then_get/run",
+      "504 POST http://127.0.0.1:5173/api/projects/2b1b77b7-2354-426d-aa39-1a2fe99f97c4/cases/case.demo.create_then_get/run",
+      "422 POST http://127.0.0.1:5173/api/projects/2b1b77b7-2354-426d-aa39-1a2fe99f97c4/cases/case.demo.legacy_v1/run"
+    ],
+    "unexpectedConsole": [],
+    "unexpectedPageErrors": [],
+    "unexpectedFailed": [],
+    "overflow": false,
+    "drawerOverflow": false,
+    "scrollWidth": 390,
+    "clientWidth": 390
+  }
+]

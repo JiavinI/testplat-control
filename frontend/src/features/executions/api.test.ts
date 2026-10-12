@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getAssetParams,
+  getCaseAssetDetail,
+  getCaseExecutionRecord,
   getExecutionRecord,
   listExecutionRecords,
   runAsset,
+  runCase,
 } from './api'
 import { ApiHttpError } from '@/shared/api/errors'
 
@@ -108,5 +111,94 @@ describe('executions api', () => {
     await expect(
       runAsset('p1', 'api.user.login', { params: {} }, { baseUrl: '', fetchImpl }),
     ).rejects.toBeInstanceOf(ApiParseError)
+  })
+})
+
+describe('Case executions api', () => {
+  it('listExecutionRecords 支持 asset_type', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse([]))
+    await listExecutionRecords(
+      'p1',
+      { asset_type: 'case', status: 'failed', asset_id: 'case.demo.x' },
+      { baseUrl: '', fetchImpl },
+    )
+    const url = String(fetchImpl.mock.calls[0][0])
+    expect(url).toContain('asset_type=case')
+    expect(url).toContain('status=failed')
+    expect(url).toContain('asset_id=case.demo.x')
+  })
+
+  it('getCaseAssetDetail / runCase / getCaseExecutionRecord 路径正确', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          case_id: 'case.demo.create_then_get',
+          path: 'scenarios/demo/create_then_get.case.yaml',
+          file_name: 'create_then_get.case.yaml',
+          size_bytes: 10,
+          modified_at: '2026-10-12T03:00:00Z',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          record_id: 'r1',
+          status: 'success',
+          duration: 0.01,
+          result: {
+            case_id: 'case.demo.create_then_get',
+            status: 'success',
+            duration_seconds: 0.01,
+            steps: [],
+            summary: { total: 0, success: 0, failed: 0, skipped: 0 },
+            error: null,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'r1',
+          project_id: 'p1',
+          asset_id: 'case.demo.create_then_get',
+          asset_type: 'case',
+          status: 'success',
+          start_time: '2026-10-12T11:30:00',
+          end_time: null,
+          duration: 0.01,
+          display: { start_time: 't', end_time: null, duration: '10ms' },
+          result: {
+            case_id: 'case.demo.create_then_get',
+            status: 'success',
+            duration_seconds: 0.01,
+            steps: [],
+            summary: { total: 0, success: 0, failed: 0, skipped: 0 },
+            error: null,
+          },
+        }),
+      )
+
+    await getCaseAssetDetail('p1', 'case.demo.create_then_get', {
+      baseUrl: '',
+      fetchImpl,
+    })
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      '/projects/p1/cases/case.demo.create_then_get',
+    )
+
+    await runCase('p1', 'case.demo.create_then_get', { params: {} }, {
+      baseUrl: '',
+      fetchImpl,
+    })
+    expect(fetchImpl.mock.calls[1][0]).toBe(
+      '/projects/p1/cases/case.demo.create_then_get/run',
+    )
+    expect(JSON.parse(String(fetchImpl.mock.calls[1][1].body))).toEqual({
+      params: {},
+    })
+
+    await getCaseExecutionRecord('p1', 'r1', { baseUrl: '', fetchImpl })
+    expect(fetchImpl.mock.calls[2][0]).toBe(
+      '/projects/p1/case-execution-records/r1',
+    )
   })
 })

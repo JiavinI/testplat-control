@@ -176,3 +176,9 @@ h4.tp-page-title {
     animation: none !important;
   }
 }
+
+/* Case：首个失败步骤描边提示（文案 Tag 仍为主表达） */
+.tp-case-step-first-failed > .ant-collapse-header {
+  background: rgba(190, 24, 93, 0.06);
+  border-radius: 8px;
+}

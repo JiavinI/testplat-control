@@ -1,15 +1,16 @@
 /**
- * Phase 2.5 浏览器门禁：联调截图 + 横向溢出 + console/page/failed request。
- * 截图写入 screenshots/phase2-5/，不覆盖 phase2-4 基线。
+ * Phase 3 浏览器门禁：Case 元信息/运行/历史 + API 回归 + 横向溢出 + console/网络。
+ * 截图写入 screenshots/phase3/。
  *
  * 假设前端 http://127.0.0.1:5173 与后端 :8000 已启动（可用 FakeEngine）。
  *   pnpm exec node scripts/e2e-gate.mjs
  *
  * 允许：
- *   - POST /api/projects/:id/assets/:asset/run → 422（门禁主动注入的错误展示用例）
- *   - POST/PUT /api/projects → 409（项目名冲突，前端表单已展示 detail）
- *   - DELETE /api/projects/:id → 409（有执行记录不可删，前端已 message 提示）
- *   - 对应的 "Failed to load resource … 422/409" console
+ *   - POST .../assets/.../run → 422（门禁主动注入）
+ *   - POST .../cases/.../run → 422 / 5xx（门禁主动注入：preflight / 系统错误）
+ *   - POST/PUT /api/projects → 409
+ *   - DELETE /api/projects/:id → 409
+ *   - 对应 Failed to load resource console
  * 其余 console error / pageerror / 失败请求 / 横向溢出 → 门禁失败。
  */
 
@@ -26,7 +27,7 @@ const ASSETS_ROOT = path.join(repoRoot, 'tests', 'fixtures', 'assets')
 const CONFIG_ROOT = path.join(repoRoot, 'tests', 'fixtures', 'config')
 const OUT = process.env.E2E_OUT_DIR
   ? path.resolve(process.env.E2E_OUT_DIR)
-  : path.join(frontendRoot, 'screenshots', 'phase2-5')
+  : path.join(frontendRoot, 'screenshots', 'phase3')
 
 fs.mkdirSync(OUT, { recursive: true })
 
@@ -35,7 +36,6 @@ function makeProjectName(suffix) {
 }
 
 function isAllowedFailedRequest(entry) {
-  // 失败请求统一记录为“状态码 方法 URL”。
   const m = String(entry).match(/^(\d+)\s+(\S+)\s+(\S+)/)
   if (!m) return false
   const [, status, method, url] = m
@@ -46,7 +46,13 @@ function isAllowedFailedRequest(entry) {
   ) {
     return true
   }
-  // 后端 #33：重名与有执行记录删除均为 409；UI 已展示 detail，不视为门禁失败。
+  if (
+    method === 'POST' &&
+    /\/api\/projects\/[^/?]+\/cases\/[^/?]+\/run$/.test(url) &&
+    ['422', '500', '502', '504'].includes(status)
+  ) {
+    return true
+  }
   if (status === '409' && method === 'POST' && /\/api\/projects\/?$/.test(url)) {
     return true
   }
@@ -62,7 +68,11 @@ function isAllowedFailedRequest(entry) {
 function isAllowedConsoleError(text) {
   if (
     text.includes('Failed to load resource') &&
-    (text.includes('422') || text.includes('409'))
+    (text.includes('422') ||
+      text.includes('409') ||
+      text.includes('500') ||
+      text.includes('502') ||
+      text.includes('504'))
   ) {
     return true
   }
@@ -97,7 +107,7 @@ async function openAssetBrowser(page) {
   }
 }
 
-async function selectAsset(page, filterText, assetId) {
+async function selectAsset(page, filterText, assetId, panelTestId) {
   await openAssetBrowser(page)
   const filter = page.getByLabel('过滤资产')
   await filter.waitFor({ timeout: 10000 })
@@ -106,7 +116,7 @@ async function selectAsset(page, filterText, assetId) {
   const node = page.locator(`[data-asset-id="${assetId}"]`)
   await node.waitFor({ timeout: 10000 })
   await node.click()
-  await page.getByTestId('api-execution-panel').waitFor({ timeout: 10000 })
+  await page.getByTestId(panelTestId).waitFor({ timeout: 10000 })
 }
 
 async function expectExecutionStatus(page, status) {
@@ -147,7 +157,6 @@ async function ensureExecutionProject(page, viewportLabel) {
     return existing
   }
 
-  // 执行记录会阻止项目删除，因此每个视口复用固定项目，避免门禁反复污染联调库。
   const createResponse = await page.request.post(`${BASE}/api/projects`, {
     data: {
       name: projectName,
@@ -196,7 +205,6 @@ async function runFlow(page, viewportLabel, projectName) {
 
   await page.getByRole('button', { name: '返回项目列表' }).click()
   await page.waitForURL((url) => url.pathname === '/projects', { timeout: 10000 })
-  // HMR/抽屉动画下路由内容可能短暂滞后；重新进入同一路由后再验列表交互。
   await page.goto(`${BASE}/projects`, { waitUntil: 'networkidle' })
   const row = await findProjectRow(page, projectName)
   await shot(page, `${viewportLabel}-07-list.png`)
@@ -233,18 +241,16 @@ async function runFlow(page, viewportLabel, projectName) {
   await page.waitForTimeout(300)
   await shot(page, `${viewportLabel}-02-asset-search.png`)
 
-  // 无参数 API 必须能直接执行，证明动态表单不会把空参数误判为异常。
-  await selectAsset(page, 'get_status', 'api.common.get_status')
+  // --- API 回归 ---
+  await selectAsset(page, 'get_status', 'api.common.get_status', 'api-execution-panel')
   await page.getByTestId('params-empty').waitFor({ timeout: 10000 })
   await page.getByRole('button', { name: '执行 API' }).click()
   await expectExecutionStatus(page, 'success')
 
-  await selectAsset(page, 'login', 'api.user.login')
+  await selectAsset(page, 'login', 'api.user.login', 'api-execution-panel')
   await shot(page, `${viewportLabel}-03-api-selected.png`)
 
   await page.getByTestId('param-username').fill('alice')
-
-  // 用一次性 422 响应验证前端错误态；随后恢复真实后端继续验证业务 failed/success。
   const runPattern = '**/api/projects/*/assets/api.user.login/run'
   await page.route(runPattern, async (route) => {
     await route.fulfill({
@@ -278,10 +284,243 @@ async function runFlow(page, viewportLabel, projectName) {
   await history.getByRole('button', { name: /查看记录/ }).first().click()
   await page.getByTestId('execution-detail').waitFor({ timeout: 10000 })
   await shot(page, `${viewportLabel}-06-execution-detail.png`)
-  // 详情抽屉打开时检查横向溢出（390 视口关键点）
   const drawerScroll = await page.evaluate(() => document.documentElement.scrollWidth)
   const drawerClient = await page.evaluate(() => document.documentElement.clientWidth)
   const drawerOverflow = drawerScroll > drawerClient + 2
+  await page.keyboard.press('Escape')
+
+  // --- Case 体验 ---
+  await selectAsset(
+    page,
+    'create_then_get',
+    'case.demo.create_then_get',
+    'case-execution-panel',
+  )
+  await page.getByTestId('case-meta-panel').waitFor({ timeout: 10000 })
+  await page.getByText('case.demo.create_then_get').first().waitFor({ timeout: 5000 })
+  // 无 tags / 步骤预览
+  // 说明文案可提及 tags/步骤；禁止出现 YAML 键值预览或标签 chip 列表
+  const metaRoot = page.getByTestId('case-meta-panel')
+  if (await metaRoot.locator('.ant-tag').filter({ hasText: 'smoke' }).count()) {
+    throw new Error('Case 元信息面板不应渲染资产 tags')
+  }
+  const metaText = await metaRoot.innerText()
+  if (/^steps:\s*$/m.test(metaText) || metaText.includes('schema_version:')) {
+    throw new Error('Case 元信息面板不应渲染 YAML 步骤预览')
+  }
+  await shot(page, `${viewportLabel}-case-meta.png`)
+
+  // success（FakeEngine 默认成功）
+  await page.getByRole('button', { name: '执行 Case' }).click()
+  await page.getByTestId('case-result-view').waitFor({ timeout: 15000 })
+  await page.getByText(/成功（success）/).first().waitFor({ timeout: 5000 })
+  await shot(page, `${viewportLabel}-case-success.png`)
+
+  // failed + skipped（注入 200 业务失败响应）
+  const caseRunPattern = '**/api/projects/*/cases/case.demo.create_then_get/run'
+  await page.route(caseRunPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        record_id: 'e2e-case-failed',
+        status: 'failed',
+        duration: 0.01,
+        result: {
+          case_id: 'case.demo.create_then_get',
+          status: 'failed',
+          duration_seconds: 0.01,
+          steps: [
+            {
+              step_id: 'bad_assert',
+              name: null,
+              type: 'api',
+              status: 'failed',
+              duration_seconds: 0.01,
+              request: { method: 'GET', url: 'http://127.0.0.1/status' },
+              response: { status_code: 200, body: { ok: true } },
+              error: {
+                kind: 'assertion',
+                message: '断言失败: 响应不符合成功条件',
+                stage: null,
+                step_id: null,
+                path: null,
+              },
+              output: null,
+              skip_reason: null,
+            },
+            {
+              step_id: 'after',
+              name: null,
+              type: 'api',
+              status: 'skipped',
+              duration_seconds: 0,
+              request: null,
+              response: null,
+              error: null,
+              output: null,
+              skip_reason: 'fail_fast',
+            },
+          ],
+          summary: { total: 2, success: 0, failed: 1, skipped: 1 },
+          error: null,
+        },
+      }),
+    })
+  }, { times: 1 })
+  await page.getByRole('button', { name: '执行 Case' }).click()
+  await page.getByTestId('first-failed-marker').waitFor({ timeout: 10000 })
+  await page.getByText(/已跳过（skipped）/).waitFor({ timeout: 5000 })
+  await shot(page, `${viewportLabel}-case-failed.png`)
+  await page.unroute(caseRunPattern)
+
+  // 422 预检失败（route mock，仅 Fake UI 门禁）
+  await page.route(caseRunPattern, async (route) => {
+    await route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: '步骤 only 引用未声明或尚未产生的 alias' }),
+    })
+  }, { times: 1 })
+  await page.getByRole('button', { name: '执行 Case' }).click()
+  await page.getByText(/预检失败/).waitFor({ timeout: 10000 })
+  await shot(page, `${viewportLabel}-case-preflight-422.png`)
+  await page.unroute(caseRunPattern)
+
+  // 5xx + 定位历史
+  await page.route(caseRunPattern, async (route) => {
+    await route.fulfill({
+      status: 504,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'API 请求超时' }),
+    })
+  }, { times: 1 })
+  const listPattern = '**/api/projects/*/execution-records?**'
+  await page.route(listPattern, async (route) => {
+    const url = route.request().url()
+    if (url.includes('asset_type=case') && url.includes('status=failed')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'e2e-case-timeout',
+            asset_id: 'case.demo.create_then_get',
+            status: 'failed',
+            start_time: '2026-10-12T11:30:00',
+            duration: 0.2,
+          },
+        ]),
+      })
+      return
+    }
+    await route.continue()
+  })
+  await page.route('**/api/projects/*/case-execution-records/e2e-case-timeout', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'e2e-case-timeout',
+        project_id: executionProject.id,
+        asset_id: 'case.demo.create_then_get',
+        asset_type: 'case',
+        status: 'failed',
+        start_time: '2026-10-12T11:30:00',
+        end_time: '2026-10-12T11:30:00.200',
+        duration: 0.2,
+        display: {
+          start_time: '2026-10-12 11:30:00',
+          end_time: '2026-10-12 11:30:00',
+          duration: '200ms',
+        },
+        result: {
+          case_id: 'case.demo.create_then_get',
+          status: 'failed',
+          duration_seconds: 0.2,
+          steps: [
+            {
+              step_id: 'slow',
+              name: null,
+              type: 'api',
+              status: 'failed',
+              duration_seconds: 0.2,
+              request: null,
+              response: null,
+              error: {
+                kind: 'timeout',
+                message: 'API 请求超时',
+                stage: 'execution',
+                step_id: null,
+                path: null,
+              },
+              output: null,
+              skip_reason: null,
+            },
+          ],
+          summary: { total: 1, success: 0, failed: 1, skipped: 0 },
+          error: { kind: 'timeout', stage: 'execution', message: 'API 请求超时' },
+        },
+      }),
+    })
+  })
+  await page.getByRole('button', { name: '执行 Case' }).click()
+  await page.getByTestId('case-system-error-located').waitFor({ timeout: 15000 })
+  await shot(page, `${viewportLabel}-case-system-error.png`)
+  await page.unroute(caseRunPattern)
+  await page.unroute(listPattern)
+  await page.unroute('**/api/projects/*/case-execution-records/e2e-case-timeout')
+
+  // 旧格式仍可点运行（不禁用）；用 legacy case 触发 422
+  await selectAsset(page, 'legacy_v1', 'case.demo.legacy_v1', 'case-execution-panel')
+  const legacyBtn = page.getByRole('button', { name: '执行 Case' })
+  if (await legacyBtn.isDisabled()) {
+    throw new Error('旧格式 Case 不应预先禁用运行按钮')
+  }
+  await page.route('**/api/projects/*/cases/case.demo.legacy_v1/run', async (route) => {
+    await route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: '旧格式/不受支持的 Case 资产' }),
+    })
+  }, { times: 1 })
+  await legacyBtn.click()
+  await page.getByText(/预检失败/).waitFor({ timeout: 10000 })
+  await shot(page, `${viewportLabel}-case-legacy-422.png`)
+
+  // Case 历史详情
+  await selectAsset(
+    page,
+    'create_then_get',
+    'case.demo.create_then_get',
+    'case-execution-panel',
+  )
+  await page.getByTestId('filter-asset-type').click()
+  await page.getByTitle('case', { exact: true }).click()
+  await page.waitForTimeout(400)
+  await page.getByTestId('filter-status').click()
+  await page.getByTitle('全部状态').click().catch(() => {})
+  // 打开任一 case 记录（若列表因 mock 清空，先跑一次真实 success）
+  const caseHistory = page.getByTestId('execution-history')
+  const detailButtons = caseHistory.getByRole('button', { name: /查看记录/ })
+  if ((await detailButtons.count()) === 0) {
+    await page.getByRole('button', { name: '执行 Case' }).click()
+    await page.getByTestId('case-result-view').waitFor({ timeout: 15000 })
+    await page.waitForTimeout(500)
+  }
+  await caseHistory.getByRole('button', { name: /查看记录/ }).first().click()
+  await page.getByTestId('execution-detail').waitFor({ timeout: 10000 })
+  await shot(page, `${viewportLabel}-history-case.png`)
+  await page.keyboard.press('Escape')
+
+  // 旧 API 详情回归
+  await page.getByTestId('filter-asset-type').click()
+  await page.getByTitle('api', { exact: true }).click()
+  await page.waitForTimeout(400)
+  await selectAsset(page, 'login', 'api.user.login', 'api-execution-panel')
+  await page.getByTestId('execution-history').getByRole('button', { name: /查看记录/ }).first().click()
+  await page.getByTestId('execution-detail').waitFor({ timeout: 10000 })
+  await shot(page, `${viewportLabel}-history-api.png`)
   await page.keyboard.press('Escape')
 
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
@@ -311,8 +550,13 @@ const chromeCandidates = [
   process.env.PLAYWRIGHT_CHROME_PATH,
   path.join(
     process.env.HOME || '',
+    'Library/Caches/ms-playwright/chromium-1187/chrome-mac/Chromium.app/Contents/MacOS/Chromium',
+  ),
+  path.join(
+    process.env.HOME || '',
     'Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
   ),
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean)
 
 let executablePath

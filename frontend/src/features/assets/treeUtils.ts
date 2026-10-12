@@ -5,6 +5,11 @@ export function isRunnableApiAsset(asset: Pick<AssetNode, 'id' | 'type'>): boole
   return asset.type === 'file' && asset.id.startsWith('api.')
 }
 
+/** Case 资产：树节点 id 为 case.*，运行走 /cases 契约 */
+export function isRunnableCaseAsset(asset: Pick<AssetNode, 'id' | 'type'>): boolean {
+  return asset.type === 'file' && asset.id.startsWith('case.')
+}
+
 function matchesQuery(node: AssetNode, query: string): boolean {
   const q = query.toLowerCase()
   return (

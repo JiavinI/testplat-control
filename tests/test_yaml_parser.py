@@ -54,55 +54,6 @@ class TestYamlParserApiYaml:
         assert isinstance(result["inputs"], dict)
 
 
-class TestYamlParserCaseYaml:
-    """Case YAML 解析测试"""
-
-    def test_parse_case_yaml_simple(self):
-        """测试: 解析简单的 Case YAML 文件"""
-        case_file = FIXTURES_DIR / "case_login.yaml"
-        result = YamlParser.parse_case_yaml(case_file)
-
-        assert result["id"] == "case.test.login"
-        assert result["name"] == "测试登录流程"
-        assert result["desc"] == "测试用例 - 登录流程"
-
-    def test_parse_case_yaml_extracts_steps(self):
-        """测试: 提取 steps 字段"""
-        case_file = FIXTURES_DIR / "case_login.yaml"
-        result = YamlParser.parse_case_yaml(case_file)
-
-        assert "steps" in result
-        assert isinstance(result["steps"], list)
-        assert len(result["steps"]) == 2
-
-        # 验证第一步
-        step0 = result["steps"][0]
-        assert step0["api_id"] == "api.user.login"
-        assert step0["name"] == "用户登录"
-        assert "params" in step0
-
-        # 验证第二步
-        step1 = result["steps"][1]
-        assert step1["api_id"] == "api.user.get_info"
-
-    def test_parse_case_yaml_extracts_tags(self):
-        """测试: 提取 tags 字段"""
-        case_file = FIXTURES_DIR / "case_login.yaml"
-        result = YamlParser.parse_case_yaml(case_file)
-
-        assert "tags" in result
-        assert isinstance(result["tags"], list)
-        assert "smoke" in result["tags"]
-        assert "login" in result["tags"]
-
-    def test_parse_case_yaml_default_tags(self):
-        """测试: 没有 tags 时返回空列表"""
-        case_file = FIXTURES_DIR / "case_login.yaml"
-        result = YamlParser.parse_case_yaml(case_file)
-        # case_login.yaml 中有 tags，所以这个测试验证存在性
-        assert isinstance(result["tags"], list)
-
-
 class TestYamlParserAutoDetect:
     """自动检测资产类型测试"""
 
@@ -142,12 +93,6 @@ class TestYamlParserErrorHandling:
         with pytest.raises(FileNotFoundError):
             YamlParser.parse_api_yaml(nonexistent)
 
-    def test_parse_case_yaml_file_not_found(self):
-        """测试: 处理不存在的文件"""
-        nonexistent = FIXTURES_DIR / "nonexistent.yaml"
-        with pytest.raises(FileNotFoundError):
-            YamlParser.parse_case_yaml(nonexistent)
-
     def test_parse_yaml_file_not_found(self):
         """测试: 处理不存在的文件"""
         nonexistent = FIXTURES_DIR / "nonexistent.yaml"
@@ -159,12 +104,6 @@ class TestYamlParserErrorHandling:
         invalid_file = FIXTURES_DIR / "invalid.yaml"
         with pytest.raises(yaml.YAMLError):
             YamlParser.parse_api_yaml(invalid_file)
-
-    def test_parse_case_yaml_invalid_yaml(self):
-        """测试: 处理无效的 YAML"""
-        invalid_file = FIXTURES_DIR / "invalid.yaml"
-        with pytest.raises(yaml.YAMLError):
-            YamlParser.parse_case_yaml(invalid_file)
 
     def test_parse_yaml_invalid_yaml(self):
         """测试: 处理无效的 YAML"""

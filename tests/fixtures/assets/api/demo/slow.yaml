@@ -1,0 +1,8 @@
+id: api.demo.slow
+name: 慢接口
+host: local
+method: GET
+url: /demo/slow
+request: {}
+success:
+  status_code: 200

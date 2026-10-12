@@ -12,10 +12,18 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import { useEffect, useMemo, useState } from 'react'
 import { ErrorState, EmptyState, LoadingState } from '@/shared/ui/AsyncState'
+import { CaseResultView } from './CaseResultView'
 import { JsonBlock } from './JsonBlock'
-import { useExecutionRecord, useExecutionRecords } from './hooks'
+import { useCaseExecutionRecord, useExecutionRecord, useExecutionRecords } from './hooks'
+import {
+  formatDurationSeconds,
+  runStatusColor,
+  runStatusLabel,
+} from './statusLabel'
 import type {
+  CaseExecutionRecordDetail,
   ExecutionHistoryProps,
+  ExecutionRecordDetail,
   ExecutionRecordListItem,
 } from './types'
 
@@ -25,6 +33,12 @@ const STATUS_OPTIONS = [
   { value: '', label: '全部状态' },
   { value: 'success', label: 'success' },
   { value: 'failed', label: 'failed' },
+]
+
+const ASSET_TYPE_OPTIONS = [
+  { value: '', label: '全部类型' },
+  { value: 'api', label: 'api' },
+  { value: 'case', label: 'case' },
 ]
 
 const ORDER_OPTIONS = [
@@ -50,21 +64,28 @@ function useDrawerWidth(preferred = 560): number {
   return width
 }
 
+function isCaseAssetId(assetId: string): boolean {
+  return assetId.startsWith('case.')
+}
+
 /**
  * 项目执行历史：筛选、分页（无 total，条数 < limit 判末页）、详情抽屉。
- * 空白页（page>0 且 0 条）仍保留翻页，避免无法返回上一页。
+ * Case 记录走类型化详情端点；旧 API 记录仍走通用详情，不回退。
  */
 export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) {
   const [status, setStatus] = useState<string>('')
+  const [assetType, setAssetType] = useState<string>('')
   const [orderBy, setOrderBy] = useState('-start_time')
   const [page, setPage] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
   const drawerWidth = useDrawerWidth(560)
 
   useEffect(() => {
     setPage(0)
     setSelectedId(null)
-  }, [projectId, assetId, status, orderBy])
+    setSelectedAssetId(null)
+  }, [projectId, assetId, status, assetType, orderBy])
 
   const query = useMemo(
     () => ({
@@ -72,13 +93,24 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       limit: DEFAULT_LIMIT,
       status: status || undefined,
       asset_id: assetId || undefined,
+      asset_type: (assetType === 'api' || assetType === 'case'
+        ? assetType
+        : undefined) as 'api' | 'case' | undefined,
       order_by: orderBy,
     }),
-    [page, status, assetId, orderBy],
+    [page, status, assetId, assetType, orderBy],
   )
 
   const listQuery = useExecutionRecords(projectId, query)
-  const detailQuery = useExecutionRecord(projectId, selectedId)
+  const selectedIsCase = Boolean(selectedAssetId && isCaseAssetId(selectedAssetId))
+  const apiDetailQuery = useExecutionRecord(
+    projectId,
+    selectedIsCase ? null : selectedId,
+  )
+  const caseDetailQuery = useCaseExecutionRecord(
+    projectId,
+    selectedIsCase ? selectedId : null,
+  )
 
   const rows = listQuery.data ?? []
   // 列表无 total：返回条数 < limit 即末页；空页（越界）也视为末页
@@ -107,10 +139,10 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 88,
+      width: 110,
       render: (value: string) => (
-        <Tag color={value === 'success' ? 'success' : value === 'failed' ? 'error' : 'default'}>
-          {value}
+        <Tag color={runStatusColor(value)}>
+          {runStatusLabel(value)}（{value}）
         </Tag>
       ),
     },
@@ -119,7 +151,11 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       dataIndex: 'asset_id',
       key: 'asset_id',
       ellipsis: true,
-      render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
+      render: (value: string) => (
+        <Typography.Text code style={{ wordBreak: 'break-all' }}>
+          {value}
+        </Typography.Text>
+      ),
     },
     {
       title: '开始时间',
@@ -133,7 +169,7 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       dataIndex: 'duration',
       key: 'duration',
       width: 80,
-      render: (value: number | null) => formatDuration(value),
+      render: (value: number | null) => formatDurationSeconds(value),
     },
     {
       title: '操作',
@@ -145,7 +181,10 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
           type="link"
           size="small"
           style={{ paddingInline: 0 }}
-          onClick={() => setSelectedId(record.id)}
+          onClick={() => {
+            setSelectedId(record.id)
+            setSelectedAssetId(record.asset_id)
+          }}
           aria-label={`查看记录 ${record.id}`}
         >
           详情
@@ -177,6 +216,18 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
     </Space>
   )
 
+  const detailLoading = selectedIsCase
+    ? caseDetailQuery.isLoading
+    : apiDetailQuery.isLoading
+  const detailError = selectedIsCase ? caseDetailQuery.error : apiDetailQuery.error
+  const detailRetry = () => {
+    if (selectedIsCase) {
+      void caseDetailQuery.refetch()
+    } else {
+      void apiDetailQuery.refetch()
+    }
+  }
+
   return (
     <Card
       size="small"
@@ -185,7 +236,7 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       styles={{ body: { overflowX: 'auto', maxWidth: '100%' } }}
       extra={
         assetId ? (
-          <Typography.Text type="secondary" code>
+          <Typography.Text type="secondary" code style={{ wordBreak: 'break-all' }}>
             {assetId}
           </Typography.Text>
         ) : null
@@ -199,6 +250,14 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
           onChange={(value) => setStatus(value)}
           aria-label="按状态筛选"
           data-testid="filter-status"
+        />
+        <Select
+          style={{ width: 140 }}
+          value={assetType}
+          options={ASSET_TYPE_OPTIONS}
+          onChange={(value) => setAssetType(value)}
+          aria-label="按资产类型筛选"
+          data-testid="filter-asset-type"
         />
         <Select
           style={{ width: 160 }}
@@ -246,9 +305,12 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       ) : null}
 
       <Drawer
-        title="执行详情"
+        title={selectedIsCase ? 'Case 执行详情' : '执行详情'}
         open={Boolean(selectedId)}
-        onClose={() => setSelectedId(null)}
+        onClose={() => {
+          setSelectedId(null)
+          setSelectedAssetId(null)
+        }}
         width={drawerWidth}
         destroyOnClose
         styles={{
@@ -256,36 +318,28 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
           wrapper: { maxWidth: '100vw' },
         }}
       >
-        {detailQuery.isLoading ? <LoadingState tip="加载详情…" /> : null}
-        {detailQuery.isError ? (
+        {detailLoading ? <LoadingState tip="加载详情…" /> : null}
+        {detailError ? (
           <ErrorState
-            error={detailQuery.error}
+            error={detailError}
             title="详情加载失败"
-            onRetry={() => {
-              void detailQuery.refetch()
-            }}
+            onRetry={detailRetry}
           />
         ) : null}
-        {detailQuery.data ? <DetailBody detail={detailQuery.data} /> : null}
+        {selectedIsCase && caseDetailQuery.data ? (
+          <CaseDetailBody detail={caseDetailQuery.data} />
+        ) : null}
+        {!selectedIsCase && apiDetailQuery.data ? (
+          <ApiDetailBody detail={apiDetailQuery.data} />
+        ) : null}
       </Drawer>
     </Card>
   )
 }
 
-function DetailBody({
-  detail,
-}: {
-  detail: NonNullable<ReturnType<typeof useExecutionRecord>['data']>
-}) {
-  const parseError =
-    detail.result &&
-    typeof detail.result === 'object' &&
-    'parse_error' in detail.result
-      ? String((detail.result as { parse_error: unknown }).parse_error)
-      : null
-
+function CaseDetailBody({ detail }: { detail: CaseExecutionRecordDetail }) {
   return (
-    <div data-testid="execution-detail" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
+    <div data-testid="execution-detail" data-asset-type="case" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
       <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
         <Descriptions.Item label="运行 ID">
           <Typography.Text copyable code style={{ wordBreak: 'break-all' }}>
@@ -297,9 +351,63 @@ function DetailBody({
             {detail.asset_id}
           </Typography.Text>
         </Descriptions.Item>
+        <Descriptions.Item label="类型">
+          <Tag>case</Tag>
+        </Descriptions.Item>
         <Descriptions.Item label="状态">
-          <Tag color={detail.status === 'success' ? 'success' : 'error'}>
-            {detail.status}
+          <Tag color={runStatusColor(detail.status)}>
+            {runStatusLabel(detail.status)}（{detail.status}）
+          </Tag>
+        </Descriptions.Item>
+        <Descriptions.Item label="开始">
+          {detail.display.start_time}
+        </Descriptions.Item>
+        <Descriptions.Item label="结束">
+          {detail.display.end_time ?? '—'}
+        </Descriptions.Item>
+        <Descriptions.Item label="耗时">
+          {detail.display.duration ?? '—'}
+        </Descriptions.Item>
+      </Descriptions>
+
+      {detail.result ? (
+        <CaseResultView result={detail.result} recordId={detail.id} />
+      ) : (
+        <Typography.Paragraph type="secondary">
+          存档缺失或无法按 CaseResult 解析（result 为 null）。
+        </Typography.Paragraph>
+      )}
+    </div>
+  )
+}
+
+function ApiDetailBody({ detail }: { detail: ExecutionRecordDetail }) {
+  const parseError =
+    detail.result &&
+    typeof detail.result === 'object' &&
+    'parse_error' in detail.result
+      ? String((detail.result as { parse_error: unknown }).parse_error)
+      : null
+
+  return (
+    <div data-testid="execution-detail" data-asset-type="api" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
+      <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
+        <Descriptions.Item label="运行 ID">
+          <Typography.Text copyable code style={{ wordBreak: 'break-all' }}>
+            {detail.id}
+          </Typography.Text>
+        </Descriptions.Item>
+        <Descriptions.Item label="资产 ID">
+          <Typography.Text code style={{ wordBreak: 'break-all' }}>
+            {detail.asset_id}
+          </Typography.Text>
+        </Descriptions.Item>
+        <Descriptions.Item label="类型">
+          <Tag>{detail.asset_type}</Tag>
+        </Descriptions.Item>
+        <Descriptions.Item label="状态">
+          <Tag color={runStatusColor(detail.status)}>
+            {runStatusLabel(detail.status)}（{detail.status}）
           </Tag>
         </Descriptions.Item>
         <Descriptions.Item label="开始">
@@ -341,14 +449,4 @@ function formatTime(value: string): string {
     return value
   }
   return date.toLocaleString('zh-CN', { hour12: false })
-}
-
-function formatDuration(seconds: number | null): string {
-  if (seconds === null || Number.isNaN(seconds)) {
-    return '—'
-  }
-  if (seconds < 1) {
-    return `${Math.round(seconds * 1000)}ms`
-  }
-  return `${seconds.toFixed(2)}s`
 }

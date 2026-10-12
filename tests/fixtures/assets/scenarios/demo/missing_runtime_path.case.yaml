@@ -1,0 +1,19 @@
+schema_version: "0.2"
+id: case.demo.missing_runtime_path
+steps:
+  - step_id: create
+    type: api
+    api_id: api.demo.create
+    params:
+      name: demo
+    output: created
+  - step_id: consume
+    type: api
+    api_id: api.demo.get
+    params:
+      resource_id: "${created.body.missing}"
+  - step_id: after
+    type: api
+    api_id: api.demo.get
+    params:
+      resource_id: "x"

@@ -1,0 +1,8 @@
+schema_version: "0.2"
+id: case.demo.missing_params
+steps:
+  - step_id: only
+    type: api
+    api_id: api.demo.create
+    params:
+      name: "${params.missing}"

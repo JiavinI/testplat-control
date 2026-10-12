@@ -1,0 +1,82 @@
+{
+  "record_id": "00000000-0000-4000-8000-000000000003",
+  "status": "failed",
+  "duration": 0.009,
+  "result": {
+    "case_id": "case.demo.missing_runtime_path",
+    "status": "failed",
+    "duration_seconds": 0.007,
+    "steps": [
+      {
+        "step_id": "create",
+        "name": null,
+        "type": "api",
+        "status": "success",
+        "duration_seconds": 0.007,
+        "request": {
+          "method": "POST",
+          "url": "http://127.0.0.1:18080/demo/resources",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "name": "demo"
+          }
+        },
+        "response": {
+          "status_code": 201,
+          "headers": {
+            "server": "BaseHTTP/0.6 Python/3.13.7",
+            "date": "Mon, 12 Oct 2026 03:45:26 GMT",
+            "content-type": "application/json",
+            "content-length": "57"
+          },
+          "body": {
+            "id": "res-42",
+            "access_token": "***"
+          }
+        },
+        "error": null,
+        "output": "created",
+        "skip_reason": null
+      },
+      {
+        "step_id": "consume",
+        "name": null,
+        "type": "api",
+        "status": "failed",
+        "duration_seconds": 0.0,
+        "request": null,
+        "response": null,
+        "error": {
+          "kind": "variable_resolution",
+          "message": "步骤 consume 的引用 ${created.body.missing} 无法解析: 路径 missing 不存在",
+          "stage": null,
+          "step_id": "consume",
+          "path": "created.body.missing"
+        },
+        "output": null,
+        "skip_reason": null
+      },
+      {
+        "step_id": "after",
+        "name": null,
+        "type": "api",
+        "status": "skipped",
+        "duration_seconds": 0.0,
+        "request": null,
+        "response": null,
+        "error": null,
+        "output": null,
+        "skip_reason": "fail_fast"
+      }
+    ],
+    "summary": {
+      "total": 3,
+      "success": 1,
+      "failed": 1,
+      "skipped": 1
+    },
+    "error": null
+  }
+}

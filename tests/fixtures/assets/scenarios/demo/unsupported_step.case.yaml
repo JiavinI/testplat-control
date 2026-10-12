@@ -1,0 +1,11 @@
+schema_version: "0.2"
+id: case.demo.unsupported_step
+steps:
+  - step_id: first
+    type: api
+    api_id: api.demo.get
+    params:
+      resource_id: "x"
+  - step_id: ui
+    type: ui
+    api_id: api.demo.get

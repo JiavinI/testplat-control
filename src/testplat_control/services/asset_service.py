@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from testplat_control.parsers import YamlParser
+from testplat_control.services.case_asset_service import case_id_for_relative_path
 
 
 @dataclass
@@ -157,6 +158,12 @@ class AssetService:
 
                 child_rel_path = item.relative_to(self.assets_root)
                 child_rel_path_str = str(child_rel_path).replace("\\", "/")
+                # Case 契约 v0.2 §8.3：``scenarios/**/*.case.yaml`` 的展示 id 是 ``case.<...>``，
+                # 不是带 ``.case`` 双后缀的 ``scenarios.<...>.case``。这里只修正展示 id，
+                # 不读取文件内 ``id``——id 一致性校验仍由 Engine 在运行时完成。
+                case_id = case_id_for_relative_path(child_rel_path)
+                if case_id is not None:
+                    file_id = case_id
 
                 metadata = self._extract_file_metadata(item)
                 # 如果没有 api_id，使用生成的 file_id

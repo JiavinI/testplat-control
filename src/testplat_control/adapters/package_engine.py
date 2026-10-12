@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import inspect
 import logging
-from typing import Any
+from typing import Any, overload
 
 from testplat_engine import (
     ApiExecutionOutcome,
     ApiExecutionRequest,
+    CaseExecutionOutcome,
+    CaseExecutionRequest,
     EngineUnavailableError,
 )
 
@@ -43,7 +45,7 @@ def resolve_package_engine() -> EnginePort:
             public_message="执行引擎不可用：已安装包，但缺少公开 create_engine 入口",
             log_reason=(
                 "testplat-engine 已安装且版本兼容，但未导出 create_engine；"
-                "请安装含 runtime 的 0.1.x 包"
+                "请安装含 runtime 的 0.2.x 包"
             ),
         )
 
@@ -52,7 +54,8 @@ def resolve_package_engine() -> EnginePort:
     except Exception as exc:
         raise EngineUnavailableError(
             public_message="执行引擎不可用：create_engine 调用失败",
-            log_reason=f"testplat_engine.create_engine() raised {type(exc).__name__}: {exc}",
+            # 只记异常类型：构造失败的原文可能夹带环境/凭证片段。
+            log_reason=f"testplat_engine.create_engine() raised {type(exc).__name__}",
         ) from exc
 
     _assert_engine_port(engine, "testplat_engine.create_engine()")
@@ -98,6 +101,14 @@ class PackageEngineAdapter:
         else:
             self._delegate = resolve_package_engine()
 
-    async def execute(self, request: ApiExecutionRequest) -> ApiExecutionOutcome:
-        """转发到包内 EnginePort。"""
-        return await self._delegate.execute(request)
+    @overload
+    async def execute(self, request: ApiExecutionRequest) -> ApiExecutionOutcome: ...
+
+    @overload
+    async def execute(self, request: CaseExecutionRequest) -> CaseExecutionOutcome: ...
+
+    async def execute(
+        self, request: ApiExecutionRequest | CaseExecutionRequest
+    ) -> ApiExecutionOutcome | CaseExecutionOutcome:
+        """转发到包内 EnginePort 的唯一 ``execute`` 入口（API 与 Case 共用）。"""
+        return await self._delegate.execute(request)  # type: ignore[call-overload,no-any-return]

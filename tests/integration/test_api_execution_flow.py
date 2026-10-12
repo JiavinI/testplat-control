@@ -8,6 +8,7 @@ Fake 通过 dependency_overrides 注入，不 monkeypatch 路由全局符号。
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -223,7 +224,9 @@ def test_execution_failure_handling(project_id: str) -> None:
     saved = detail.json()
     assert_execution_record(saved, "failed")
     assert saved["response"] is None
-    assert saved["request"]["params"]["password"] == "wrong-password"
+    # Engine 0.2 的公开 DTO 在构造期递归脱敏：保存的请求快照不再含 password 明文。
+    assert saved["request"]["params"]["password"] == "***"
+    assert "wrong-password" not in json.dumps(saved, ensure_ascii=False)
     assert saved["display"]["duration"] is not None
 
     listed = _list(project_id, status="failed").json()

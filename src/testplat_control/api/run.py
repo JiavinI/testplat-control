@@ -296,7 +296,8 @@ def _load_param_form(project: Project, asset_id: str) -> list[ParamInfo]:
     except yaml.YAMLError as exc:
         raise HTTPException(status_code=422, detail=f"Invalid YAML: {exc}") from exc
     except OSError as exc:
-        logger.exception("Failed to read asset %s", asset_id)
+        # 日志硬约束：不用 logger.exception，只记资产 ID 与异常类型名。
+        logger.error("Failed to read asset %s exc_type=%s", asset_id, type(exc).__name__)
         raise HTTPException(status_code=500, detail="Failed to read asset file") from exc
 
     if parsed.get("type") != "api":

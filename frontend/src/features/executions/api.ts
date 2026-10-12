@@ -8,7 +8,16 @@ import {
   requireNullableString,
   requireString,
 } from '@/shared/api/validate'
+import {
+  parseCaseAssetDetail,
+  parseCaseExecutionRecordDetail,
+  parseCaseRunResponse,
+} from './caseParse'
 import type {
+  CaseAssetDetail,
+  CaseExecutionRecordDetail,
+  CaseRunRequest,
+  CaseRunResponse,
   ExecutionListQuery,
   ExecutionRecordDetail,
   ExecutionRecordListItem,
@@ -31,6 +40,9 @@ function recordsPath(projectId: string, query: ExecutionListQuery = {}): string 
   }
   if (query.asset_id) {
     params.set('asset_id', query.asset_id)
+  }
+  if (query.asset_type) {
+    params.set('asset_type', query.asset_type)
   }
   if (query.order_by) {
     params.set('order_by', query.order_by)
@@ -179,4 +191,46 @@ export async function getExecutionRecord(
     options,
   )
   return parseRecordDetail(payload)
+}
+
+export async function getCaseAssetDetail(
+  projectId: string,
+  caseId: string,
+  options?: ApiClientOptions,
+): Promise<CaseAssetDetail> {
+  const payload = await apiClient.get<unknown>(
+    encodePath(['projects', projectId, 'cases', caseId]),
+    options,
+  )
+  return parseCaseAssetDetail(payload)
+}
+
+/**
+ * 同步等待 Case 跑完；不设客户端 Abort 超时。
+ * Control 每步最多约 30s，N 步最坏约 N×30s，短超时会误杀仍在执行的请求。
+ */
+export async function runCase(
+  projectId: string,
+  caseId: string,
+  body: CaseRunRequest = {},
+  options?: ApiClientOptions,
+): Promise<CaseRunResponse> {
+  const payload = await apiClient.post<unknown>(
+    encodePath(['projects', projectId, 'cases', caseId, 'run']),
+    { params: body.params ?? {} },
+    options,
+  )
+  return parseCaseRunResponse(payload)
+}
+
+export async function getCaseExecutionRecord(
+  projectId: string,
+  recordId: string,
+  options?: ApiClientOptions,
+): Promise<CaseExecutionRecordDetail> {
+  const payload = await apiClient.get<unknown>(
+    encodePath(['projects', projectId, 'case-execution-records', recordId]),
+    options,
+  )
+  return parseCaseExecutionRecordDetail(payload)
 }

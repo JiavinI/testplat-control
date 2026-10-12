@@ -10,11 +10,16 @@ import type { ExecutionRecordDetail, ExecutionRecordListItem } from './types'
 const listExecutionRecords = vi.fn()
 const getExecutionRecord = vi.fn()
 
+const getCaseExecutionRecord = vi.fn()
+
 vi.mock('./api', () => ({
   listExecutionRecords: (...args: unknown[]) => listExecutionRecords(...args),
   getExecutionRecord: (...args: unknown[]) => getExecutionRecord(...args),
+  getCaseExecutionRecord: (...args: unknown[]) => getCaseExecutionRecord(...args),
   getAssetParams: vi.fn(),
   runAsset: vi.fn(),
+  runCase: vi.fn(),
+  getCaseAssetDetail: vi.fn(),
 }))
 
 function makeItem(
@@ -47,6 +52,7 @@ function renderHistory(projectId = 'p1', assetId?: string) {
 beforeEach(() => {
   listExecutionRecords.mockReset()
   getExecutionRecord.mockReset()
+  getCaseExecutionRecord.mockReset()
 })
 
 afterEach(() => {
@@ -214,5 +220,81 @@ describe('ExecutionHistory', () => {
     listExecutionRecords.mockResolvedValue([])
     renderHistory()
     expect(await screen.findByText('暂无执行记录')).toBeInTheDocument()
+  })
+  it('Case 历史详情走类型化端点并渲染步骤', async () => {
+    const user = userEvent.setup({ delay: null })
+    listExecutionRecords.mockResolvedValue([
+      makeItem({ id: 'case-rec', asset_id: 'case.demo.create_then_get', status: 'failed' }),
+    ])
+    getCaseExecutionRecord.mockResolvedValue({
+      id: 'case-rec',
+      project_id: 'p1',
+      asset_id: 'case.demo.create_then_get',
+      asset_type: 'case',
+      status: 'failed',
+      start_time: '2026-10-12T11:30:00',
+      end_time: null,
+      duration: 0.01,
+      display: { start_time: 't', end_time: null, duration: '10ms' },
+      result: {
+        case_id: 'case.demo.create_then_get',
+        status: 'failed',
+        duration_seconds: 0.01,
+        steps: [
+          {
+            step_id: 'bad',
+            name: null,
+            type: 'api',
+            status: 'failed',
+            duration_seconds: 0.01,
+            request: null,
+            response: null,
+            error: { kind: 'assertion', message: '断言失败', stage: null, step_id: null, path: null },
+            output: null,
+            skip_reason: null,
+          },
+          {
+            step_id: 'after',
+            name: null,
+            type: 'api',
+            status: 'skipped',
+            duration_seconds: 0,
+            request: null,
+            response: null,
+            error: null,
+            output: null,
+            skip_reason: 'fail_fast',
+          },
+        ],
+        summary: { total: 2, success: 0, failed: 1, skipped: 1 },
+        error: null,
+      },
+    })
+
+    renderHistory()
+    await user.click(await screen.findByRole('button', { name: '查看记录 case-rec' }))
+    expect(await screen.findByTestId('execution-detail')).toHaveAttribute(
+      'data-asset-type',
+      'case',
+    )
+    expect(getCaseExecutionRecord).toHaveBeenCalledWith('p1', 'case-rec')
+    expect(getExecutionRecord).not.toHaveBeenCalled()
+    expect(screen.getByTestId('case-result-view')).toBeInTheDocument()
+    expect(screen.getAllByText(/已跳过（skipped）/).length).toBeGreaterThan(0)
+  })
+
+  it('asset_type 筛选会带入列表查询', async () => {
+    const user = userEvent.setup({ delay: null })
+    listExecutionRecords.mockResolvedValue([])
+    renderHistory()
+    const typeFilter = screen.getByTestId('filter-asset-type')
+    await user.click(within(typeFilter).getByRole('combobox'))
+    await user.click(await screen.findByTitle('case'))
+    await waitFor(() => {
+      expect(listExecutionRecords).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({ asset_type: 'case' }),
+      )
+    })
   })
 })

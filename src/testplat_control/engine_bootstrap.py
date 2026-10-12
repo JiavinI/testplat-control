@@ -14,13 +14,18 @@ from packaging.version import InvalidVersion, Version
 
 logger = logging.getLogger(__name__)
 
-# Phase 2.5 兼容范围：与 pyproject 中 testplat-engine 约束一致。
-ENGINE_VERSION_SPEC = SpecifierSet(">=0.1.0,<0.2")
+# Phase 3 兼容范围：与 pyproject 中 testplat-engine 约束一致。
+# 0.2 在保持单 API DTO 的同时新增 Case DTO / invalid_input；0.1.x 不再受支持。
+ENGINE_VERSION_SPEC = SpecifierSet(">=0.2.0,<0.3")
 ENGINE_DISTRIBUTION = "testplat-engine"
 _REQUIRED_EXPORTS = (
     "ApiExecutionRequest",
     "ApiExecutionOutcome",
+    "CaseExecutionRequest",
+    "CaseExecutionOutcome",
+    "StepOutcome",
     "EngineError",
+    "InvalidInputError",
     "EnginePort",
     "__version__",
 )
@@ -51,8 +56,8 @@ def ensure_engine_compatible() -> str:
     except ImportError as exc:
         raise EngineBootstrapError(
             "未安装 testplat-engine。请按 README 安装正式依赖，"
-            "或在本地开发中用 uv sources 指向已审查的 Interface/runtime worktree。"
-            f" 底层原因: {exc}"
+            "或在本地开发中用 uv sources 指向已审查的 Interface/runtime commit。"
+            f" 底层原因类型: {type(exc).__name__}"
         ) from exc
 
     try:
@@ -82,7 +87,7 @@ def ensure_engine_compatible() -> str:
     if parsed not in ENGINE_VERSION_SPEC:
         raise EngineBootstrapError(
             f"testplat-engine 版本不兼容: 当前 {check_version}，"
-            f"需要满足 {ENGINE_VERSION_SPEC}（Phase 2.5 锁定 0.1.x）。"
+            f"需要满足 {ENGINE_VERSION_SPEC}（Phase 3 锁定 0.2.x）。"
         )
 
     missing = [name for name in _REQUIRED_EXPORTS if not hasattr(eng, name)]
@@ -98,7 +103,7 @@ def ensure_engine_compatible() -> str:
         raise EngineBootstrapError(
             "testplat-engine 缺少公开 runtime 入口 create_engine()。"
             f"当前版本 {check_version} 可能只安装了 Interface 契约；"
-            "请安装含真实执行实现的 0.1.x（见 README）。"
+            "请安装含真实执行实现的 0.2.x（见 README）。"
         )
 
     try:
@@ -106,7 +111,7 @@ def ensure_engine_compatible() -> str:
     except Exception as exc:
         raise EngineBootstrapError(
             "testplat-engine.create_engine() 调用失败，无法在启动期构造执行引擎："
-            f"{type(exc).__name__}: {exc}"
+            f"异常类型 {type(exc).__name__}"
         ) from exc
 
     execute = getattr(runtime, "execute", None)

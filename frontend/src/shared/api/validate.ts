@@ -66,6 +66,32 @@ export function requireNullableNumber(
   return value
 }
 
+export function requireNumber(
+  obj: Record<string, unknown>,
+  key: string,
+  label: string,
+  bodyText = '',
+): number {
+  const value = obj[key]
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    throw new ApiParseError(`${label}.${key} 应为数字`, bodyText || summarize(obj))
+  }
+  return value
+}
+
+export function requireInteger(
+  obj: Record<string, unknown>,
+  key: string,
+  label: string,
+  bodyText = '',
+): number {
+  const value = requireNumber(obj, key, label, bodyText)
+  if (!Number.isInteger(value)) {
+    throw new ApiParseError(`${label}.${key} 应为整数`, bodyText || summarize(obj))
+  }
+  return value
+}
+
 function summarize(value: unknown): string {
   try {
     return JSON.stringify(value)?.slice(0, 200) ?? String(value)
