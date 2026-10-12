@@ -1,0 +1,12 @@
+# 匿名回显：把 alias 绑定值放进 X-Resource-Id，验证 alias 拿到的是 ***（§6-4）
+id: api.authm.echo_resource
+name: 回显 alias 值
+host: local
+method: GET
+url: /echo/headers
+auth: none
+request:
+  headers:
+    X-Resource-Id: "${resource_id}"
+success:
+  status_code: 200

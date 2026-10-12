@@ -46,3 +46,16 @@ def test_no_fake_secret_in_any_frozen_doc() -> None:
     files = sorted(DOCS.rglob("*"))
     assert files
     assert_no_secret([path.read_text("utf-8") for path in files if path.is_file()])
+
+
+def test_error_examples_come_from_real_engine_run() -> None:
+    """B5：错误示例由真实 Engine 矩阵重新生成（run_real_engine_matrix.sh），键名不带 fake 标记。"""
+    errors = _load("auth-error-responses.json")
+    assert set(errors) == {
+        "identity_unavailable",
+        "identity_not_found",
+        "config_invalid_yaml",
+        "config_template_control_char",
+        "config_default_identity_missing",
+        "config_header_case_duplicate",
+    }

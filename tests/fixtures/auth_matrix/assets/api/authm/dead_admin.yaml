@@ -1,0 +1,10 @@
+# 带身份但目标不可达：Case 中为系统错误步骤，auth 为 null，前端显示“—”（A4/B7）
+id: api.authm.dead_admin
+name: 不可达（admin）
+host: dead
+method: GET
+url: /demo/dead
+auth: admin
+request: {}
+success:
+  status_code: 200

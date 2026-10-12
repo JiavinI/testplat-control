@@ -1,0 +1,14 @@
+# 干净安装证据（Phase 3.3a Agent 4，2026-10-12 15:46:22 CST）
+目录: 新克隆（基于 d80cf63 + 本次集成改动，路径为临时目录）；UV_CACHE_DIR: 新建空缓存
+Engine 来源: uv.lock 中 file:// 锁定 f631e2e（远程精确锁定 BLOCKED：需用户授权推送 Engine 后由主线程完成）
+$ uv sync --extra dev --locked
+   Updating file:///Users/jiavin/Developer/products/testplat1/testplat-engine (f631e2e3f9e2bad146a9182062ae0d99ea5c62b5)
+    Updated file:///Users/jiavin/Developer/products/testplat1/testplat-engine (f631e2e3f9e2bad146a9182062ae0d99ea5c62b5)
+   Building testplat-engine @ git+file:///Users/jiavin/Developer/products/testplat1/testplat-engine@f631e2e3f9e2bad146a9182062ae0d99ea5c62b5
+      Built testplat-engine @ git+file:///Users/jiavin/Developer/products/testplat1/testplat-engine@f631e2e3f9e2bad146a9182062ae0d99ea5c62b5
+Installed 30 packages in 36ms
+ + testplat-engine==0.3.0 (from git+file:///Users/jiavin/Developer/products/testplat1/testplat-engine@f631e2e3f9e2bad146a9182062ae0d99ea5c62b5)
+$ python -c "import testplat_engine; print(testplat_engine.__version__)"
+0.3.0
+$ pytest -q
+298 passed, 175 warnings in 21.13s

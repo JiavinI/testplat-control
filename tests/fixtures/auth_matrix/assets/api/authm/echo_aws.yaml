@@ -1,0 +1,9 @@
+id: api.authm.echo_aws
+name: 回显凭证（awsvar）
+host: local
+method: GET
+url: /echo/headers
+auth: awsvar
+request: {}
+success:
+  status_code: 200

@@ -1,0 +1,33 @@
+# 主身份表：只含占位，假秘密由矩阵脚本以环境变量注入 Control 进程
+identities:
+  admin:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_ADMIN_TOKEN}"
+  partner:
+    headers:
+      X-Api-Key: "${secret:TESTPLAT_PARTNER_KEY}"
+  combo:
+    headers:
+      X-Tenant-Token: "${secret:TESTPLAT_ADMIN_TOKEN}.${secret:TESTPLAT_PARTNER_KEY}"
+  missing:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_MISSING_TOKEN}"
+  empty:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_EMPTY_TOKEN}"
+  short:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_SHORT_TOKEN}"
+  homevar:
+    headers:
+      Authorization: "Bearer ${secret:HOME}"
+  awsvar:
+    headers:
+      Authorization: "Bearer ${secret:AWS_SECRET_ACCESS_KEY}"
+  crlf:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_CRLF_TOKEN}"
+  lf:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_LF_TOKEN}"
+default_identity: admin

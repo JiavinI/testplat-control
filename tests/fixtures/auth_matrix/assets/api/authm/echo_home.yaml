@@ -1,0 +1,9 @@
+id: api.authm.echo_home
+name: 回显凭证（homevar）
+host: local
+method: GET
+url: /echo/headers
+auth: homevar
+request: {}
+success:
+  status_code: 200

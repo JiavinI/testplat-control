@@ -1,14 +1,26 @@
 {
-  "identity_unavailable_fake_engine": {
+  "identity_unavailable": {
     "status": 422,
     "body": {
-      "detail": "身份 partner 不可用: 环境变量 TESTPLAT_PARTNER_KEY 未设置"
+      "detail": "身份 missing 不可用: 环境变量 TESTPLAT_MISSING_TOKEN 未设置"
     }
   },
-  "identity_not_found_fake_engine": {
+  "identity_not_found": {
     "status": 422,
     "body": {
       "detail": "身份不存在: ghost"
+    }
+  },
+  "config_invalid_yaml": {
+    "status": 422,
+    "body": {
+      "detail": "鉴权配置 YAML 无效: test"
+    }
+  },
+  "config_template_control_char": {
+    "status": 422,
+    "body": {
+      "detail": "鉴权配置无效 (test): 身份 admin 的 header Authorization 含非法控制字符"
     }
   },
   "config_default_identity_missing": {

@@ -1,0 +1,10 @@
+schema_version: "0.2"
+id: case.authm.unavailable
+name: 预检一次性检查（unavailable）
+steps:
+  - step_id: first
+    type: api
+    api_id: api.authm.echo_admin
+  - step_id: second
+    type: api
+    api_id: api.authm.echo_missing

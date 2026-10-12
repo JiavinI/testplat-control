@@ -1,0 +1,9 @@
+# 未声明 auth：走 default_identity（admin）
+id: api.authm.echo_default
+name: 回显凭证（默认身份）
+host: local
+method: GET
+url: /echo/headers
+request: {}
+success:
+  status_code: 200

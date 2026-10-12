@@ -1,0 +1,98 @@
+{
+  "search_targets": 3,
+  "positive_control_hits": 3,
+  "sources": [
+    {
+      "kind": "log",
+      "path": "frontend/screenshots/phase3_3-real-engine/backend.log",
+      "hits": 0,
+      "bytes": 187785
+    },
+    {
+      "kind": "log",
+      "path": "frontend/screenshots/phase3_3-real-engine/frontend.log",
+      "hits": 0,
+      "bytes": 72
+    },
+    {
+      "kind": "log",
+      "path": "frontend/screenshots/phase3_3-real-engine/target.log",
+      "hits": 0,
+      "bytes": 36
+    },
+    {
+      "kind": "sqlite_file_bytes",
+      "path": "/var/folders/54/cn3fz6zx2x3297j5r45ph8140000gn/T/phase3_3-matrix.kJLFLh/control.db",
+      "hits": 0
+    },
+    {
+      "kind": "sqlite_raw_rows",
+      "path": "/var/folders/54/cn3fz6zx2x3297j5r45ph8140000gn/T/phase3_3-matrix.kJLFLh/control.db",
+      "hits": 0,
+      "tables": {
+        "projects": 0,
+        "projects__rows": 11,
+        "execution_records": 0,
+        "execution_records__rows": 30
+      }
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/auth-422-real-engine.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/auth-browser-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/auth-matrix-projects.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/auth-matrix-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/dom-secret-search.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/phase3-regression-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "dom_per_screenshot",
+      "path": "frontend/screenshots/phase3_3-real-engine/dom-secret-search.json",
+      "hits": 0,
+      "screenshots": 16
+    },
+    {
+      "kind": "docs",
+      "path": "docs",
+      "hits": 0,
+      "files": 22
+    },
+    {
+      "kind": "readme",
+      "path": ".",
+      "hits": 0
+    }
+  ],
+  "tracked_by_design": [
+    "frontend/scripts/e2e-auth-real-engine.mjs:1",
+    "frontend/scripts/e2e-gate.mjs:1",
+    "frontend/src/features/executions/AuthSummary.test.tsx:1",
+    "frontend/src/features/executions/auth.test.ts:1",
+    "scripts/auth_leak_search.py:1",
+    "scripts/auth_real_engine_matrix.py:3",
+    "scripts/run_real_engine_matrix.sh:5",
+    "tests/auth_support.py:2"
+  ],
+  "total_unexpected_hits": 0
+}

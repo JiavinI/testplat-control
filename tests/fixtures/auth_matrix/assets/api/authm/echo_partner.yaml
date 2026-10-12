@@ -1,0 +1,9 @@
+id: api.authm.echo_partner
+name: 回显凭证（partner）
+host: local
+method: GET
+url: /echo/headers
+auth: partner
+request: {}
+success:
+  status_code: 200

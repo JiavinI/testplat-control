@@ -1,0 +1,13 @@
+schema_version: "0.2"
+id: case.authm.syserror
+name: 系统错误步骤
+steps:
+  - step_id: admin
+    type: api
+    api_id: api.authm.echo_admin
+  - step_id: dead
+    type: api
+    api_id: api.authm.dead_admin
+  - step_id: after
+    type: api
+    api_id: api.authm.echo_partner

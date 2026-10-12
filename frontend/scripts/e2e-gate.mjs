@@ -632,7 +632,7 @@ async function runAuthFlow(page, viewportLabel, executionProject, secretHits) {
   await page.unroute(runPattern)
 
   // 3) 身份不可用 422：detail 取自冻结示例，前端须原样展示
-  const unavailable = authErrors.identity_unavailable_fake_engine
+  const unavailable = authErrors.identity_unavailable
   await page.route(runPattern, async (route) => {
     await route.fulfill({
       status: unavailable.status,
@@ -701,7 +701,7 @@ async function runAuthFlow(page, viewportLabel, executionProject, secretHits) {
   await page.unroute(caseRunPattern)
 
   // 6) Case 身份不可用 422（身份不存在示例）
-  const notFound = authErrors.identity_not_found_fake_engine
+  const notFound = authErrors.identity_not_found
   await page.route(caseRunPattern, async (route) => {
     await route.fulfill({
       status: notFound.status,

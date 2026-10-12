@@ -1,0 +1,47 @@
+{
+  "evidence": [
+    {
+      "step": "create_project",
+      "id": "676f010a-9a57-40b5-80c8-bcbab97fc7eb"
+    },
+    {
+      "step": "success",
+      "ok": true
+    },
+    {
+      "step": "assertion_failed",
+      "ok": true
+    },
+    {
+      "step": "preflight_422",
+      "ok": true
+    },
+    {
+      "step": "legacy_422",
+      "ok": true
+    },
+    {
+      "step": "transport_502_serial_locate",
+      "record_id": "c06a67f7-50a1-408b-bf24-f71651d3aede",
+      "ok": true
+    },
+    {
+      "step": "timeout_504_serial_locate",
+      "record_id": "37dd3aaf-1412-4572-b59b-c9ddb91f0ede",
+      "ok": true
+    },
+    {
+      "step": "history_detail",
+      "ok": true
+    }
+  ],
+  "unexpectedConsole": [],
+  "unexpectedFailed": [],
+  "pageErrors": [],
+  "failedRequests": [
+    "422 POST http://127.0.0.1:5183/api/projects/676f010a-9a57-40b5-80c8-bcbab97fc7eb/cases/case.demo.undeclared_alias/run",
+    "422 POST http://127.0.0.1:5183/api/projects/676f010a-9a57-40b5-80c8-bcbab97fc7eb/cases/case.demo.legacy_v1/run",
+    "502 POST http://127.0.0.1:5183/api/projects/676f010a-9a57-40b5-80c8-bcbab97fc7eb/cases/case.demo.transport/run",
+    "504 POST http://127.0.0.1:5183/api/projects/676f010a-9a57-40b5-80c8-bcbab97fc7eb/cases/case.demo.timeout/run"
+  ]
+}

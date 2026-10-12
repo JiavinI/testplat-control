@@ -1,0 +1,107 @@
+{
+  "viewports": [
+    {
+      "label": "desktop-1440x900",
+      "dom": [
+        {
+          "screenshot": "desktop-1440x900-auth-api-identity.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-auth-api-anonymous.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-auth-api-header-override.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-auth-api-identity-unavailable-422.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-auth-case-mixed-identities.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-auth-case-system-error-dash.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-auth-history-api-detail.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-auth-history-case-detail.png",
+          "dom_secret_hits": 0
+        }
+      ],
+      "scenes": [
+        "api-identity",
+        "api-anonymous",
+        "api-header-override",
+        "api-identity-unavailable-422",
+        "case-mixed-identities",
+        "case-system-error-dash(in-viewport)",
+        "history-api-detail",
+        "history-case-detail"
+      ],
+      "project_id": "27b48546-6755-4a43-985f-ab4e64cd6324",
+      "unexpectedFailed": [],
+      "unexpectedConsole": [],
+      "overflow": false
+    },
+    {
+      "label": "mobile-390x844",
+      "dom": [
+        {
+          "screenshot": "mobile-390x844-auth-api-identity.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-auth-api-anonymous.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-auth-api-header-override.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-auth-api-identity-unavailable-422.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-auth-case-mixed-identities.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-auth-case-system-error-dash.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-auth-history-api-detail.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-auth-history-case-detail.png",
+          "dom_secret_hits": 0
+        }
+      ],
+      "scenes": [
+        "api-identity",
+        "api-anonymous",
+        "api-header-override",
+        "api-identity-unavailable-422",
+        "case-mixed-identities",
+        "case-system-error-dash(in-viewport)",
+        "history-api-detail",
+        "history-case-detail"
+      ],
+      "project_id": "3b3089e7-5023-4841-8872-20a9f08efd82",
+      "unexpectedFailed": [],
+      "unexpectedConsole": [],
+      "overflow": false
+    }
+  ],
+  "error": null
+}

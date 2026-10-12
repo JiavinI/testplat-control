@@ -160,7 +160,7 @@ describe('身份相关 422', () => {
   it('预检 422 原样展示后端 detail（不硬编码文案）', async () => {
     const { CaseExecutionPanel } = await import('./CaseExecutionPanel')
     const errors = loadContractExample('auth-error-responses.json') as Record<string, { status: number; body: { detail: string } }>
-    const sample = errors.identity_unavailable_fake_engine
+    const sample = errors.identity_unavailable
     runCase.mockRejectedValueOnce(
       new ApiHttpError(sample.status, sample.body.detail, JSON.stringify(sample.body)),
     )

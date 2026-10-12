@@ -1,0 +1,9 @@
+id: api.authm.echo_short
+name: 回显凭证（short）
+host: local
+method: GET
+url: /echo/headers
+auth: short
+request: {}
+success:
+  status_code: 200

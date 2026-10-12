@@ -31,5 +31,5 @@ default_identity: admin   # 可选
 
 - 新 schema `ExecutionAuth {identity, header_names, overridden_headers}`。
 - `RunResponse.auth`、`ExecutionRecordDetailResponse.auth`、`CaseStepResult.auth`：`ExecutionAuth | null`。
-- 路由不变；完整文档 `openapi-phase3_3.json`；示例见 `examples/`（Fake Engine 生成，错误文案以真实 Engine 为准）。
+- 路由不变；完整文档 `openapi-phase3_3.json`；示例见 `examples/`：成功响应由 Fake Engine 生成；`auth-error-responses.json` 已由 Agent 4 用真实 Engine（`f631e2e`）重新生成（B5），见 `integration-real-engine.md`。
 - 请求 DTO 构造失败的 422 detail 改为固定文案 `执行请求无效：参数或环境配置不合法`（不再回显 `str(exc)`）。

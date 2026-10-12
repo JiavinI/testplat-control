@@ -1,0 +1,9 @@
+id: api.authm.echo_none
+name: 回显凭证（none）
+host: local
+method: GET
+url: /echo/headers
+auth: none
+request: {}
+success:
+  status_code: 200

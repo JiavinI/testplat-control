@@ -1,0 +1,9 @@
+id: api.authm.echo_admin
+name: 回显凭证（admin）
+host: local
+method: GET
+url: /echo/headers
+auth: admin
+request: {}
+success:
+  status_code: 200
