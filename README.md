@@ -17,14 +17,14 @@ Control 通过 Python 包依赖调用 `testplat-engine`，**禁止**运行时 `s
 
 ```toml
 # pyproject.toml 中的 [tool.uv.sources]
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "3bfd0fd0adb230135b47fd31c4579d123959600e" }
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "4715c61be52ce4e071bde5114a57fbbcad959bf6" }
 ```
 
-> 该 rev 是 Engine 集成分支 `codex/phase3-integration-engine` 的 HEAD（包含已审查的 `aff3ca6`），已推送到 GitHub。
+> 该 rev 是 Engine PR #12 合并后的 `main` commit（`4715c61`，merge commit）。
 > 之前的本机 `file://` 临时锁定已移除，干净目录 / 干净缓存的远程安装已验证（见
 > `frontend/screenshots/phase3-real-engine/CLEAN_INSTALL_EVIDENCE.txt`）。
 >
-> - Engine PR 合并后必须改为合并后 main 的 commit SHA，再执行 `uv lock`。
+> - 升级 Engine 时改为新的 main commit SHA，再执行 `uv lock`。
 
 - 版本约束：`>=0.2.0,<0.3`（与依赖声明一致）
 - 安装以 **rev/commit** 为准，不依赖分支名漂移；**禁止** `sys.path` 注入与 path editable

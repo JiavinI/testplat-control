@@ -15,7 +15,7 @@ dependencies = [
     "pyyaml>=6.0",
     "packaging>=24.0",
     # Phase 3：Case 能力需要 Engine 0.2.x（CaseExecutionRequest/Outcome、InvalidInputError）。
-    # 具体 commit 由 uv sources 锁定；见文件下方“临时本地 URL”说明。
+    # 具体 commit 由 uv sources 锁定；见文件下方 [tool.uv.sources] 说明。
     "testplat-engine>=0.2.0,<0.3",
 ]
 
@@ -36,12 +36,10 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 远程精确锁定：指向 GitHub 上 Engine 集成分支 codex/phase3-integration-engine 的 commit
-# （3bfd0fd，包含已审查的 aff3ca6）。锁定的是精确 rev，不是分支名，也不是 path editable。
-# Engine PR 合并后，请改为合并后 main 的 commit SHA 并重新执行 `uv lock`：
-#   testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "<合并后的 main commit>" }
+# 远程精确锁定：指向 Engine PR #12 合并后的 main commit（4715c61，merge commit）。
+# 锁定的是精确 rev，不是分支名，也不是 path editable。升级 Engine 时改 rev 并重新执行 `uv lock`。
 # 切勿改成 path editable 或在运行时修改 sys.path。
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "3bfd0fd0adb230135b47fd31c4579d123959600e" }
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "4715c61be52ce4e071bde5114a57fbbcad959bf6" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
