@@ -116,9 +116,7 @@ def _run(real: dict[str, Any], case_id: str, params: dict[str, Any] | None = Non
 
 
 def _records(real: dict[str, Any], **query: Any) -> list[dict[str, Any]]:
-    response = real["client"].get(
-        f"/projects/{real['project_id']}/execution-records", params=query
-    )
+    response = real["client"].get(f"/projects/{real['project_id']}/execution-records", params=query)
     assert response.status_code == 200
     return response.json()
 
@@ -247,9 +245,11 @@ def test_real_case_timeout_maps_504_and_saves_partial_steps(
     assert resp.status_code == 504, resp.text
     (item,) = _records(real, asset_type="case")
     assert item["status"] == "failed"
-    typed = real["client"].get(
-        f"/projects/{real['project_id']}/case-execution-records/{item['id']}"
-    ).json()
+    typed = (
+        real["client"]
+        .get(f"/projects/{real['project_id']}/case-execution-records/{item['id']}")
+        .json()
+    )
     result = typed["result"]
     assert [(s["step_id"], s["status"]) for s in result["steps"]] == [
         ("create", "success"),
@@ -266,9 +266,11 @@ def test_real_case_transport_maps_502_and_saves_partial_steps(real: dict[str, An
 
     assert resp.status_code == 502, resp.text
     (item,) = _records(real, asset_type="case")
-    typed = real["client"].get(
-        f"/projects/{real['project_id']}/case-execution-records/{item['id']}"
-    ).json()
+    typed = (
+        real["client"]
+        .get(f"/projects/{real['project_id']}/case-execution-records/{item['id']}")
+        .json()
+    )
     result = typed["result"]
     assert [(s["step_id"], s["status"]) for s in result["steps"]] == [
         ("create", "success"),
@@ -329,7 +331,7 @@ def test_real_case_legacy_schema_is_preflight_422(real: dict[str, Any]) -> None:
             "scenarios/demo/mut_forward_ref.case.yaml",
             'schema_version: "0.2"\nid: case.demo.mut_forward_ref\nsteps:\n'
             "  - step_id: first\n    type: api\n    api_id: api.demo.get\n"
-            "    params:\n      resource_id: \"${later.body.id}\"\n"
+            '    params:\n      resource_id: "${later.body.id}"\n'
             "  - step_id: later\n    type: api\n    api_id: api.demo.create\n"
             "    params:\n      name: x\n    output: later\n",
             "alias",
@@ -404,30 +406,28 @@ def test_real_case_5xx_serial_history_locate_uses_newest_failed(
     # 先跑 transport（502）
     transport = _run(real, "case.demo.transport")
     assert transport.status_code == 502, transport.text
-    (t_item,) = _records(
-        real, asset_type="case", asset_id="case.demo.transport", status="failed"
+    (t_item,) = _records(real, asset_type="case", asset_id="case.demo.transport", status="failed")
+    t_detail = (
+        real["client"]
+        .get(f"/projects/{real['project_id']}/case-execution-records/{t_item['id']}")
+        .json()
     )
-    t_detail = real["client"].get(
-        f"/projects/{real['project_id']}/case-execution-records/{t_item['id']}"
-    ).json()
     assert t_detail["result"]["error"]["kind"] == "transport"
 
     # timeout（短超时）
     _short_step_timeout(monkeypatch, 0.2)
     timeout = _run(real, "case.demo.timeout")
     assert timeout.status_code == 504, timeout.text
-    timeout_items = _records(
-        real, asset_type="case", asset_id="case.demo.timeout", status="failed"
-    )
+    timeout_items = _records(real, asset_type="case", asset_id="case.demo.timeout", status="failed")
     assert len(timeout_items) == 1
     assert timeout_items[0]["id"] != t_item["id"]
-    to_detail = real["client"].get(
-        f"/projects/{real['project_id']}/case-execution-records/{timeout_items[0]['id']}"
-    ).json()
+    to_detail = (
+        real["client"]
+        .get(f"/projects/{real['project_id']}/case-execution-records/{timeout_items[0]['id']}")
+        .json()
+    )
     assert to_detail["result"]["error"]["kind"] == "timeout"
 
     # 再用 asset_id=transport 过滤：items[0] 仍是 transport，不被 timeout 污染
-    again = _records(
-        real, asset_type="case", asset_id="case.demo.transport", status="failed"
-    )
+    again = _records(real, asset_type="case", asset_id="case.demo.transport", status="failed")
     assert again[0]["id"] == t_item["id"]

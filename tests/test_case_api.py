@@ -479,9 +479,10 @@ def test_history_filter_by_asset_type(seeded: dict[str, Any]) -> None:
     assert {r["id"] for r in cases} == set(ids["case"])
     assert {r["id"] for r in apis} == set(ids["api"])
     assert len(mixed) == 6  # 不带 asset_type 时保持 Phase 2.5 的混合行为
-    assert client.get(
-        f"/projects/{pid}/execution-records", params={"asset_type": "ui"}
-    ).status_code == 422
+    assert (
+        client.get(f"/projects/{pid}/execution-records", params={"asset_type": "ui"}).status_code
+        == 422
+    )
 
 
 def test_history_filter_by_status_and_asset_id_for_cases(seeded: dict[str, Any]) -> None:
@@ -537,8 +538,16 @@ def test_history_generic_detail_stays_compatible_for_case_records(seeded: dict[s
     ]
     assert typed["asset_type"] == "case"
     assert set(typed) == {
-        "id", "project_id", "asset_id", "asset_type", "status", "start_time",
-        "end_time", "duration", "display", "result",
+        "id",
+        "project_id",
+        "asset_id",
+        "asset_type",
+        "status",
+        "start_time",
+        "end_time",
+        "duration",
+        "display",
+        "result",
     }
 
 

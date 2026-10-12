@@ -83,9 +83,7 @@ def test_list_records_asset_type_parameter_is_optional_enum(current: dict[str, A
     asset_type = params["asset_type"]
     assert asset_type["in"] == "query" and asset_type["required"] is False
     enum_values = {
-        value
-        for branch in asset_type["schema"]["anyOf"]
-        for value in branch.get("enum", [])
+        value for branch in asset_type["schema"]["anyOf"] for value in branch.get("enum", [])
     }
     assert enum_values == {"api", "case"}
 
@@ -128,7 +126,12 @@ def test_case_result_structure(current: dict[str, Any]) -> None:
 
     result = schemas["CaseResult"]
     assert set(result["properties"]) == {
-        "case_id", "status", "duration_seconds", "steps", "summary", "error",
+        "case_id",
+        "status",
+        "duration_seconds",
+        "steps",
+        "summary",
+        "error",
     }
     assert set(result["required"]) == {"case_id", "status", "duration_seconds", "steps", "summary"}
     assert _literal(result["properties"]["status"]) == ["success", "failed"]
@@ -142,18 +145,32 @@ def test_case_result_structure(current: dict[str, Any]) -> None:
     assert _literal(skip_reason) == ["fail_fast"]
     assert step["properties"]["duration_seconds"]["minimum"] == 0
     assert set(step["properties"]) == {
-        "step_id", "name", "type", "status", "duration_seconds",
-        "request", "response", "error", "output", "skip_reason",
+        "step_id",
+        "name",
+        "type",
+        "status",
+        "duration_seconds",
+        "request",
+        "response",
+        "error",
+        "output",
+        "skip_reason",
     }
     assert schemas["CaseSummary"]["required"] == ["total", "success", "failed", "skipped"]
     assert set(_literal(schemas["CaseSystemError"]["properties"]["kind"])) == {
-        "timeout", "transport", "internal",
+        "timeout",
+        "transport",
+        "internal",
     }
     assert _literal(schemas["CaseSystemError"]["properties"]["stage"]) == ["execution"]
     record_detail = schemas["CaseExecutionRecordDetailResponse"]
     assert _literal(record_detail["properties"]["asset_type"]) == ["case"]
     assert set(schemas["CaseAssetDetailResponse"]["required"]) == {
-        "case_id", "path", "file_name", "size_bytes", "modified_at",
+        "case_id",
+        "path",
+        "file_name",
+        "size_bytes",
+        "modified_at",
     }
 
 

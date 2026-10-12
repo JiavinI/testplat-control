@@ -278,9 +278,7 @@ def test_corrupt_result_json_does_not_log_stored_content(
     db.commit()
     db.close()
 
-    response = client.get(
-        f"/projects/{project_id}/case-execution-records/{project_id[:8]}-corrupt"
-    )
+    response = client.get(f"/projects/{project_id}/case-execution-records/{project_id[:8]}-corrupt")
 
     assert response.status_code == 200 and response.json()["result"] is None
     text = "\n".join(r.getMessage() for r in assert_logs_clean(caplog))
@@ -311,6 +309,7 @@ def test_package_adapter_unavailable_reason_has_no_exception_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """create_engine 构造失败转成 EngineUnavailableError：log_reason 只保留类型名。"""
+
     def _bad_factory() -> Any:
         raise RuntimeError(LEAKY)
 
