@@ -6,6 +6,7 @@ import {
   filterTreeKeepingAncestors,
   findAssetById,
   isRunnableApiAsset,
+  isRunnableCaseAsset,
 } from './treeUtils'
 
 const sampleTree: AssetNode = {
@@ -115,5 +116,15 @@ describe('tree helpers', () => {
     expect(collectDirectoryKeys(sampleTree)).toEqual(
       expect.arrayContaining(['assets', 'api', 'api.common', 'scenarios']),
     )
+  })
+})
+
+describe('isRunnableCaseAsset', () => {
+  it('仅 case.* 文件可运行', () => {
+    expect(
+      isRunnableCaseAsset({ id: 'case.demo.create_then_get', type: 'file' }),
+    ).toBe(true)
+    expect(isRunnableCaseAsset({ id: 'api.user.login', type: 'file' })).toBe(false)
+    expect(isRunnableCaseAsset({ id: 'case.demo', type: 'directory' })).toBe(false)
   })
 })

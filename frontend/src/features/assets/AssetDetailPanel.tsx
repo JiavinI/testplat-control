@@ -2,7 +2,7 @@ import { Card, Descriptions, Empty, Tag, Typography } from 'antd'
 import { ApiHttpError } from '@/shared/api/errors'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
 import type { AssetDetails, AssetNode } from './types'
-import { isRunnableApiAsset } from './treeUtils'
+import { isRunnableApiAsset, isRunnableCaseAsset } from './treeUtils'
 
 interface AssetDetailPanelProps {
   selectedFromTree: AssetNode | null
@@ -57,7 +57,9 @@ export function AssetDetailPanel({
 
   const isDirectory = selectedFromTree.type === 'directory'
   const display = isDirectory ? selectedFromTree : (details ?? selectedFromTree)
-  const runnable = isRunnableApiAsset(selectedFromTree)
+  const runnableApi = isRunnableApiAsset(selectedFromTree)
+  const runnableCase = isRunnableCaseAsset(selectedFromTree)
+  const runnable = runnableApi || runnableCase
 
   if (!isDirectory && detailsLoading && !details) {
     return <LoadingState tip="加载资产详情…" />
@@ -91,8 +93,10 @@ export function AssetDetailPanel({
       <div style={{ marginBottom: 12 }}>
         <Tag>{display.type === 'directory' ? '目录' : '文件'}</Tag>
         {display.type === 'file' ? (
-          runnable ? (
+          runnableApi ? (
             <Tag color="blue">可运行（api.*）</Tag>
+          ) : runnableCase ? (
+            <Tag color="blue">可运行（case.*）</Tag>
           ) : (
             <Tag>只读 · 当前不可运行</Tag>
           )
@@ -120,13 +124,19 @@ export function AssetDetailPanel({
 
       {!isDirectory && !runnable ? (
         <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-          当前阶段仅 api.* 文件支持参数与运行；本资产可查看元信息，无运行按钮。
+          当前阶段仅 api.* / case.* 文件支持运行；本资产可查看元信息，无运行按钮。
         </Typography.Paragraph>
       ) : null}
 
-      {!isDirectory && runnable ? (
+      {!isDirectory && runnableApi ? (
         <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
           此文件可运行；执行面板由工作台集成层挂载，此处不提供运行按钮。
+        </Typography.Paragraph>
+      ) : null}
+
+      {!isDirectory && runnableCase ? (
+        <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+          Case 元信息与运行由工作台 Case 面板挂载；此处不渲染 YAML 或步骤预览。
         </Typography.Paragraph>
       ) : null}
 

@@ -18,11 +18,18 @@ import {
   AssetDetailPanel,
   findAssetById,
   isRunnableApiAsset,
+  isRunnableCaseAsset,
   useAssetDetails,
   useAssetsTree,
   type AssetNode,
 } from '@/features/assets'
-import { ApiExecutionPanel, ExecutionHistory } from '@/features/executions'
+import {
+  ApiExecutionPanel,
+  CaseExecutionPanel,
+  CaseMetaPanel,
+  ExecutionHistory,
+} from '@/features/executions'
+import { useCaseAssetDetail } from '@/features/executions/hooks'
 import { useProject } from '@/features/projects/hooks'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
 
@@ -40,8 +47,8 @@ function useIsNarrowViewport(query = '(max-width: 767px)'): boolean {
 }
 
 /**
- * 项目工作台：组合资产浏览、单 API 执行与执行历史。
- * 仅 api.* 文件挂载执行面板；目录/其他文件只读并说明能力边界。
+ * 项目工作台：组合资产浏览、API/Case 执行与执行历史。
+ * api.* 挂动态参数面板；case.* 挂文件元信息 + 运行（步骤只来自运行/历史）。
  */
 export function ProjectWorkspacePage() {
   const { projectId = '' } = useParams()
@@ -66,17 +73,27 @@ export function ProjectWorkspacePage() {
     return findAssetById(treeQuery.data, selectedAssetId)
   }, [treeQuery.data, selectedAssetId])
 
-  const shouldFetchDetails = Boolean(
-    selectedFromTree && selectedFromTree.type === 'file',
+  const isCase =
+    selectedFromTree !== null && isRunnableCaseAsset(selectedFromTree)
+  const isApi =
+    selectedFromTree !== null && isRunnableApiAsset(selectedFromTree)
+
+  const shouldFetchApiDetails = Boolean(
+    selectedFromTree && selectedFromTree.type === 'file' && !isCase,
   )
   const detailsQuery = useAssetDetails(
     projectId,
-    selectedFromTree?.type === 'file' ? selectedFromTree.id : undefined,
-    shouldFetchDetails,
+    selectedFromTree?.type === 'file' && !isCase
+      ? selectedFromTree.id
+      : undefined,
+    shouldFetchApiDetails,
   )
 
-  const runnable =
-    selectedFromTree !== null && isRunnableApiAsset(selectedFromTree)
+  const caseDetailQuery = useCaseAssetDetail(
+    projectId,
+    isCase && selectedFromTree ? selectedFromTree.id : undefined,
+    isCase,
+  )
 
   const handleSelectAsset = (asset: AssetNode) => {
     setSelectedAssetId(asset.id)
@@ -148,18 +165,30 @@ export function ProjectWorkspacePage() {
           padding: 14,
         }}
       >
-        <AssetDetailPanel
-          selectedFromTree={selectedFromTree}
-          details={detailsQuery.data}
-          detailsLoading={detailsQuery.isLoading || detailsQuery.isFetching}
-          detailsError={detailsQuery.error}
-          onRetryDetails={() => {
-            void detailsQuery.refetch()
-          }}
-        />
+        {isCase && selectedFromTree ? (
+          <CaseMetaPanel
+            caseId={selectedFromTree.id}
+            detail={caseDetailQuery.data}
+            loading={caseDetailQuery.isLoading || caseDetailQuery.isFetching}
+            error={caseDetailQuery.error}
+            onRetry={() => {
+              void caseDetailQuery.refetch()
+            }}
+          />
+        ) : (
+          <AssetDetailPanel
+            selectedFromTree={selectedFromTree}
+            details={detailsQuery.data}
+            detailsLoading={detailsQuery.isLoading || detailsQuery.isFetching}
+            detailsError={detailsQuery.error}
+            onRetryDetails={() => {
+              void detailsQuery.refetch()
+            }}
+          />
+        )}
       </section>
 
-      {runnable && selectedFromTree ? (
+      {isApi && selectedFromTree ? (
         <ApiExecutionPanel
           key={`${projectId}:${selectedFromTree.id}`}
           projectId={projectId}
@@ -167,7 +196,15 @@ export function ProjectWorkspacePage() {
         />
       ) : null}
 
-      {!runnable && selectedFromTree ? (
+      {isCase && selectedFromTree ? (
+        <CaseExecutionPanel
+          key={`${projectId}:case:${selectedFromTree.id}`}
+          projectId={projectId}
+          caseId={selectedFromTree.id}
+        />
+      ) : null}
+
+      {!isApi && !isCase && selectedFromTree ? (
         <Typography.Paragraph
           type="secondary"
           style={{ margin: 0 }}
@@ -175,13 +212,13 @@ export function ProjectWorkspacePage() {
         >
           {selectedFromTree.type === 'directory'
             ? '目录仅供浏览，不提供参数或运行。'
-            : '当前仅 api.* 文件支持参数与运行；本资产无执行面板。'}
+            : '当前仅 api.* 与 case.* 文件支持运行；本资产无执行面板。'}
         </Typography.Paragraph>
       ) : null}
 
       {!selectedFromTree ? (
         <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-          从左侧选择资产。选中 api.* 文件后可在此填写参数并执行。
+          从左侧选择资产。选中 api.* 可填参执行；选中 case.* 可查看文件元信息并运行。
         </Typography.Paragraph>
       ) : null}
 

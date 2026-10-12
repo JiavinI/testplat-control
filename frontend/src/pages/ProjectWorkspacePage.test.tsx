@@ -159,6 +159,9 @@ vi.mock('@/features/executions/api', () => ({
   runAsset: (...args: unknown[]) => runAsset(...args),
   listExecutionRecords: (...args: unknown[]) => listExecutionRecords(...args),
   getExecutionRecord: (...args: unknown[]) => getExecutionRecord(...args),
+  getCaseAssetDetail: vi.fn(),
+  runCase: vi.fn(),
+  getCaseExecutionRecord: vi.fn(),
 }))
 
 function renderWorkspace(projectId = 'p-1') {
@@ -284,7 +287,7 @@ describe('ProjectWorkspacePage 集成', () => {
     await clickTreeNode(user, 'docs')
 
     expect(await screen.findByTestId('workspace-capability-note')).toHaveTextContent(
-      /仅 api\.\*/,
+      /api\.\* 与 case\.\*/,
     )
     expect(screen.queryByTestId('api-execution-panel')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '执行 API' })).not.toBeInTheDocument()

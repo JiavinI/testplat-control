@@ -1,0 +1,10 @@
+id: api.demo.get
+name: 查询资源
+host: local
+method: GET
+url: /demo/resources/item
+request:
+  headers:
+    X-Resource-Id: "${resource_id}"
+success:
+  status_code: 200
