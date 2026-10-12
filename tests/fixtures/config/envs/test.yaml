@@ -1,7 +1,12 @@
-# 由 run_real_engine_matrix.sh 生成；local 指向本机 target，不访问公网。
+# 测试环境配置
 api_hosts:
   test_server: http://127.0.0.1:9
-  local: http://127.0.0.1:18099
-  dead: http://127.0.0.1:1
+
+# 超时配置
 timeout:
   default: 30
+
+# 重试配置
+retry:
+  max_attempts: 3
+  backoff: 1.0

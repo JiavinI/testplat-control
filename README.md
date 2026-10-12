@@ -11,23 +11,20 @@ Control 通过 Python 包依赖调用 `testplat-engine`，**禁止**运行时 `s
 - 默认 DI 提供 `PackageEngineAdapter`（仅解析已安装包的官方 `create_engine()`）
 - 测试 / 浏览器 Fake 门禁通过 `app.dependency_overrides[get_engine_port]` 或 `harness_fake` 注入 `FakeEngineAdapter`
 
-### 安装（git commit 锁定；当前为临时本地 URL）
+### 安装（远程 git commit 精确锁定）
 
-`testplat-engine` 通过 `[tool.uv.sources]` **锁定到精确 git commit**（非本地 path editable）：
+`testplat-engine` 通过 `[tool.uv.sources]` **锁定到 GitHub 上的精确 commit**（非本地 path editable）：
 
 ```toml
-# pyproject.toml 中的 [tool.uv.sources]（临时！）
-testplat-engine = { git = "file:///Users/jiavin/Developer/products/testplat1/testplat-engine", rev = "aff3ca6a26d3a2b5bae9449008a9b911124e31aa" }
+# pyproject.toml 中的 [tool.uv.sources]
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "3bfd0fd0adb230135b47fd31c4579d123959600e" }
 ```
 
-> **临时方案 / BLOCKED（远程 SHA 锁定）**：Engine 0.2 的 commit `aff3ca6` **尚未出现在 GitHub**
->（`gh api repos/JiavinI/testplat-engine/commits/aff3ca6…` → 422）。因此暂时指向本机
-> `file://…/testplat-engine` **精确 rev**（非 path editable）。
+> 该 rev 是 Engine 集成分支 `codex/phase3-integration-engine` 的 HEAD（包含已审查的 `aff3ca6`），已推送到 GitHub。
+> 之前的本机 `file://` 临时锁定已移除，干净目录 / 干净缓存的远程安装已验证（见
+> `frontend/screenshots/phase3-real-engine/CLEAN_INSTALL_EVIDENCE.txt`）。
 >
-> - 干净机「无 sibling 的远程 git 安装」**当前 BLOCKED**，需主线程授权推送 Engine 集成分支后才能关闭。
-> - `file://` 精确 rev 的干净目录复装仍可作为本机证据（见交付报告）。
-> - Engine 推送并合并后必须改回远程 URL + 合并后的 rev，再执行 `uv lock`：
->   `testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "<合并后的 main commit>" }`。
+> - Engine PR 合并后必须改为合并后 main 的 commit SHA，再执行 `uv lock`。
 
 - 版本约束：`>=0.2.0,<0.3`（与依赖声明一致）
 - 安装以 **rev/commit** 为准，不依赖分支名漂移；**禁止** `sys.path` 注入与 path editable

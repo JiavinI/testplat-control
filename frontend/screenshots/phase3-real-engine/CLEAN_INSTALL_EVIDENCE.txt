@@ -1,6 +1,25 @@
-clean_dir=/tmp/phase3-clean-install-26997
-engine_wheel_install=OK version=0.2.0
-control_uv_sync_locked=OK
-engine_source=file:///Users/jiavin/Developer/products/testplat1/testplat-engine@aff3ca6a26d3a2b5bae9449008a9b911124e31aa
-remote_sha_lock=BLOCKED (GitHub 422)
-sibling_path_editable=NOT used (git file:// rev)
+Phase 3 干净安装证据（远程 GitHub 精确 SHA 锁定）
+=====================================================
+时间：2026-10-12（Asia/Shanghai）
+状态：之前 BLOCKED 项「干净机无 sibling 的远程 git 安装」已关闭（Engine 集成分支已推送到 GitHub）。
+原 file:// 本机临时锁定证据已作废并被本文件替换。
+
+Engine 远程：
+- 分支 codex/phase3-integration-engine 已推送至 https://github.com/JiavinI/testplat-engine.git
+- gh api repos/JiavinI/testplat-engine/commits/3bfd0fd0adb230135b47fd31c4579d123959600e -> 200（sha 一致）
+- gh api repos/JiavinI/testplat-engine/commits/aff3ca6a26d3a2b5bae9449008a9b911124e31aa -> 200（已审查 commit 可解析）
+
+Control 锁定：
+- pyproject: testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "3bfd0fd0adb230135b47fd31c4579d123959600e" }，约束 >=0.2.0,<0.3
+- pyproject.toml / uv.lock 中无 file://
+
+干净目录复装：
+- 源：Control 工作区快照 git archive（testplat1 之外：/tmp/phase3-clean-vQkj）
+- UV_CACHE_DIR=全新临时目录 /tmp/phase3-uvcache-yeWy
+- uv sync --extra dev --locked -> 成功
+  + testplat-engine==0.2.0 (from git+https://github.com/JiavinI/testplat-engine.git@3bfd0fd0adb230135b47fd31c4579d123959600e)
+- direct_url.json:
+  {"url":"https://github.com/JiavinI/testplat-engine.git","vcs_info":{"vcs":"git","commit_id":"3bfd0fd0adb230135b47fd31c4579d123959600e","requested_revision":"3bfd0fd0adb230135b47fd31c4579d123959600e"}}
+- importlib.metadata.version('testplat-engine') == 0.2.0；模块位于干净目录 .venv/site-packages
+- 在 .venv / uv.lock / pyproject 中搜索 /Users/jiavin/Developer/products/testplat1/testplat-engine -> 无引用
+- uv run pytest -q -rs -> 219 passed, 0 skipped

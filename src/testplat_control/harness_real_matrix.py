@@ -3,7 +3,11 @@
 挂载默认 PackageEngineAdapter（与 ``main:app`` 相同），但将 Case / API 的每步骤
 ``timeout_seconds`` 缩短为 0.5，以便本地 slow 目标触发 504 而不必等待 30 秒。
 
-本模块仅供矩阵验收；不改变公开 HTTP 契约，也不作为生产入口。
+【仅限验收，禁止用于生产】
+本模块只供 ``scripts/run_real_engine_matrix.sh`` 的真实 Engine 矩阵验收使用：
+它在导入时 monkeypatch 服务层与路由层的 ``run_case`` / ``run_single_api``，
+把每步骤超时强制改为 0.5 秒。这会改变执行语义，因此它**不是**生产入口，
+生产请使用 ``testplat_control.main:app``。不改变公开 HTTP 契约。
 
 用法：
     uv run uvicorn testplat_control.harness_real_matrix:app --host 127.0.0.1 --port 8000

@@ -11,28 +11,29 @@ OUT_DIR="${E2E_OUT_DIR:-$ROOT/frontend/screenshots/phase3-real-engine}"
 mkdir -p "$OUT_DIR"
 # 保证后续日志/报告目录存在
 
-# 写入运行时 env：local 指向本机 target
-python3 - <<PY
-from pathlib import Path
-path = Path("$ROOT/tests/fixtures/config/envs/test.yaml")
-path.write_text(
-    "# 由 run_real_engine_matrix.sh 生成；local 指向本机 target，不访问公网。\n"
-    "api_hosts:\n"
-    "  test_server: http://127.0.0.1:9\n"
-    "  local: http://127.0.0.1:$TARGET_PORT\n"
-    "  dead: http://127.0.0.1:1\n"
-    "timeout:\n"
-    "  default: 30\n",
-    encoding="utf-8",
-)
-print("wrote", path)
-PY
+# 生成运行时配置到临时目录（不改写已跟踪的 tests/fixtures/config/envs/test.yaml）：
+# local 指向本机 target，不访问公网。
+E2E_CONFIG_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/phase3-matrix-config.XXXXXX")"
+mkdir -p "$E2E_CONFIG_ROOT/envs"
+cp -R "$ROOT/tests/fixtures/config/." "$E2E_CONFIG_ROOT/"
+cat >"$E2E_CONFIG_ROOT/envs/test.yaml" <<YAML
+# 由 run_real_engine_matrix.sh 生成（临时目录）；local 指向本机 target，不访问公网。
+api_hosts:
+  test_server: http://127.0.0.1:9
+  local: http://127.0.0.1:$TARGET_PORT
+  dead: http://127.0.0.1:1
+timeout:
+  default: 30
+YAML
+echo "wrote $E2E_CONFIG_ROOT/envs/test.yaml"
+export E2E_CONFIG_ROOT
 
 PIDS=()
 cleanup() {
   for pid in "${PIDS[@]:-}"; do
     kill "$pid" 2>/dev/null || true
   done
+  rm -rf "$E2E_CONFIG_ROOT"
 }
 trap cleanup EXIT
 
@@ -66,5 +67,6 @@ echo "services ready; running matrix"
   cd frontend
   E2E_BASE_URL="http://127.0.0.1:$FRONTEND_PORT" \
   E2E_OUT_DIR="$OUT_DIR" \
+  E2E_CONFIG_ROOT="$E2E_CONFIG_ROOT" \
   pnpm exec node scripts/e2e-real-engine-matrix.mjs
 )

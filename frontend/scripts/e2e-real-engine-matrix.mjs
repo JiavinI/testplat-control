@@ -5,7 +5,7 @@
  *   - 本地 target 在 127.0.0.1:18099（scripts/local_target_server.py）
  *   - Control：harness_real_matrix:app @ :8000（短超时 + PackageEngineAdapter）
  *   - 前端：pnpm dev @ :5173
- *   - 项目资产/配置指向 tests/fixtures/{assets,config}，且 config 的 local=18099
+ *   - 项目资产/配置指向 tests/fixtures/{assets,config}，且 config 取 E2E_CONFIG_ROOT（脚本生成的临时目录，local=target 端口）
  *
  * 串行执行；5xx 后按 asset_type=case + asset_id + status=failed 定位最近失败记录，
  * 不依赖并发下不可靠的假设。
@@ -21,7 +21,7 @@ const frontendRoot = path.resolve(__dirname, '..')
 const repoRoot = path.resolve(frontendRoot, '..')
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:5173'
 const ASSETS_ROOT = path.join(repoRoot, 'tests', 'fixtures', 'assets')
-const CONFIG_ROOT = path.join(repoRoot, 'tests', 'fixtures', 'config')
+const CONFIG_ROOT = process.env.E2E_CONFIG_ROOT || path.join(repoRoot, 'tests', 'fixtures', 'config')
 const OUT = process.env.E2E_OUT_DIR
   ? path.resolve(process.env.E2E_OUT_DIR)
   : path.join(frontendRoot, 'screenshots', 'phase3-real-engine')
