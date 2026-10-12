@@ -147,6 +147,10 @@ def test_engine_receives_explicit_secret_values_every_time(
         ({"TESTPLAT_ADMIN_TOKEN": ""}, "TESTPLAT_ADMIN_TOKEN", "为空"),
         ({"TESTPLAT_ADMIN_TOKEN": "tp-7ch!"}, "TESTPLAT_ADMIN_TOKEN", "长度不足 8"),
         ({"TESTPLAT_ADMIN_TOKEN": "tp-fake\nsecret-9f31"}, "TESTPLAT_ADMIN_TOKEN", "控制字符"),
+        # B2：CR 与 NUL 同样降级为不可用。NUL 无法放进真实进程环境变量，只能经 environ 映射注入，
+        # 真实 Engine 矩阵因此只覆盖 CR/LF（见 docs/phase3_3/integration-real-engine.md）
+        ({"TESTPLAT_ADMIN_TOKEN": "tp-fake\rsecret-9f31"}, "TESTPLAT_ADMIN_TOKEN", "控制字符"),
+        ({"TESTPLAT_ADMIN_TOKEN": "tp-fake\x00secret-9f31"}, "TESTPLAT_ADMIN_TOKEN", "控制字符"),
     ],
 )
 def test_variable_problems_degrade_to_unavailable(

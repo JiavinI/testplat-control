@@ -26,6 +26,6 @@ SQLite 全部写在临时目录，结束即删除；已跟踪 fixture 从不改�
 
 ## 已知限制
 
-- POSIX 环境变量值不能含 NUL，“变量值含 NUL → 不可用”无法在真实进程环境里构造，由 Control 单测覆盖；
-  模板字面量含 NUL（`literal-nul`）在矩阵中覆盖。
+- POSIX 环境变量值不能含 NUL，“变量值含 NUL → 不可用”无法在真实进程环境里构造，由 Control 单测覆盖（经 environ 映射注入）；
+  模板字面量含 NUL（`literal-nul`）在矩阵中覆盖；变量值含 CR/NUL 的单测见 `tests/test_auth_loader.py`（本批补充）。
 - `harness_real_matrix` 仅限验收：缩短超时，并在设置 `MATRIX_SQLITE_PATH` 时改绑文件型 SQLite。
