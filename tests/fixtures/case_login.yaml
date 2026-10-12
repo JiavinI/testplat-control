@@ -1,15 +1,20 @@
-# 测试用的 Case YAML
+# 测试用的 Case YAML（Case 契约 v0.2 新 schema；Control 不解析其语义，仅作文件夹具）
+schema_version: "0.2"
 id: case.test.login
 name: 测试登录流程
 desc: 测试用例 - 登录流程
 tags: [smoke, login]
 steps:
-  - api_id: api.user.login
+  - step_id: login
+    type: api
+    api_id: api.user.login
     name: 用户登录
     params:
       username: test_user
-      password: test_pass
-  - api_id: api.user.get_info
+    output: session
+  - step_id: get_info
+    type: api
+    api_id: api.user.get_info
     name: 获取用户信息
     params:
-      user_id: "${steps.0.response.user_id}"
+      user_id: "${session.body.user_id}"

@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from testplat_control.api import assets, execution, projects, run
+from testplat_control.api import assets, cases, execution, projects, run
 from testplat_control.deps import create_default_engine_port
 from testplat_control.engine_bootstrap import EngineBootstrapError, ensure_engine_compatible
 
@@ -39,6 +39,7 @@ app.include_router(projects.router)
 app.include_router(execution.router)
 app.include_router(assets.router)
 app.include_router(run.router)
+app.include_router(cases.router)
 
 
 @app.get("/health")

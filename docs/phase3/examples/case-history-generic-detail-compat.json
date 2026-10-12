@@ -1,0 +1,94 @@
+{
+  "id": "00000000-0000-4000-8000-000000000001",
+  "project_id": "00000000-0000-4000-8000-000000000006",
+  "asset_id": "case.demo.create_then_get",
+  "asset_type": "case",
+  "status": "success",
+  "start_time": "2026-10-12T11:30:00",
+  "end_time": "2026-10-12T11:30:00.250",
+  "duration": 0.04,
+  "display": {
+    "start_time": "2026-10-12 11:30:00",
+    "end_time": "2026-10-12 11:30:00",
+    "duration": "40ms"
+  },
+  "result": {
+    "case_id": "case.demo.create_then_get",
+    "status": "success",
+    "duration_seconds": 0.039,
+    "steps": [
+      {
+        "step_id": "create",
+        "name": "创建资源",
+        "type": "api",
+        "status": "success",
+        "duration_seconds": 0.032,
+        "request": {
+          "method": "POST",
+          "url": "http://127.0.0.1:18080/demo/resources",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "name": "alpha"
+          }
+        },
+        "response": {
+          "status_code": 201,
+          "headers": {
+            "server": "BaseHTTP/0.6 Python/3.13.7",
+            "date": "Mon, 12 Oct 2026 03:45:26 GMT",
+            "content-type": "application/json",
+            "content-length": "57"
+          },
+          "body": {
+            "id": "res-42",
+            "access_token": "***"
+          }
+        },
+        "error": null,
+        "output": "created",
+        "skip_reason": null
+      },
+      {
+        "step_id": "get",
+        "name": null,
+        "type": "api",
+        "status": "success",
+        "duration_seconds": 0.007,
+        "request": {
+          "method": "GET",
+          "url": "http://127.0.0.1:18080/demo/resources/item",
+          "headers": {
+            "X-Resource-Id": "res-42"
+          },
+          "body": null
+        },
+        "response": {
+          "status_code": 200,
+          "headers": {
+            "server": "BaseHTTP/0.6 Python/3.13.7",
+            "date": "Mon, 12 Oct 2026 03:45:26 GMT",
+            "content-type": "application/json",
+            "content-length": "12"
+          },
+          "body": {
+            "ok": true
+          }
+        },
+        "error": null,
+        "output": null,
+        "skip_reason": null
+      }
+    ],
+    "summary": {
+      "total": 2,
+      "success": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "error": null
+  },
+  "request": null,
+  "response": null
+}

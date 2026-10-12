@@ -1,0 +1,2000 @@
+{
+  "components": {
+    "schemas": {
+      "AssetDetailsResponse": {
+        "description": "资产详情响应",
+        "properties": {
+          "id": {
+            "description": "唯一标识",
+            "title": "Id",
+            "type": "string"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "文件元数据",
+            "title": "Metadata"
+          },
+          "name": {
+            "description": "显示名称",
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "description": "相对路径",
+            "title": "Path",
+            "type": "string"
+          },
+          "type": {
+            "description": "类型: directory 或 file",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "path"
+        ],
+        "title": "AssetDetailsResponse",
+        "type": "object"
+      },
+      "AssetNodeResponse": {
+        "description": "资产树节点响应",
+        "properties": {
+          "children": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AssetNodeResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "子节点 (仅目录)",
+            "title": "Children"
+          },
+          "id": {
+            "description": "唯一标识",
+            "title": "Id",
+            "type": "string"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "文件元数据 (仅文件)",
+            "title": "Metadata"
+          },
+          "name": {
+            "description": "显示名称",
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "description": "相对路径",
+            "title": "Path",
+            "type": "string"
+          },
+          "type": {
+            "description": "类型: directory 或 file",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "path"
+        ],
+        "title": "AssetNodeResponse",
+        "type": "object"
+      },
+      "CaseAssetDetailResponse": {
+        "description": "Case 资产详情：仅文件级元信息（见模块文档字符串关于摘要来源的说明）。",
+        "properties": {
+          "case_id": {
+            "description": "Case ID，由规范路径推导，例如 case.demo.login",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "file_name": {
+            "description": "文件名，例如 login.case.yaml",
+            "title": "File Name",
+            "type": "string"
+          },
+          "modified_at": {
+            "description": "文件最后修改时间（UTC）",
+            "format": "date-time",
+            "title": "Modified At",
+            "type": "string"
+          },
+          "path": {
+            "description": "相对 assets_root 的路径（POSIX 分隔符）",
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "description": "文件大小（字节）",
+            "minimum": 0.0,
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_id",
+          "path",
+          "file_name",
+          "size_bytes",
+          "modified_at"
+        ],
+        "title": "CaseAssetDetailResponse",
+        "type": "object"
+      },
+      "CaseExecutionRecordDetailResponse": {
+        "description": "Case 历史详情：与通用执行记录详情同源，但 ``result`` 有明确 schema。\n\n通用端点 ``/projects/{id}/execution-records/{record_id}`` 对 Case 记录仍然可用且不变\n（``result`` 为未约束对象，``request``/``response`` 为 null）；本端点供前端稳定消费步骤数据。",
+        "properties": {
+          "asset_id": {
+            "description": "Case ID",
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "asset_type": {
+            "const": "case",
+            "description": "恒为 case",
+            "title": "Asset Type",
+            "type": "string"
+          },
+          "display": {
+            "$ref": "#/components/schemas/ExecutionDisplay",
+            "description": "格式化后的时间与耗时"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行时长（秒）",
+            "title": "Duration"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "结束时间",
+            "title": "End Time"
+          },
+          "id": {
+            "description": "记录 ID",
+            "title": "Id",
+            "type": "string"
+          },
+          "project_id": {
+            "description": "项目 ID",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Case 结果；存档缺失或无法按 schema 解析时为 null"
+          },
+          "start_time": {
+            "description": "开始时间",
+            "format": "date-time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "status": {
+            "description": "执行状态：success / failed",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "asset_id",
+          "asset_type",
+          "status",
+          "start_time",
+          "display"
+        ],
+        "title": "CaseExecutionRecordDetailResponse",
+        "type": "object"
+      },
+      "CaseResult": {
+        "description": "Case 完整结果：run 响应与历史详情共用同一形状。\n\n- 业务 success / failed：``error`` 为 null，``steps`` 来自 Engine 的 outcome。\n- execution 系统错误（只在历史里出现）：``status=failed``，``steps`` 来自异常携带的\n  ``partial_outcome``（前序 success、当前 failed、其后 skipped），``error`` 说明系统错误。",
+        "properties": {
+          "case_id": {
+            "description": "Case ID",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "duration_seconds": {
+            "description": "Engine 计时的 Case 总耗时（秒）",
+            "minimum": 0.0,
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseSystemError"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "仅 execution 系统错误记录非 null"
+          },
+          "status": {
+            "description": "success 当且仅当全部步骤 success",
+            "enum": [
+              "success",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "description": "按声明顺序的步骤结果",
+            "items": {
+              "$ref": "#/components/schemas/CaseStepResult"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CaseSummary",
+            "description": "步骤计数汇总"
+          }
+        },
+        "required": [
+          "case_id",
+          "status",
+          "duration_seconds",
+          "steps",
+          "summary"
+        ],
+        "title": "CaseResult",
+        "type": "object"
+      },
+      "CaseRunRequest": {
+        "description": "运行 Case 的请求体。\n\n``params`` 以顶层键覆盖 Case 资产里的默认参数（浅层覆盖，由 Engine 完成）。\n不接受 ``fail_fast`` / ``timeout_seconds``：fail-fast 固定开启；超时由 Control 设定。",
+        "properties": {
+          "params": {
+            "additionalProperties": true,
+            "description": "覆盖 Case 默认参数的顶层键值（自由 JSON；不得放秘密）",
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "title": "CaseRunRequest",
+        "type": "object"
+      },
+      "CaseRunResponse": {
+        "description": "Case 运行响应。业务 failed 同样是 HTTP 200，``status`` 为 failed。\n\n系统错误（timeout/transport/internal）与 preflight 错误不使用本响应，\n而是沿用 Phase 2.5 的 ``{\"detail\": \"...\"}`` 错误体与状态码映射。",
+        "properties": {
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Control 侧测得的执行时长（秒）",
+            "title": "Duration"
+          },
+          "record_id": {
+            "description": "执行记录 ID，可用于历史详情",
+            "title": "Record Id",
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/CaseResult",
+            "description": "完整 Case / 步骤结果"
+          },
+          "status": {
+            "description": "Case 状态",
+            "enum": [
+              "success",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id",
+          "status",
+          "result"
+        ],
+        "title": "CaseRunResponse",
+        "type": "object"
+      },
+      "CaseStepError": {
+        "additionalProperties": true,
+        "description": "步骤级业务错误（assertion / variable_resolution 等），或系统错误对应的步骤错误。\n\n``kind`` 是开放字符串：业务错误的 kind 由 Engine 的步骤执行器定义\n（目前有 ``assertion``、``variable_resolution``，系统错误则为 timeout/transport/internal）。",
+        "properties": {
+          "kind": {
+            "description": "错误类别",
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "description": "面向用户的安全说明，不含秘密",
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "variable_resolution：无法解析的引用路径",
+            "title": "Path"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "enum": [
+                  "preflight",
+                  "execution"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "仅系统错误携带；Case 开始后的系统错误恒为 execution",
+            "title": "Stage"
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "variable_resolution：出错的步骤",
+            "title": "Step Id"
+          }
+        },
+        "required": [
+          "kind",
+          "message"
+        ],
+        "title": "CaseStepError",
+        "type": "object"
+      },
+      "CaseStepRequest": {
+        "additionalProperties": true,
+        "description": "步骤实际发出的请求快照（已脱敏）。变量解析失败的步骤没有请求（为 null）。",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "已脱敏的请求体（自由 JSON）",
+            "title": "Body"
+          },
+          "headers": {
+            "additionalProperties": true,
+            "description": "已脱敏的请求头",
+            "title": "Headers",
+            "type": "object"
+          },
+          "method": {
+            "description": "HTTP 方法",
+            "title": "Method",
+            "type": "string"
+          },
+          "url": {
+            "description": "完整请求 URL",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "url"
+        ],
+        "title": "CaseStepRequest",
+        "type": "object"
+      },
+      "CaseStepResponse": {
+        "additionalProperties": true,
+        "description": "步骤收到的响应快照（已脱敏）。",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "已安全化的响应体（自由 JSON）",
+            "title": "Body"
+          },
+          "headers": {
+            "additionalProperties": true,
+            "description": "已脱敏的响应头",
+            "title": "Headers",
+            "type": "object"
+          },
+          "status_code": {
+            "description": "HTTP 状态码",
+            "title": "Status Code",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status_code"
+        ],
+        "title": "CaseStepResponse",
+        "type": "object"
+      },
+      "CaseStepResult": {
+        "description": "单个声明步骤的结果；顺序与 Case 资产 steps 声明顺序一一对应。",
+        "properties": {
+          "duration_seconds": {
+            "description": "步骤耗时（秒）；skipped 恒为 0",
+            "minimum": 0.0,
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseStepError"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "failed 步骤的安全错误；其余为 null"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "步骤展示名；缺省时前端回退到 step_id",
+            "title": "Name"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "成功步骤声明的 output alias 名（不含响应值）",
+            "title": "Output"
+          },
+          "request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseStepRequest"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "请求快照；skipped/变量失败为 null"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseStepResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应快照；skipped/变量失败为 null"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "const": "fail_fast",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "仅 skipped 步骤：fail_fast 表示被前序失败跳过",
+            "title": "Skip Reason"
+          },
+          "status": {
+            "description": "success / failed / skipped",
+            "enum": [
+              "success",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step_id": {
+            "description": "步骤 ID（Case 内唯一）",
+            "title": "Step Id",
+            "type": "string"
+          },
+          "type": {
+            "description": "步骤类型；第一批恒为 api",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step_id",
+          "type",
+          "status",
+          "duration_seconds"
+        ],
+        "title": "CaseStepResult",
+        "type": "object"
+      },
+      "CaseSummary": {
+        "description": "步骤计数汇总，由 Engine 根据步骤结果计算。",
+        "properties": {
+          "failed": {
+            "minimum": 0.0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "skipped": {
+            "minimum": 0.0,
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "success": {
+            "minimum": 0.0,
+            "title": "Success",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "success",
+          "failed",
+          "skipped"
+        ],
+        "title": "CaseSummary",
+        "type": "object"
+      },
+      "CaseSystemError": {
+        "description": "Case 执行阶段系统错误（timeout / transport / internal）的外显信息。\n\n只出现在 execution 系统错误保存的历史记录里；``log_reason`` 永不进入此处。",
+        "properties": {
+          "kind": {
+            "description": "系统错误类别",
+            "enum": [
+              "timeout",
+              "transport",
+              "internal"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "description": "安全的公开说明",
+            "title": "Message",
+            "type": "string"
+          },
+          "stage": {
+            "const": "execution",
+            "description": "恒为 execution：preflight 不保存记录",
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "stage",
+          "message"
+        ],
+        "title": "CaseSystemError",
+        "type": "object"
+      },
+      "ExecutionDisplay": {
+        "description": "详情页使用的格式化时间与耗时。",
+        "properties": {
+          "duration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "可读耗时",
+            "title": "Duration"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "结束时间，YYYY-MM-DD HH:MM:SS",
+            "title": "End Time"
+          },
+          "start_time": {
+            "description": "开始时间，YYYY-MM-DD HH:MM:SS",
+            "title": "Start Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_time"
+        ],
+        "title": "ExecutionDisplay",
+        "type": "object"
+      },
+      "ExecutionRecordDetailResponse": {
+        "description": "执行记录详情。``result`` 是解析后的结果，而不是原始 JSON 字符串。",
+        "properties": {
+          "asset_id": {
+            "description": "资产ID",
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "asset_type": {
+            "description": "资产类型",
+            "title": "Asset Type",
+            "type": "string"
+          },
+          "display": {
+            "$ref": "#/components/schemas/ExecutionDisplay",
+            "description": "格式化后的时间与耗时"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行时长（秒）",
+            "title": "Duration"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "结束时间",
+            "title": "End Time"
+          },
+          "id": {
+            "description": "记录ID",
+            "title": "Id",
+            "type": "string"
+          },
+          "project_id": {
+            "description": "项目ID",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "request": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "结果中的请求详情",
+            "title": "Request"
+          },
+          "response": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "结果中的响应详情",
+            "title": "Response"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "解析后的执行结果",
+            "title": "Result"
+          },
+          "start_time": {
+            "description": "开始时间",
+            "format": "date-time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "status": {
+            "description": "执行状态",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "asset_id",
+          "asset_type",
+          "status",
+          "start_time",
+          "display"
+        ],
+        "title": "ExecutionRecordDetailResponse",
+        "type": "object"
+      },
+      "ExecutionRecordListResponse": {
+        "description": "执行记录列表项。",
+        "properties": {
+          "asset_id": {
+            "description": "资产ID",
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行时长（秒）",
+            "title": "Duration"
+          },
+          "id": {
+            "description": "记录ID",
+            "title": "Id",
+            "type": "string"
+          },
+          "start_time": {
+            "description": "开始时间",
+            "format": "date-time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "status": {
+            "description": "执行状态",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "asset_id",
+          "status",
+          "start_time"
+        ],
+        "title": "ExecutionRecordListResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ParamInfo": {
+        "description": "从 YAML inputs 提取的单个参数。",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "参数说明",
+            "title": "Description"
+          },
+          "name": {
+            "description": "参数名",
+            "title": "Name",
+            "type": "string"
+          },
+          "required": {
+            "description": "是否必填",
+            "title": "Required",
+            "type": "boolean"
+          },
+          "type": {
+            "description": "参数类型：string、number 或 boolean",
+            "enum": [
+              "string",
+              "number",
+              "boolean"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "required"
+        ],
+        "title": "ParamInfo",
+        "type": "object"
+      },
+      "ParamsResponse": {
+        "description": "API 参数表单。",
+        "properties": {
+          "asset_id": {
+            "description": "资产 ID",
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "params": {
+            "description": "参数列表，顺序与 YAML inputs 一致",
+            "items": {
+              "$ref": "#/components/schemas/ParamInfo"
+            },
+            "title": "Params",
+            "type": "array"
+          }
+        },
+        "required": [
+          "asset_id",
+          "params"
+        ],
+        "title": "ParamsResponse",
+        "type": "object"
+      },
+      "ProjectCreate": {
+        "description": "创建项目的请求模型",
+        "properties": {
+          "assets_root": {
+            "description": "资产目录",
+            "minLength": 1,
+            "title": "Assets Root",
+            "type": "string"
+          },
+          "config_root": {
+            "description": "配置目录",
+            "minLength": 1,
+            "title": "Config Root",
+            "type": "string"
+          },
+          "env": {
+            "default": "test",
+            "description": "环境",
+            "title": "Env",
+            "type": "string"
+          },
+          "name": {
+            "description": "项目名称",
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "assets_root",
+          "config_root"
+        ],
+        "title": "ProjectCreate",
+        "type": "object"
+      },
+      "ProjectResponse": {
+        "description": "项目响应模型",
+        "properties": {
+          "assets_root": {
+            "description": "资产目录",
+            "title": "Assets Root",
+            "type": "string"
+          },
+          "config_root": {
+            "description": "配置目录",
+            "title": "Config Root",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "创建时间",
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "env": {
+            "description": "环境",
+            "title": "Env",
+            "type": "string"
+          },
+          "id": {
+            "description": "项目ID",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "项目名称",
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "更新时间",
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "env",
+          "assets_root",
+          "config_root",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProjectResponse",
+        "type": "object"
+      },
+      "ProjectUpdate": {
+        "description": "更新项目的请求模型",
+        "properties": {
+          "assets_root": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "资产目录",
+            "title": "Assets Root"
+          },
+          "config_root": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "配置目录",
+            "title": "Config Root"
+          },
+          "env": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "环境",
+            "title": "Env"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "项目名称",
+            "title": "Name"
+          }
+        },
+        "title": "ProjectUpdate",
+        "type": "object"
+      },
+      "RunRequest": {
+        "description": "单次 API 执行请求。",
+        "properties": {
+          "params": {
+            "additionalProperties": true,
+            "description": "执行参数",
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "title": "RunRequest",
+        "type": "object"
+      },
+      "RunResponse": {
+        "description": "单次 API 执行结果。",
+        "properties": {
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行时长（秒）",
+            "title": "Duration"
+          },
+          "record_id": {
+            "description": "执行记录 ID",
+            "title": "Record Id",
+            "type": "string"
+          },
+          "result": {
+            "description": "执行结果",
+            "title": "Result"
+          },
+          "status": {
+            "description": "执行状态：success 或 failed",
+            "enum": [
+              "success",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id",
+          "status"
+        ],
+        "title": "RunResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "通用接口自动化测试平台 - 控制层",
+    "title": "testplat-control",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "description": "健康检查端点。\n\nReturns:\n    dict: 健康状态",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/projects": {
+      "get": {
+        "description": "列出所有项目 (分页)\n\nArgs:\n    skip: 跳过的项目数\n    limit: 返回的最大项目数\n    db: 数据库会话\n\nReturns:\n    list[ProjectResponse]: 项目列表",
+        "operationId": "list_projects_projects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "skip",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Skip",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectResponse"
+                  },
+                  "title": "Response List Projects Projects Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Projects",
+        "tags": [
+          "projects"
+        ]
+      },
+      "post": {
+        "description": "创建新项目\n\nArgs:\n    project: 项目创建请求\n    db: 数据库会话\n\nReturns:\n    ProjectResponse: 创建的项目\n\nRaises:\n    HTTPException: 项目名称已存在时返回 409",
+        "operationId": "create_project_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}": {
+      "delete": {
+        "description": "删除项目\n\nArgs:\n    project_id: 项目ID\n    db: 数据库会话\n\nReturns:\n    dict: 删除结果\n\nRaises:\n    HTTPException: 项目不存在时返回 404；仍有执行记录时返回 409",
+        "operationId": "delete_project_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Project Projects  Project Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Project",
+        "tags": [
+          "projects"
+        ]
+      },
+      "get": {
+        "description": "获取项目详情\n\nArgs:\n    project_id: 项目ID\n    db: 数据库会话\n\nReturns:\n    ProjectResponse: 项目信息\n\nRaises:\n    HTTPException: 项目不存在时返回 404",
+        "operationId": "get_project_projects__project_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Project",
+        "tags": [
+          "projects"
+        ]
+      },
+      "put": {
+        "description": "更新项目\n\nArgs:\n    project_id: 项目ID\n    project: 项目更新请求\n    db: 数据库会话\n\nReturns:\n    ProjectResponse: 更新后的项目\n\nRaises:\n    HTTPException: 项目不存在时返回 404；名称与其他项目重复时返回 409",
+        "operationId": "update_project_projects__project_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/assets": {
+      "get": {
+        "description": "获取项目的资产树\n\nArgs:\n    project_id: 项目ID\n    db: 数据库会话\n\nReturns:\n    AssetNodeResponse: 资产树根节点\n\nRaises:\n    HTTPException: 项目不存在返回 404",
+        "operationId": "get_assets_tree_projects__project_id__assets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetNodeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Assets Tree",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/projects/{project_id}/assets/{asset_id}": {
+      "get": {
+        "description": "获取单个资产详情\n\nArgs:\n    project_id: 项目ID\n    asset_id: 资产ID (如 api.common.health_check)\n    db: 数据库会话\n\nReturns:\n    AssetDetailsResponse: 资产详情\n\nRaises:\n    HTTPException: 项目或资产不存在返回 404",
+        "operationId": "get_asset_details_projects__project_id__assets__asset_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetDetailsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Asset Details",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/projects/{project_id}/assets/{asset_id}/params": {
+      "get": {
+        "description": "从 API YAML 的 inputs 提取参数表单。\n\nArgs:\n    project_id: 项目 ID。\n    asset_id: 资产 ID，例如 ``api.user.create``。\n    db: 数据库会话。\n\nReturns:\n    参数名、类型、是否必填和说明。\n\nRaises:\n    HTTPException: 项目或资产不存在返回 404；资产不是 API YAML 或\n        inputs 无法识别时返回 422。",
+        "operationId": "get_asset_params_projects__project_id__assets__asset_id__params_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Asset Params",
+        "tags": [
+          "run"
+        ]
+      }
+    },
+    "/projects/{project_id}/assets/{asset_id}/run": {
+      "post": {
+        "description": "执行单个 API，并保存执行记录。\n\nEnginePort 由依赖注入提供（默认 PackageEngineAdapter；测试注入 Fake）。\n业务断言失败仍返回 HTTP 200 且 ``status=failed``。系统错误按 kind/stage\n映射为 404/422/502/503/504/500；``preflight`` 不写记录，``execution`` 写 failed。\n\nArgs:\n    project_id: 项目 ID。\n    asset_id: 资产 ID。\n    body: 执行参数，形状为 ``{\"params\": {...}}``。\n    db: 数据库会话。\n    engine: 注入的 EnginePort。\n\nReturns:\n    记录 ID、状态、耗时和执行结果。\n\nRaises:\n    HTTPException: 项目/资产 404；参数 422；系统错误按错误表映射。",
+        "operationId": "run_asset_projects__project_id__assets__asset_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Asset",
+        "tags": [
+          "run"
+        ]
+      }
+    },
+    "/projects/{project_id}/case-execution-records/{record_id}": {
+      "get": {
+        "description": "获取 Case 执行记录详情（``result`` 有明确 schema）。\n\n只匹配 ``asset_type=\"case\"`` 的记录；API 记录请用通用的\n``/projects/{id}/execution-records/{record_id}``。通用端点对 Case 记录依然可用。\n\nRaises:\n    HTTPException: 项目、记录不存在，或记录不是 Case 记录时返回 404。",
+        "operationId": "get_case_execution_record_projects__project_id__case_execution_records__record_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseExecutionRecordDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Case Execution Record",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/projects/{project_id}/cases/{case_id}": {
+      "get": {
+        "description": "获取 Case 资产的文件级元信息。\n\n不解析 YAML：Engine 0.2 没有公开的 Case 摘要接口，Control 也不维护第二套 Case 解析器。\n只有 ``scenarios`` 下真实存在的 ``.case.yaml`` 文件才会匹配；其他一律 404。\n\nRaises:\n    HTTPException: 项目或 Case 文件不存在返回 404。",
+        "operationId": "get_case_detail_projects__project_id__cases__case_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseAssetDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Case Detail",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/projects/{project_id}/cases/{case_id}/run": {
+      "post": {
+        "description": "串行运行一个 Case，并保存执行记录。\n\n业务成功与业务失败（断言失败、变量解析失败）都返回 HTTP 200 并保存记录，\n失败时后续步骤为 ``skipped``。Engine 的 preflight 错误\n（asset_not_found 404 / invalid_asset、invalid_input、invalid_environment 422）\n不保存记录；execution 阶段系统错误保存 ``failed`` 记录后返回\n504（timeout）/ 502（transport）/ 500（internal）。\n\n注意：同步请求，会占用连接直到 Case 跑完。Engine 的超时是每步骤超时而非总预算。\n\nRaises:\n    HTTPException: 项目不存在 404；其余按上述错误表映射。",
+        "operationId": "run_case_asset_projects__project_id__cases__case_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Case Asset",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/projects/{project_id}/execution-records": {
+      "get": {
+        "description": "获取项目的执行记录。\n\n可按 ``status``、``asset_id``、``asset_type``（``api`` / ``case``）过滤。\n不传 ``asset_type`` 时 API 与 Case 记录混合返回（Phase 2.5 行为）。\n默认按 ``start_time`` 降序，并用 ``skip`` / ``limit`` 分页。\n\nArgs:\n    project_id: 项目 ID。\n    skip: 跳过的记录数。\n    limit: 返回的最大记录数。\n    status: 按执行状态精确过滤，例如 ``success``。\n    asset_id: 按资产 ID 精确过滤。\n    asset_type: 按资产类型精确过滤：``api`` 或 ``case``（Phase 3 新增，可选）。\n    order_by: 排序，默认 ``-start_time``。\n    db: 数据库会话。\n\nReturns:\n    执行记录列表项。\n\nRaises:\n    HTTPException: 项目不存在返回 404；``order_by`` 无法识别返回 422。",
+        "operationId": "list_execution_records_projects__project_id__execution_records_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Skip",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "api",
+                    "case"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order_by",
+            "required": false,
+            "schema": {
+              "default": "-start_time",
+              "title": "Order By",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExecutionRecordListResponse"
+                  },
+                  "title": "Response List Execution Records Projects  Project Id  Execution Records Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Execution Records",
+        "tags": [
+          "execution"
+        ]
+      }
+    },
+    "/projects/{project_id}/execution-records/{record_id}": {
+      "get": {
+        "description": "获取执行记录详情。\n\n``result`` 为解析后的对象。结果里若有 ``request`` / ``response``，会同时\n出现在对应字段。``display`` 提供格式化的起止时间和耗时。\n\nArgs:\n    project_id: 项目 ID。\n    record_id: 记录 ID。\n    db: 数据库会话。\n\nReturns:\n    执行记录详情。\n\nRaises:\n    HTTPException: 项目或记录不存在时返回 404。",
+        "operationId": "get_execution_record_projects__project_id__execution_records__record_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionRecordDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Execution Record",
+        "tags": [
+          "execution"
+        ]
+      }
+    }
+  }
+}

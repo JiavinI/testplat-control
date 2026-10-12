@@ -2,27 +2,30 @@
 
 测试平台控制面（FastAPI）。
 
-## Engine 依赖（Phase 2.5）
+## Engine 依赖（Phase 3：Engine 0.2）
 
 Control 通过 Python 包依赖调用 `testplat-engine`，**禁止**运行时 `sys.path` 注入。
 
-- 兼容版本：`testplat-engine>=0.1.0,<0.2`（0.1.x）
+- 兼容版本：`testplat-engine>=0.2.0,<0.3`（0.2.x；0.1.x 不再支持，因为缺少 Case DTO 与 `invalid_input`）
 - 启动时校验：包是否安装、版本是否兼容、Interface 符号齐全，并**实际调用**公开 `create_engine()`，验证返回对象具备 async `execute`；失败则 fail-fast（不再把无效 runtime 延迟到首次执行 503）
 - 默认 DI 提供 `PackageEngineAdapter`（仅解析已安装包的官方 `create_engine()`）
 - 测试 / 浏览器 Fake 门禁通过 `app.dependency_overrides[get_engine_port]` 或 `harness_fake` 注入 `FakeEngineAdapter`
 
-### 安装（git commit 锁定）
+### 安装（git commit 锁定；当前为临时本地 URL）
 
-`testplat-engine` 通过 `[tool.uv.sources]` **锁定到远程 git commit**（非本地 path editable）：
+`testplat-engine` 通过 `[tool.uv.sources]` **锁定到精确 git commit**（非本地 path editable）：
 
 ```toml
-# pyproject.toml 中的 [tool.uv.sources]
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "942a66dd127de3647deab88611ada2a9bcc06c90" }
+# pyproject.toml 中的 [tool.uv.sources]（临时！）
+testplat-engine = { git = "file:///Users/jiavin/Developer/products/testplat1/testplat-engine", rev = "aff3ca6a26d3a2b5bae9449008a9b911124e31aa" }
 ```
 
-- 版本约束：`>=0.1.0,<0.2`（与依赖声明一致）
-- 对应远程分支：`codex/phase2-5-integration`（安装以 **rev/commit** 为准，不依赖分支名漂移）
-- 换机 / clean-machine：只需能访问该仓库与 commit；**不需要** sibling Engine worktree，也**禁止** `sys.path` 注入
+> **临时方案**：Engine 0.2 的 commit `aff3ca6` 尚未推送，远程 URL 无法解析，所以暂时指向本机 `file://` 仓库。
+> 这条依赖**只在本机可用**。Engine 推送并合并后必须改回远程 URL + 合并后的 rev，再执行 `uv lock`：
+> `testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "<合并后的 main commit>" }`。
+
+- 版本约束：`>=0.2.0,<0.3`（与依赖声明一致）
+- 安装以 **rev/commit** 为准，不依赖分支名漂移；**禁止** `sys.path` 注入与 path editable
 
 ```bash
 uv sync --extra dev
@@ -63,11 +66,30 @@ cd frontend && pnpm e2e:gate
 | asset_not_found | preflight | 404 | 不创建 |
 | invalid_asset | preflight | 422 | 不创建 |
 | invalid_environment | preflight | 422 | 不创建 |
+| invalid_input（Phase 3 新增，Case 参数缺失） | preflight | 422 | 不创建 |
 | unavailable | preflight | 503 | 不创建 |
 | timeout | execution | 504 | 创建 failed |
 | transport | execution | 502 | 创建 failed |
 | internal | preflight / execution | 500 | 仅 execution 创建 |
 | 业务 failed | — | 200 | 创建 failed |
+
+## Case（Phase 3）
+
+Case 的语法校验与执行语义**归 Engine**；Control 只负责项目/环境、调用与计时、记录与 HTTP。
+契约、示例 JSON 与 OpenAPI diff 见 `docs/phase3/`。
+
+| 方法与路径 | 说明 |
+|---|---|
+| `GET /projects/{id}/cases/{case_id}` | Case 文件级元信息（不解析 YAML） |
+| `POST /projects/{id}/cases/{case_id}/run` | 串行运行 Case，保存 `asset_type="case"` 记录 |
+| `GET /projects/{id}/case-execution-records/{record_id}` | 历史详情，`result` 有明确 schema |
+| `GET /projects/{id}/execution-records?asset_type=case` | 历史列表按类型筛选（可选参数） |
+
+`timeout_seconds`（默认 30）是 Engine 对**每个步骤**的 HTTP 超时，不是整个 Case 的总预算；
+Control 目前没有 Case 级总限时，N 步 Case 最坏约 `N × 30s`。
+
+日志硬约束：不使用 `logger.exception` / `exc_info`，不记录 `EngineError.log_reason`、`__cause__` 或异常原文，
+只记 kind、stage、ID 与异常类型名（`tests/test_log_redaction.py` 守护）。
 
 ## 故障排查
 

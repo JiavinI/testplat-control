@@ -14,8 +14,9 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "packaging>=24.0",
-    # Phase 2.5：testplat-engine 由 [tool.uv.sources] 锁定到远程 git commit。
-    "testplat-engine>=0.1.0,<0.2",
+    # Phase 3：Case 能力需要 Engine 0.2.x（CaseExecutionRequest/Outcome、InvalidInputError）。
+    # 具体 commit 由 uv sources 锁定；见文件下方“临时本地 URL”说明。
+    "testplat-engine>=0.2.0,<0.3",
 ]
 
 [project.optional-dependencies]
@@ -35,9 +36,16 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# Phase 2.5：锁定远程 Engine 集成分支 commit（官方入口 create_engine）。
-# 勿把本地 path / sys.path 写进运行时；换机仅需能访问该 git rev。
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "942a66dd127de3647deab88611ada2a9bcc06c90" }
+# 【临时方案 · 必须在合并前替换】
+# Engine 0.2 的已审查 commit aff3ca6 位于本地仓库分支 codex/phase3-engine-case-runtime，
+# 尚未推送到远程，远程 URL 无法解析该 rev，所以这里临时指向本机 file:// 仓库，
+# 并锁定到精确 commit（不是分支名，更不是 path editable）。
+# 这条依赖只在本机可用：换机器 / CI / 其他开发者都会解析失败。
+# Engine 推送并合并后，请改为：
+#   testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "<合并后的 main commit>" }
+# 然后重新执行 `uv lock`，让 uv.lock 同步指向远程 URL 与合并后的 rev。
+# 切勿改成 path editable 或在运行时修改 sys.path。
+testplat-engine = { git = "file:///Users/jiavin/Developer/products/testplat1/testplat-engine", rev = "aff3ca6a26d3a2b5bae9449008a9b911124e31aa" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

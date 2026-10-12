@@ -1,0 +1,65 @@
+{
+  "record_id": "00000000-0000-4000-8000-000000000002",
+  "status": "failed",
+  "duration": 0.008,
+  "result": {
+    "case_id": "case.demo.assert_failed",
+    "status": "failed",
+    "duration_seconds": 0.007,
+    "steps": [
+      {
+        "step_id": "bad_assert",
+        "name": null,
+        "type": "api",
+        "status": "failed",
+        "duration_seconds": 0.007,
+        "request": {
+          "method": "GET",
+          "url": "http://127.0.0.1:18080/status/200",
+          "headers": {},
+          "body": null
+        },
+        "response": {
+          "status_code": 200,
+          "headers": {
+            "server": "BaseHTTP/0.6 Python/3.13.7",
+            "date": "Mon, 12 Oct 2026 03:45:26 GMT",
+            "content-type": "application/json",
+            "content-length": "12"
+          },
+          "body": {
+            "ok": true
+          }
+        },
+        "error": {
+          "kind": "assertion",
+          "message": "断言失败: 响应不符合成功条件",
+          "stage": null,
+          "step_id": null,
+          "path": null
+        },
+        "output": null,
+        "skip_reason": null
+      },
+      {
+        "step_id": "after",
+        "name": null,
+        "type": "api",
+        "status": "skipped",
+        "duration_seconds": 0.0,
+        "request": null,
+        "response": null,
+        "error": null,
+        "output": null,
+        "skip_reason": "fail_fast"
+      }
+    ],
+    "summary": {
+      "total": 2,
+      "success": 0,
+      "failed": 1,
+      "skipped": 1
+    },
+    "error": null
+  }
+}

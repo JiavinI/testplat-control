@@ -1,0 +1,96 @@
+{
+  "id": "00000000-0000-4000-8000-000000000004",
+  "project_id": "00000000-0000-4000-8000-000000000006",
+  "asset_id": "case.demo.timeout",
+  "asset_type": "case",
+  "status": "failed",
+  "start_time": "2026-10-12T11:30:00",
+  "end_time": "2026-10-12T11:30:00.250",
+  "duration": 0.218,
+  "display": {
+    "start_time": "2026-10-12 11:30:00",
+    "end_time": "2026-10-12 11:30:00",
+    "duration": "218ms"
+  },
+  "result": {
+    "case_id": "case.demo.timeout",
+    "status": "failed",
+    "duration_seconds": 0.216,
+    "steps": [
+      {
+        "step_id": "create",
+        "name": null,
+        "type": "api",
+        "status": "success",
+        "duration_seconds": 0.007,
+        "request": {
+          "method": "POST",
+          "url": "http://127.0.0.1:18080/demo/resources",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "name": "demo"
+          }
+        },
+        "response": {
+          "status_code": 201,
+          "headers": {
+            "server": "BaseHTTP/0.6 Python/3.13.7",
+            "date": "Mon, 12 Oct 2026 03:45:27 GMT",
+            "content-type": "application/json",
+            "content-length": "57"
+          },
+          "body": {
+            "id": "res-42",
+            "access_token": "***"
+          }
+        },
+        "error": null,
+        "output": null,
+        "skip_reason": null
+      },
+      {
+        "step_id": "slow",
+        "name": null,
+        "type": "api",
+        "status": "failed",
+        "duration_seconds": 0.209,
+        "request": null,
+        "response": null,
+        "error": {
+          "kind": "timeout",
+          "message": "API 请求超时",
+          "stage": "execution",
+          "step_id": null,
+          "path": null
+        },
+        "output": null,
+        "skip_reason": null
+      },
+      {
+        "step_id": "after",
+        "name": null,
+        "type": "api",
+        "status": "skipped",
+        "duration_seconds": 0.0,
+        "request": null,
+        "response": null,
+        "error": null,
+        "output": null,
+        "skip_reason": "fail_fast"
+      }
+    ],
+    "summary": {
+      "total": 3,
+      "success": 1,
+      "failed": 1,
+      "skipped": 1
+    },
+    "error": {
+      "kind": "timeout",
+      "stage": "execution",
+      "message": "API 请求超时"
+    }
+  }
+}

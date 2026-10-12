@@ -55,7 +55,7 @@ uv run pytest tests/integration --cov=testplat_control.api --cov=testplat_contro
 - `httpx`（`AsyncClient` 发并发请求，`TestClient` 走其余请求）
 - `pytest-cov`（只在查看覆盖率时需要）
 
-运行时依赖是 FastAPI、SQLAlchemy、Pydantic、PyYAML，以及 `testplat-engine`（0.1.x）。本地开发可用 uv path editable 指向 Engine 集成 worktree（`../phase2-5-integration`）。集成测试通过 `app.dependency_overrides[get_engine_port]` 注入 `FakeEngineAdapter`，不 monkeypatch 路由全局符号，也不访问真实网络。
+运行时依赖是 FastAPI、SQLAlchemy、Pydantic、PyYAML，以及 `testplat-engine`（0.2.x，由 uv sources 锁定到精确 commit；当前为临时本地 `file://` URL，见 README）。集成测试通过 `app.dependency_overrides[get_engine_port]` 注入 `FakeEngineAdapter`，不 monkeypatch 路由全局符号，也不访问真实网络。
 
 数据库用的是应用启动时的共享内存 SQLite（`StaticPool`）。每个用例创建自己的项目，记录按 `project_id` 隔离。
 

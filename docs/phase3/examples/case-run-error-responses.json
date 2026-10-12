@@ -1,0 +1,39 @@
+{
+  "invalid_asset_422": {
+    "http_status": 422,
+    "body": {
+      "detail": "步骤 only 引用未声明或尚未产生的 alias: ${missing.body.id}"
+    }
+  },
+  "invalid_input_422": {
+    "http_status": 422,
+    "body": {
+      "detail": "Case 参数缺失: params.missing"
+    }
+  },
+  "asset_not_found_404": {
+    "http_status": 404,
+    "body": {
+      "detail": "Case 资产不存在: case.demo.does_not_exist"
+    }
+  },
+  "timeout_504": {
+    "http_status": 504,
+    "body": {
+      "detail": "API 请求超时"
+    }
+  },
+  "transport_502": {
+    "http_status": 502,
+    "body": {
+      "detail": "API 传输失败"
+    }
+  },
+  "internal_500": {
+    "http_status": 500,
+    "body": {
+      "detail": "执行引擎内部错误"
+    },
+    "note": "由 Engine 抛出的 internal/execution 错误；记录同样保存为 failed 并携带 partial_outcome 步骤"
+  }
+}
