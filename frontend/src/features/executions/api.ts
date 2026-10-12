@@ -13,6 +13,7 @@ import {
   parseCaseExecutionRecordDetail,
   parseCaseRunResponse,
 } from './caseParse'
+import { parseExecutionAuth } from './auth'
 import type {
   CaseAssetDetail,
   CaseExecutionRecordDetail,
@@ -88,7 +89,7 @@ function parseParamsResponse(payload: unknown): ParamsResponse {
   return { asset_id: assetId, params }
 }
 
-function parseRunResponse(payload: unknown): RunResponse {
+export function parseRunResponse(payload: unknown): RunResponse {
   assertObject(payload, 'RunResponse')
   const recordId = requireString(payload, 'record_id', 'RunResponse')
   const status = requireString(payload, 'status', 'RunResponse')
@@ -100,6 +101,7 @@ function parseRunResponse(payload: unknown): RunResponse {
     status,
     duration: requireNullableNumber(payload, 'duration', 'RunResponse'),
     result: payload.result,
+    auth: parseExecutionAuth(payload.auth, 'RunResponse.auth'),
   }
 }
 
@@ -114,7 +116,7 @@ function parseListItem(payload: unknown, index: number): ExecutionRecordListItem
   }
 }
 
-function parseRecordDetail(payload: unknown): ExecutionRecordDetail {
+export function parseRecordDetail(payload: unknown): ExecutionRecordDetail {
   assertObject(payload, 'ExecutionRecordDetail')
   assertObject(payload.display, 'ExecutionRecordDetail.display')
   const display = payload.display
@@ -142,6 +144,7 @@ function parseRecordDetail(payload: unknown): ExecutionRecordDetail {
     result,
     request: payload.request ?? null,
     response: payload.response ?? null,
+    auth: parseExecutionAuth(payload.auth, 'ExecutionRecordDetail.auth'),
   }
 }
 

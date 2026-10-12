@@ -1,4 +1,6 @@
 import { Alert, Descriptions, Tag, Typography } from 'antd'
+import { apiAuthDisplayMode } from './auth'
+import { AuthSummary } from './AuthSummary'
 import { JsonBlock } from './JsonBlock'
 import type { RunResponse } from './types'
 
@@ -35,6 +37,13 @@ export function ExecutionResultCard({ result }: ExecutionResultCardProps) {
         </Descriptions.Item>
         <Descriptions.Item label="耗时">
           {formatDurationSeconds(result.duration)}
+        </Descriptions.Item>
+        {/* 单 API：auth 为 null 只表示匿名执行 */}
+        <Descriptions.Item label="身份" span={2}>
+          <AuthSummary
+            auth={result.auth ?? null}
+            mode={apiAuthDisplayMode(result.auth ?? null)}
+          />
         </Descriptions.Item>
         <Descriptions.Item label="记录 ID" span={2}>
           <Typography.Text copyable code>

@@ -1,5 +1,7 @@
 import { Alert, Collapse, Descriptions, Space, Tag, Typography } from 'antd'
 import { useMemo, useState } from 'react'
+import { stepAuthDisplayMode } from './auth'
+import { AuthSummary } from './AuthSummary'
 import { findFirstFailedStepIndex } from './caseParse'
 import { JsonBlock } from './JsonBlock'
 import {
@@ -26,6 +28,18 @@ function StepDetail({ step }: { step: CaseStepResult }) {
           跳过原因：{step.skip_reason === 'fail_fast' ? '前序失败（fail_fast）' : step.skip_reason}
         </Typography.Paragraph>
       ) : null}
+
+      {/* 步骤身份：null 需区分“匿名”与“未发请求（—）”，判定见 auth.ts */}
+      <div style={{ marginBottom: 8 }}>
+        <Typography.Text type="secondary" style={{ marginRight: 8 }}>
+          身份
+        </Typography.Text>
+        <AuthSummary
+          auth={step.auth ?? null}
+          mode={stepAuthDisplayMode(step)}
+          testId={`step-auth-${step.step_id}`}
+        />
+      </div>
 
       {step.error ? (
         <Alert

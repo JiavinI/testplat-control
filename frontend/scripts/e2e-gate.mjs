@@ -1,6 +1,11 @@
 /**
  * Phase 3 浏览器门禁：Case 元信息/运行/历史 + API 回归 + 横向溢出 + console/网络。
- * 截图写入 screenshots/phase3/。
+ * 截图写入 screenshots/phase3/；Phase 3.3a 身份相关截图写入 screenshots/phase3_3/
+ * （设置 E2E_OUT_DIR 时两者都写入该目录）。
+ *
+ * Phase 3.3a 身份段：用 Agent 2 冻结的 docs/phase3_3/examples/ 作为 route mock 响应，
+ * 覆盖“有身份 / 匿名 / header 覆盖 / 身份不可用 422 / 系统错误步骤显示 —”，
+ * 并在每个截图点对整页 DOM 搜索测试假秘密，命中即门禁失败。
  *
  * 假设前端 http://127.0.0.1:5173 与后端 :8000 已启动（可用 FakeEngine）。
  *   pnpm exec node scripts/e2e-gate.mjs
@@ -29,7 +34,37 @@ const OUT = process.env.E2E_OUT_DIR
   ? path.resolve(process.env.E2E_OUT_DIR)
   : path.join(frontendRoot, 'screenshots', 'phase3')
 
+const AUTH_OUT = process.env.E2E_OUT_DIR
+  ? OUT
+  : path.join(frontendRoot, 'screenshots', 'phase3_3')
+const EXAMPLES_DIR = path.join(repoRoot, 'docs', 'phase3_3', 'examples')
+// 测试用假秘密：只作为 DOM 泄密搜索目标，绝不写进任何 mock 响应
+const FAKE_SECRETS = ['tp-fake-secret-9f31c2a7', 'tp-fake-partner-4c8e11d0']
+
 fs.mkdirSync(OUT, { recursive: true })
+fs.mkdirSync(AUTH_OUT, { recursive: true })
+
+function loadExample(name) {
+  return JSON.parse(fs.readFileSync(path.join(EXAMPLES_DIR, name), 'utf8'))
+}
+
+/** 整页 DOM（含 Drawer 等 portal）搜索假秘密，返回命中的项。 */
+async function findSecretsInDom(page) {
+  const html = await page.content()
+  const text = await page.evaluate(() => document.body.innerText)
+  return FAKE_SECRETS.filter((secret) => html.includes(secret) || text.includes(secret))
+}
+
+async function authShot(page, name, secretHits) {
+  const file = path.join(AUTH_OUT, name)
+  await page.screenshot({ path: file, fullPage: true })
+  console.log('screenshot', file)
+  const hits = await findSecretsInDom(page)
+  if (hits.length > 0) {
+    secretHits.push({ screenshot: name, hits: hits.length })
+  }
+  return file
+}
 
 function makeProjectName(suffix) {
   return `e2e-${Date.now()}-${suffix}`
@@ -289,6 +324,9 @@ async function runFlow(page, viewportLabel, projectName) {
   const drawerOverflow = drawerScroll > drawerClient + 2
   await page.keyboard.press('Escape')
 
+  const secretHits = []
+  const authOverflow = await runAuthFlow(page, viewportLabel, executionProject, secretHits)
+
   // --- Case 体验 ---
   await selectAsset(
     page,
@@ -526,7 +564,7 @@ async function runFlow(page, viewportLabel, projectName) {
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
   const clientWidth = await page.evaluate(() => document.documentElement.clientWidth)
   const pageOverflow = scrollWidth > clientWidth + 2
-  const overflow = pageOverflow || drawerOverflow
+  const overflow = pageOverflow || drawerOverflow || authOverflow
 
   const unexpectedConsole = consoleErrors.filter((t) => !isAllowedConsoleError(t))
   const unexpectedFailed = failedRequests.filter((e) => !isAllowedFailedRequest(e))
@@ -541,9 +579,215 @@ async function runFlow(page, viewportLabel, projectName) {
     unexpectedFailed,
     overflow,
     drawerOverflow,
+    authOverflow,
+    secretHits,
     scrollWidth,
     clientWidth,
   }
+}
+
+async function hasHorizontalOverflow(page) {
+  return page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2,
+  )
+}
+
+/**
+ * Phase 3.3a 身份展示门禁。前置：已选中 api.user.login（执行面板可见）；结束时回到 api.user.login。
+ * 只用冻结示例与后端返回的 detail 文案，不在脚本里另造错误文案。
+ */
+async function runAuthFlow(page, viewportLabel, executionProject, secretHits) {
+  let overflow = false
+  const authErrors = loadExample('auth-error-responses.json')
+
+  // 1) 匿名：FakeEngine 在无 auth 配置的项目下真实执行，auth 为 null
+  await page.getByTestId('param-password').fill('secret')
+  await page.getByRole('button', { name: '执行 API' }).click()
+  await expectExecutionStatus(page, 'success')
+  const anon = page.getByTestId('execution-result').getByTestId('auth-summary')
+  await anon.waitFor({ timeout: 10000 })
+  if ((await anon.getAttribute('data-auth-mode')) !== 'anonymous') {
+    throw new Error('无 auth 配置的单 API 结果应显示“匿名”')
+  }
+  await authShot(page, `${viewportLabel}-auth-api-anonymous.png`, secretHits)
+
+  // 2) 有身份 + header 覆盖：冻结示例 api-run-with-auth.json（admin，覆盖 authorization）
+  const runPattern = '**/api/projects/*/assets/api.user.login/run'
+  await page.route(runPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(loadExample('api-run-with-auth.json')),
+    })
+  }, { times: 1 })
+  await page.getByRole('button', { name: '执行 API' }).click()
+  const identity = page.getByTestId('execution-result').getByTestId('auth-summary')
+  await identity.getByText('身份：admin').waitFor({ timeout: 10000 })
+  await authShot(page, `${viewportLabel}-auth-api-identity.png`, secretHits)
+  await identity.getByText('查看 header 名').click()
+  await page.getByTestId('auth-summary-overridden-headers').getByText('authorization').waitFor({ timeout: 5000 })
+  await page.getByTestId('auth-summary-header-names').getByText('Authorization').waitFor({ timeout: 5000 })
+  overflow = overflow || (await hasHorizontalOverflow(page))
+  await authShot(page, `${viewportLabel}-auth-api-header-override.png`, secretHits)
+  await page.unroute(runPattern)
+
+  // 3) 身份不可用 422：detail 取自冻结示例，前端须原样展示
+  const unavailable = authErrors.identity_unavailable_fake_engine
+  await page.route(runPattern, async (route) => {
+    await route.fulfill({
+      status: unavailable.status,
+      contentType: 'application/json',
+      body: JSON.stringify(unavailable.body),
+    })
+  }, { times: 1 })
+  await page.getByRole('button', { name: '执行 API' }).click()
+  await page.getByRole('alert').filter({ hasText: '执行失败' }).waitFor({ timeout: 10000 })
+  await page.getByText(unavailable.body.detail).waitFor({ timeout: 10000 })
+  await authShot(page, `${viewportLabel}-auth-api-identity-unavailable-422.png`, secretHits)
+  await page.unroute(runPattern)
+
+  // 4) API 历史详情：冻结示例 api-history-detail-with-auth.json
+  const apiDetail = loadExample('api-history-detail-with-auth.json')
+  apiDetail.project_id = executionProject.id
+  const apiListPattern = '**/api/projects/*/execution-records?**'
+  await page.route(apiListPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: apiDetail.id,
+          asset_id: apiDetail.asset_id,
+          status: apiDetail.status,
+          start_time: apiDetail.start_time,
+          duration: apiDetail.duration,
+        },
+      ]),
+    })
+  })
+  const apiDetailPattern = `**/api/projects/*/execution-records/${apiDetail.id}`
+  await page.route(apiDetailPattern, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(apiDetail) })
+  })
+  // 切换筛选触发列表重新请求，命中上面的 mock
+  await page.getByTestId('filter-status').click()
+  await page.getByTitle('全部状态').click()
+  await page.waitForTimeout(400)
+  await page.getByTestId('execution-history').getByRole('button', { name: /查看记录/ }).first().click()
+  const detail = page.getByTestId('execution-detail')
+  await detail.getByText('身份：admin').waitFor({ timeout: 10000 })
+  await detail.getByText('查看 header 名').click()
+  overflow = overflow || (await hasHorizontalOverflow(page))
+  await authShot(page, `${viewportLabel}-auth-history-api-identity.png`, secretHits)
+  await page.keyboard.press('Escape')
+  await page.unroute(apiListPattern)
+  await page.unroute(apiDetailPattern)
+
+  // 5) Case：冻结示例 case-run-with-auth.json（每步 partner）
+  await selectAsset(page, 'create_then_get', 'case.demo.create_then_get', 'case-execution-panel')
+  const caseRunPattern = '**/api/projects/*/cases/case.demo.create_then_get/run'
+  await page.route(caseRunPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(loadExample('case-run-with-auth.json')),
+    })
+  }, { times: 1 })
+  await page.getByRole('button', { name: '执行 Case' }).click()
+  await page.getByTestId('case-result-view').waitFor({ timeout: 15000 })
+  await page.getByText('步骤 create').first().click()
+  await page.getByTestId('step-auth-create').getByText('身份：partner').waitFor({ timeout: 5000 })
+  await authShot(page, `${viewportLabel}-auth-case-identity.png`, secretHits)
+  await page.unroute(caseRunPattern)
+
+  // 6) Case 身份不可用 422（身份不存在示例）
+  const notFound = authErrors.identity_not_found_fake_engine
+  await page.route(caseRunPattern, async (route) => {
+    await route.fulfill({
+      status: notFound.status,
+      contentType: 'application/json',
+      body: JSON.stringify(notFound.body),
+    })
+  }, { times: 1 })
+  await page.getByRole('button', { name: '执行 Case' }).click()
+  await page.getByText(/预检失败/).waitFor({ timeout: 10000 })
+  await page.getByText(notFound.body.detail).waitFor({ timeout: 10000 })
+  await authShot(page, `${viewportLabel}-auth-case-identity-not-found-422.png`, secretHits)
+  await page.unroute(caseRunPattern)
+
+  // 7) Case 系统错误步骤：auth 为 null 必须显示“—”而不是“匿名”（设计稿 A4）
+  const base = loadExample('case-history-detail-with-auth.json')
+  const sysDetail = {
+    ...base,
+    id: 'e2e-auth-case-timeout',
+    project_id: executionProject.id,
+    status: 'failed',
+    result: {
+      ...base.result,
+      status: 'failed',
+      steps: [
+        base.result.steps[0],
+        {
+          ...base.result.steps[1],
+          status: 'failed',
+          request: null,
+          response: null,
+          output: null,
+          auth: null,
+          error: { kind: 'timeout', stage: 'execution', message: 'API 请求超时', step_id: null, path: null },
+        },
+      ],
+      summary: { total: 2, success: 1, failed: 1, skipped: 0 },
+      error: { kind: 'timeout', stage: 'execution', message: 'API 请求超时' },
+    },
+  }
+  const caseListPattern = '**/api/projects/*/execution-records?**'
+  await page.route(caseListPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: sysDetail.id,
+          asset_id: sysDetail.asset_id,
+          status: 'failed',
+          start_time: sysDetail.start_time,
+          duration: sysDetail.duration,
+        },
+      ]),
+    })
+  })
+  const caseDetailPattern = `**/api/projects/*/case-execution-records/${sysDetail.id}`
+  await page.route(caseDetailPattern, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sysDetail) })
+  })
+  await page.getByTestId('filter-status').click()
+  await page.getByTitle('failed', { exact: true }).click()
+  await page.waitForTimeout(400)
+  await page.getByTestId('execution-history').getByRole('button', { name: /查看记录/ }).first().click()
+  const caseDetail = page.getByTestId('execution-detail')
+  const dash = caseDetail.getByTestId('step-auth-get')
+  await dash.waitFor({ timeout: 10000 })
+  if ((await dash.getAttribute('data-auth-mode')) !== 'not_applicable' || (await dash.innerText()).includes('匿名')) {
+    throw new Error('系统错误步骤的身份应显示“—”，不得显示“匿名”')
+  }
+  await caseDetail.getByText('步骤 create').click()
+  await caseDetail.getByTestId('step-auth-create').getByText('身份：partner').waitFor({ timeout: 5000 })
+  overflow = overflow || (await hasHorizontalOverflow(page))
+  await authShot(page, `${viewportLabel}-auth-case-system-error-dash.png`, secretHits)
+  await page.keyboard.press('Escape')
+  await page.unroute(caseListPattern)
+  await page.unroute(caseDetailPattern)
+  await page.getByTestId('filter-status').click()
+  await page.getByTitle('全部状态').click().catch(() => {})
+  await page.waitForTimeout(300)
+
+  // 回到 api.user.login，恢复既有 Case 段的前置状态（移动端重复点同一资产不会关闭抽屉）；
+  // 等资产抽屉关闭动画结束，避免下一次 openAssetBrowser 误判抽屉仍打开
+  await selectAsset(page, 'login', 'api.user.login', 'api-execution-panel')
+  await page.getByLabel('过滤资产').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
+  await page.waitForTimeout(600)
+  return overflow
 }
 
 const chromeCandidates = [
@@ -588,6 +832,7 @@ for (const vp of [
     results.push(r)
     const bad =
       r.overflow ||
+      (r.secretHits && r.secretHits.length > 0) ||
       r.unexpectedConsole.length > 0 ||
       r.unexpectedPageErrors.length > 0 ||
       r.unexpectedFailed.length > 0
