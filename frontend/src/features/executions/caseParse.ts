@@ -1,3 +1,4 @@
+import { parseExecutionAuth } from './auth'
 import { ApiParseError } from '@/shared/api/errors'
 import {
   assertArray,
@@ -155,6 +156,7 @@ function parseStepResult(value: unknown, index: number): CaseStepResult {
       'skip_reason' in value ? value.skip_reason : null,
       `${label}.skip_reason`,
     ),
+    auth: parseExecutionAuth(value.auth, `${label}.auth`),
   }
 }
 

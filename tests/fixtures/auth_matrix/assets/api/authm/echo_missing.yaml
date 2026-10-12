@@ -1,0 +1,9 @@
+id: api.authm.echo_missing
+name: 回显凭证（missing）
+host: local
+method: GET
+url: /echo/headers
+auth: missing
+request: {}
+success:
+  status_code: 200

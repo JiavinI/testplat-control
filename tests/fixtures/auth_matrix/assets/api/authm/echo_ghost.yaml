@@ -1,0 +1,9 @@
+id: api.authm.echo_ghost
+name: 回显凭证（ghost）
+host: local
+method: GET
+url: /echo/headers
+auth: ghost
+request: {}
+success:
+  status_code: 200

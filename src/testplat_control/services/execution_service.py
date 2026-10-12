@@ -8,7 +8,8 @@
 - **Case 语法与运行语义的权威是 Engine**：Case id 格式、文件路径映射、schema、引用
   校验、步骤执行与 fail-fast 全部发生在 ``EnginePort.execute(request)`` 之内。
   本模块不解析 Case YAML，只把 Engine 返回的 outcome / 异常原样落库和映射为 HTTP。
-- Control 只负责：项目与环境（``load_project_environment``）、调用与计时、
+- Control 只负责：项目与环境（``load_project_environment``）、身份表
+  （``load_auth_table``，Phase 3.3a）、调用与计时、
   ``ExecutionRecord`` 持久化、HTTP 状态码映射。
 
 记录生命周期（单次写入）
@@ -30,6 +31,13 @@ Engine 异常的 ``log_reason``、``__cause__`` 与异常原文可能带有 pass
 所以本模块**任何日志都不得**使用 ``logger.exception`` / ``exc_info``，也不得记录
 ``log_reason`` 或异常文本；只记 kind、stage、项目/资产/记录 ID 与异常**类型名**。
 ``log_reason`` 只留在异常对象上，供调用方做决策，不外显、不入库、不进日志。
+
+鉴权（Phase 3.3a）
+-----------------
+- 身份表在环境之后加载；配置错误与环境错误同属 preflight ``invalid_environment``，不写记录。
+- 没有 auth 配置文件时传 ``auth=None``（不是空表），行为与 Phase 3 一致（Q2）。
+- 请求 DTO 构造失败时 422 detail 使用固定安全文案，不再回显 ``str(exc)``（M1）：
+  异常消息可能含 params/environment 的值，Control 不对其内容做任何假设。
 
 超时语义
 --------
@@ -53,6 +61,7 @@ from sqlalchemy.orm import Session
 from testplat_engine import (
     ApiExecutionOutcome,
     ApiExecutionRequest,
+    AuthTable,
     CaseExecutionOutcome,
     CaseExecutionRequest,
     EngineError,
@@ -60,6 +69,7 @@ from testplat_engine import (
 
 from testplat_control.database.models import ExecutionRecord, Project
 from testplat_control.ports.engine import EnginePort
+from testplat_control.services.auth_loader import load_auth_table
 from testplat_control.services.env_loader import load_project_environment
 
 logger = logging.getLogger(__name__)
@@ -177,6 +187,41 @@ def _load_environment(project: Project) -> dict[str, Any]:
         ) from exc
 
 
+def _load_auth(project: Project) -> AuthTable | None:
+    """加载项目环境的身份表；失败属 Control 侧 preflight，不写记录。
+
+    日志沿用 ``_log_engine_error`` 的安全字段；``public_message`` 由 auth_loader 保证
+    只含身份名 / header 名 / 变量名。
+    """
+    try:
+        return load_auth_table(project.config_root, project.env)
+    except EngineError as exc:
+        _log_engine_error(
+            project=project,
+            asset_id="-",
+            exc=exc,
+            what=f"鉴权配置 preflight 失败 env={project.env}",
+        )
+        raise HTTPException(
+            status_code=map_engine_error_http_status(exc),
+            detail=exc.public_message,
+        ) from exc
+
+
+# 请求 DTO 构造失败的固定外显文案（M1：不回显 str(exc)）。
+_INVALID_REQUEST_DETAIL = "执行请求无效：参数或环境配置不合法"
+
+
+def _log_request_build_error(*, project: Project, asset_id: str, exc: Exception) -> None:
+    """请求 DTO 构造失败：只记 ids 与异常类型名。"""
+    logger.error(
+        "执行请求构造失败 project=%s asset=%s exc_type=%s",
+        project.id,
+        asset_id,
+        type(exc).__name__,
+    )
+
+
 async def run_single_api(
     *,
     db: Session,
@@ -209,6 +254,7 @@ async def run_single_api(
         HTTPException: 按错误表映射的状态码；detail 仅含安全外显信息。
     """
     environment = _load_environment(project)
+    auth = _load_auth(project)
 
     try:
         request = ApiExecutionRequest(
@@ -217,10 +263,12 @@ async def run_single_api(
             environment=environment,
             params=params,
             timeout_seconds=timeout_seconds,
+            auth=auth,
         )
     except (TypeError, ValueError) as exc:
-        # 请求 DTO 构造失败视为 Control 侧参数/环境不合法。
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # 请求 DTO 构造失败视为 Control 侧参数/环境不合法；detail 用固定文案（M1）。
+        _log_request_build_error(project=project, asset_id=asset_id, exc=exc)
+        raise HTTPException(status_code=422, detail=_INVALID_REQUEST_DETAIL) from exc
 
     start_time = datetime.now(UTC)
     try:
@@ -350,6 +398,7 @@ async def run_case(
         HTTPException: 按错误表映射的状态码；detail 仅含安全外显信息。
     """
     environment = _load_environment(project)
+    auth = _load_auth(project)
 
     try:
         request = CaseExecutionRequest(
@@ -358,9 +407,11 @@ async def run_case(
             environment=environment,
             params=params,
             timeout_seconds=timeout_seconds,
+            auth=auth,
         )
     except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        _log_request_build_error(project=project, asset_id=case_id, exc=exc)
+        raise HTTPException(status_code=422, detail=_INVALID_REQUEST_DETAIL) from exc
 
     start_time = datetime.now(UTC)
     try:

@@ -34,10 +34,28 @@ def test_fake_injection_via_dependency_overrides_without_monkeypatch() -> None:
         app.dependency_overrides.pop(get_engine_port, None)
 
 
-def test_ensure_engine_compatible_succeeds_for_installed_0_2() -> None:
-    """已安装 0.2.x Interface（含 Case DTO）时启动诊断通过。"""
+def test_ensure_engine_compatible_succeeds_for_installed_0_3() -> None:
+    """已安装 0.3.x Interface（含 Case 与鉴权 DTO）时启动诊断通过。"""
     version = ensure_engine_compatible()
-    assert version.startswith("0.2")
+    assert version.startswith("0.3")
+
+
+def test_ensure_engine_compatible_rejects_0_2(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 3.3a 起 0.2.x 不再兼容：缺少鉴权 DTO 与公开 auth 字段。"""
+    monkeypatch.setattr("testplat_control.engine_bootstrap.version", lambda _dist: "0.2.0")
+    with pytest.raises(EngineBootstrapError, match="版本不兼容"):
+        ensure_engine_compatible()
+
+
+def test_ensure_engine_compatible_requires_auth_interface(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """缺少鉴权公开符号时 fail-fast，并点名缺失项。"""
+    import testplat_engine as eng
+
+    monkeypatch.delattr(eng, "AuthTable", raising=False)
+    with pytest.raises(EngineBootstrapError, match="AuthTable"):
+        ensure_engine_compatible()
 
 
 def test_ensure_engine_compatible_rejects_0_1(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,7 +95,7 @@ def test_ensure_engine_compatible_fail_fast_on_missing_package(
 def test_ensure_engine_compatible_fail_fast_on_bad_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """版本不在 0.2.x 时 fail-fast。"""
+    """版本不在 0.3.x 时 fail-fast。"""
     monkeypatch.setattr(
         "testplat_control.engine_bootstrap.version",
         lambda _dist: "9.0.0",

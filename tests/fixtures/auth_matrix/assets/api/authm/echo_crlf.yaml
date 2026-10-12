@@ -1,0 +1,9 @@
+id: api.authm.echo_crlf
+name: 回显凭证（crlf）
+host: local
+method: GET
+url: /echo/headers
+auth: crlf
+request: {}
+success:
+  status_code: 200

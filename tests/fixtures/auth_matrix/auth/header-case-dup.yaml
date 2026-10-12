@@ -1,0 +1,6 @@
+# 同一身份内 header 名仅大小写不同 → schema 错误 422（Q3）
+identities:
+  admin:
+    headers:
+      X-Token: "${secret:TESTPLAT_ADMIN_TOKEN}"
+      x-token: "${secret:TESTPLAT_PARTNER_KEY}"

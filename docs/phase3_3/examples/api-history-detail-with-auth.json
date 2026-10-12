@@ -1,0 +1,63 @@
+{
+  "id": "9aaffe51-4c9a-4017-9d8a-1b0c08314f4b",
+  "project_id": "4c339192-a668-409d-b0e8-e552dd9f6cde",
+  "asset_id": "api.demo.create",
+  "asset_type": "api",
+  "status": "success",
+  "start_time": "2026-10-12T06:58:33.928434",
+  "end_time": "2026-10-12T06:58:33.928470",
+  "duration": 3.6e-05,
+  "display": {
+    "start_time": "2026-10-12 06:58:33",
+    "end_time": "2026-10-12 06:58:33",
+    "duration": "0ms"
+  },
+  "result": {
+    "status": "success",
+    "request": {
+      "api_id": "api.demo.create",
+      "params": {},
+      "headers": {
+        "Authorization": "***"
+      }
+    },
+    "response": {
+      "status_code": 200,
+      "body": {
+        "ok": true
+      }
+    },
+    "error": null,
+    "auth": {
+      "identity": "admin",
+      "header_names": [
+        "Authorization"
+      ],
+      "overridden_headers": [
+        "authorization"
+      ]
+    }
+  },
+  "request": {
+    "api_id": "api.demo.create",
+    "params": {},
+    "headers": {
+      "Authorization": "***"
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "auth": {
+    "identity": "admin",
+    "header_names": [
+      "Authorization"
+    ],
+    "overridden_headers": [
+      "authorization"
+    ]
+  }
+}

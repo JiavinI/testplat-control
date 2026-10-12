@@ -1,0 +1,29 @@
+schema_version: "0.2"
+id: case.authm.mixed
+name: 混合身份
+desc: admin / partner / 匿名 / 默认身份 / 多秘密头交替，最后用 alias 引用回显的凭证
+steps:
+  - step_id: admin
+    type: api
+    api_id: api.authm.echo_admin
+    output: echoed
+  - step_id: partner
+    type: api
+    api_id: api.authm.echo_partner
+  - step_id: anonymous
+    type: api
+    api_id: api.authm.echo_none
+  - step_id: default
+    type: api
+    api_id: api.authm.echo_default
+  - step_id: combo
+    type: api
+    api_id: api.authm.echo_combo
+  - step_id: admin_again
+    type: api
+    api_id: api.authm.echo_admin
+  - step_id: alias
+    type: api
+    api_id: api.authm.echo_resource
+    params:
+      resource_id: "${echoed.body.echo.seen_a}"

@@ -1,0 +1,6 @@
+# default_identity 指向不存在的身份 → 加载即 422（Q7）
+identities:
+  admin:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_ADMIN_TOKEN}"
+default_identity: ghost

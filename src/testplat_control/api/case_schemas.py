@@ -21,7 +21,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from testplat_control.api.schemas import ExecutionDisplay, format_duration, format_time
+from testplat_control.api.schemas import (
+    ExecutionAuth,
+    ExecutionDisplay,
+    format_duration,
+    format_time,
+)
 
 StepStatus = Literal["success", "failed", "skipped"]
 CaseStatus = Literal["success", "failed"]
@@ -80,6 +85,14 @@ class CaseStepResult(BaseModel):
     output: str | None = Field(None, description="成功步骤声明的 output alias 名（不含响应值）")
     skip_reason: Literal["fail_fast"] | None = Field(
         None, description="仅 skipped 步骤：fail_fast 表示被前序失败跳过"
+    )
+    # H3：显式声明而不是改成 extra="allow"——本模型对未知字段静默丢弃，
+    # 漏声明会让 Engine 0.3 的步骤 auth 在响应和历史详情里消失。
+    auth: ExecutionAuth | None = Field(
+        None,
+        description=(
+            "步骤实际使用的身份（Phase 3.3a）；匿名、skipped、系统错误归属的失败步骤为 null"
+        ),
     )
 
 

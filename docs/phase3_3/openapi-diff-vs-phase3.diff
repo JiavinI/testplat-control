@@ -1,0 +1,97 @@
+--- docs/phase3/openapi-phase3.json
++++ docs/phase3_3/openapi-phase3_3.json
+@@ -484,6 +484,17 @@
+       "CaseStepResult": {
+         "description": "单个声明步骤的结果；顺序与 Case 资产 steps 声明顺序一一对应。",
+         "properties": {
++          "auth": {
++            "anyOf": [
++              {
++                "$ref": "#/components/schemas/ExecutionAuth"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "description": "步骤实际使用的身份（Phase 3.3a）；匿名、skipped、系统错误归属的失败步骤为 null"
++          },
+           "duration_seconds": {
+             "description": "步骤耗时（秒）；skipped 恒为 0",
+             "minimum": 0.0,
+@@ -656,6 +667,40 @@
+         "title": "CaseSystemError",
+         "type": "object"
+       },
++      "ExecutionAuth": {
++        "additionalProperties": false,
++        "description": "一次 API 请求实际使用的身份（Phase 3.3a，Engine 0.3 公开 ``auth`` 字段，Q1）。\n\n只含身份名与 header **名**，永不含秘密值；匿名执行时整个字段为 null。\n``extra=\"forbid\"``：Engine 的公开 auth 恰好三个键，多出的键说明契约漂移，宁可解析失败。",
++        "properties": {
++          "header_names": {
++            "description": "注入的凭证 header 名（不含值）",
++            "items": {
++              "type": "string"
++            },
++            "title": "Header Names",
++            "type": "array"
++          },
++          "identity": {
++            "description": "身份名，例如 admin",
++            "title": "Identity",
++            "type": "string"
++          },
++          "overridden_headers": {
++            "description": "被凭证覆盖的资产 header 名（资产里的原始写法）",
++            "items": {
++              "type": "string"
++            },
++            "title": "Overridden Headers",
++            "type": "array"
++          }
++        },
++        "required": [
++          "identity",
++          "header_names",
++          "overridden_headers"
++        ],
++        "title": "ExecutionAuth",
++        "type": "object"
++      },
+       "ExecutionDisplay": {
+         "description": "详情页使用的格式化时间与耗时。",
+         "properties": {
+@@ -708,6 +753,17 @@
+             "title": "Asset Type",
+             "type": "string"
+           },
++          "auth": {
++            "anyOf": [
++              {
++                "$ref": "#/components/schemas/ExecutionAuth"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "description": "单 API 结果中的身份信息（Phase 3.3a）；匿名、Case 记录或旧记录为 null"
++          },
+           "display": {
+             "$ref": "#/components/schemas/ExecutionDisplay",
+             "description": "格式化后的时间与耗时"
+@@ -1094,6 +1150,17 @@
+       "RunResponse": {
+         "description": "单次 API 执行结果。",
+         "properties": {
++          "auth": {
++            "anyOf": [
++              {
++                "$ref": "#/components/schemas/ExecutionAuth"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "description": "本次请求使用的身份（Phase 3.3a）；匿名为 null，与 result.auth 相同"
++          },
+           "duration": {
+             "anyOf": [
+               {

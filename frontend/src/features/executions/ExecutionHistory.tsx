@@ -13,6 +13,8 @@ import type { ColumnsType } from 'antd/es/table'
 import { useEffect, useMemo, useState } from 'react'
 import { ErrorState, EmptyState, LoadingState } from '@/shared/ui/AsyncState'
 import { CaseResultView } from './CaseResultView'
+import { apiAuthDisplayMode } from './auth'
+import { AuthSummary } from './AuthSummary'
 import { JsonBlock } from './JsonBlock'
 import { useCaseExecutionRecord, useExecutionRecord, useExecutionRecords } from './hooks'
 import {
@@ -418,6 +420,13 @@ function ApiDetailBody({ detail }: { detail: ExecutionRecordDetail }) {
         </Descriptions.Item>
         <Descriptions.Item label="耗时">
           {detail.display.duration ?? '—'}
+        </Descriptions.Item>
+        {/* API 历史详情：顶层 auth，null（含 3.3 之前的旧记录）即匿名 */}
+        <Descriptions.Item label="身份">
+          <AuthSummary
+            auth={detail.auth ?? null}
+            mode={apiAuthDisplayMode(detail.auth ?? null)}
+          />
         </Descriptions.Item>
       </Descriptions>
 

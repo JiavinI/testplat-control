@@ -1,0 +1,10 @@
+# 目标把凭证写进 401 错误正文（§6-3）：业务失败，正文中凭证须为 ***
+id: api.authm.error_admin
+name: 错误正文回显凭证
+host: local
+method: GET
+url: /echo/error
+auth: admin
+request: {}
+success:
+  status_code: 200

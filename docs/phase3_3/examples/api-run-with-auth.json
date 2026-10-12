@@ -1,0 +1,40 @@
+{
+  "record_id": "9aaffe51-4c9a-4017-9d8a-1b0c08314f4b",
+  "status": "success",
+  "duration": 3.6e-05,
+  "result": {
+    "status": "success",
+    "request": {
+      "api_id": "api.demo.create",
+      "params": {},
+      "headers": {
+        "Authorization": "***"
+      }
+    },
+    "response": {
+      "status_code": 200,
+      "body": {
+        "ok": true
+      }
+    },
+    "error": null,
+    "auth": {
+      "identity": "admin",
+      "header_names": [
+        "Authorization"
+      ],
+      "overridden_headers": [
+        "authorization"
+      ]
+    }
+  },
+  "auth": {
+    "identity": "admin",
+    "header_names": [
+      "Authorization"
+    ],
+    "overridden_headers": [
+      "authorization"
+    ]
+  }
+}

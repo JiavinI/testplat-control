@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
 class ProjectCreate(BaseModel):
@@ -121,6 +121,35 @@ class ExecutionRecordListResponse(BaseModel):
         return cls.from_model(record)
 
 
+class ExecutionAuth(BaseModel):
+    """一次 API 请求实际使用的身份（Phase 3.3a，Engine 0.3 公开 ``auth`` 字段，Q1）。
+
+    只含身份名与 header **名**，永不含秘密值；匿名执行时整个字段为 null。
+    ``extra="forbid"``：Engine 的公开 auth 恰好三个键，多出的键说明契约漂移，宁可解析失败。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    identity: str = Field(..., description="身份名，例如 admin")
+    header_names: list[str] = Field(..., description="注入的凭证 header 名（不含值）")
+    overridden_headers: list[str] = Field(
+        ..., description="被凭证覆盖的资产 header 名（资产里的原始写法）"
+    )
+
+
+def parse_execution_auth(result: dict[str, Any] | None) -> ExecutionAuth | None:
+    """从结果字典中取出公开 ``auth``；缺失（旧记录）或形状不符时返回 None，不让详情 500。"""
+    if not isinstance(result, dict):
+        return None
+    raw = result.get("auth")
+    if raw is None:
+        return None
+    try:
+        return ExecutionAuth.model_validate(raw)
+    except ValidationError:
+        return None
+
+
 class ExecutionDisplay(BaseModel):
     """详情页使用的格式化时间与耗时。"""
 
@@ -144,6 +173,9 @@ class ExecutionRecordDetailResponse(BaseModel):
     result: dict[str, Any] | None = Field(None, description="解析后的执行结果")
     request: Any | None = Field(None, description="结果中的请求详情")
     response: Any | None = Field(None, description="结果中的响应详情")
+    auth: ExecutionAuth | None = Field(
+        None, description="单 API 结果中的身份信息（Phase 3.3a）；匿名、Case 记录或旧记录为 null"
+    )
 
     @classmethod
     def from_model(cls, record: Any) -> "ExecutionRecordDetailResponse":
@@ -174,6 +206,7 @@ class ExecutionRecordDetailResponse(BaseModel):
             result=result,
             request=None if result is None else result.get("request"),
             response=None if result is None else result.get("response"),
+            auth=parse_execution_auth(result),
         )
 
     @classmethod

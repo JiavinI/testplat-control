@@ -11,6 +11,16 @@ export type CaseStepStatus = 'success' | 'failed' | 'skipped'
 
 export type CaseSystemErrorKind = 'timeout' | 'transport' | 'internal'
 
+/**
+ * Phase 3.3a 公开身份：只有名字，没有值。null 的含义由上下文决定：
+ * 单 API / 历史详情里是匿名执行；Case 步骤里也可能是“没有发出请求”（见 auth.ts）。
+ */
+export interface ExecutionAuth {
+  identity: string
+  header_names: string[]
+  overridden_headers: string[]
+}
+
 export interface ParamInfo {
   name: string
   type: ParamType
@@ -32,6 +42,8 @@ export interface RunResponse {
   status: RunStatus
   duration: number | null
   result: unknown
+  /** 顶层公开身份；旧后端无此键时视为 null（匿名） */
+  auth?: ExecutionAuth | null
 }
 
 export interface ExecutionRecordListItem {
@@ -61,6 +73,8 @@ export interface ExecutionRecordDetail {
   result: Record<string, unknown> | null
   request: unknown
   response: unknown
+  /** 顶层公开身份；Phase 3.3 之前的旧记录无此键 → null（匿名） */
+  auth?: ExecutionAuth | null
 }
 
 export interface ExecutionListQuery {
@@ -135,6 +149,8 @@ export interface CaseStepResult {
   error: CaseStepError | null
   output: string | null
   skip_reason: 'fail_fast' | null
+  /** 步骤公开身份；null 时需结合 status / error / request 区分“匿名”与“—” */
+  auth?: ExecutionAuth | null
 }
 
 export interface CaseSystemError {

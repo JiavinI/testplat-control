@@ -1,0 +1,12 @@
+# 资产自带小写 authorization：凭证优先、只发一份，overridden_headers 记原始写法（D5、Q3）
+id: api.authm.echo_override
+name: 回显凭证（header 覆盖）
+host: local
+method: GET
+url: /echo/headers
+auth: admin
+request:
+  headers:
+    authorization: "Bearer asset-own-value"
+success:
+  status_code: 200

@@ -1,0 +1,5 @@
+# 模板字面量含控制字符 → 配置 schema 错误 422（B2）
+identities:
+  admin:
+    headers:
+      Authorization: "Bearer\0${secret:TESTPLAT_ADMIN_TOKEN}"

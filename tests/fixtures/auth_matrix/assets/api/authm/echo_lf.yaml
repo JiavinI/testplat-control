@@ -1,0 +1,9 @@
+id: api.authm.echo_lf
+name: 回显凭证（lf）
+host: local
+method: GET
+url: /echo/headers
+auth: lf
+request: {}
+success:
+  status_code: 200
