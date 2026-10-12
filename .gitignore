@@ -9,3 +9,6 @@ dist/
 build/
 .DS_Store
 *.db
+
+# Phase 3.3a：秘密只来自进程环境变量；本地 .env 文件一律不入库
+.env*

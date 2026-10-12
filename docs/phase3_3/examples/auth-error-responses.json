@@ -1,0 +1,26 @@
+{
+  "identity_unavailable_fake_engine": {
+    "status": 422,
+    "body": {
+      "detail": "身份 partner 不可用: 环境变量 TESTPLAT_PARTNER_KEY 未设置"
+    }
+  },
+  "identity_not_found_fake_engine": {
+    "status": 422,
+    "body": {
+      "detail": "身份不存在: ghost"
+    }
+  },
+  "config_default_identity_missing": {
+    "status": 422,
+    "body": {
+      "detail": "鉴权配置无效 (test): default_identity 指向不存在的身份: ghost"
+    }
+  },
+  "config_header_case_duplicate": {
+    "status": 422,
+    "body": {
+      "detail": "鉴权配置无效 (test): 身份 admin 的 header X-Token 与 x-token 仅大小写不同"
+    }
+  }
+}

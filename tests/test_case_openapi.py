@@ -4,7 +4,9 @@
 允许的差异是**显式白名单**：
 
 1. 新增 3 条 Case 路由及其 schema；
-2. ``GET /projects/{project_id}/execution-records`` 新增一个可选查询参数 ``asset_type``。
+2. ``GET /projects/{project_id}/execution-records`` 新增一个可选查询参数 ``asset_type``；
+3. Phase 3.3a：新增 ``ExecutionAuth`` schema，``RunResponse`` / ``ExecutionRecordDetailResponse``
+   各新增一个可选属性 ``auth``（相对 Phase 3 快照的逐项白名单见 ``tests/test_auth_openapi.py``）。
 
 除此之外，基线里的每条 path/operation 与每个 component schema 必须逐字节相等。
 """
@@ -42,6 +44,9 @@ NEW_SCHEMAS = {
     "CaseSummary",
     "CaseSystemError",
 }
+# Phase 3.3a 新增的非 Case schema 与给既有 schema 追加的属性。
+AUTH_SCHEMAS = {"ExecutionAuth"}
+AUTH_PROPERTY_ADDED = {"RunResponse", "ExecutionRecordDetailResponse"}
 
 
 @pytest.fixture(scope="module")
@@ -66,7 +71,12 @@ def test_phase_2_5_paths_do_not_drift(current: dict[str, Any]) -> None:
 
 def test_phase_2_5_component_schemas_do_not_drift(current: dict[str, Any]) -> None:
     for name, schema in BASELINE["components"]["schemas"].items():
-        assert current["components"]["schemas"][name] == schema, f"schema {name} 发生漂移"
+        now = copy.deepcopy(current["components"]["schemas"][name])
+        if name in AUTH_PROPERTY_ADDED:
+            # 3.3a 唯一允许的变化：追加可选 auth（不进 required）；其余逐字相等。
+            assert "auth" in now["properties"] and "auth" not in now.get("required", [])
+            now["properties"].pop("auth")
+        assert now == schema, f"schema {name} 发生漂移"
 
 
 def test_only_expected_additions(current: dict[str, Any]) -> None:
@@ -75,7 +85,7 @@ def test_only_expected_additions(current: dict[str, Any]) -> None:
     for path, methods in NEW_PATHS.items():
         assert set(current["paths"][path]) == methods
     added_schemas = set(current["components"]["schemas"]) - set(BASELINE["components"]["schemas"])
-    assert added_schemas == NEW_SCHEMAS
+    assert added_schemas == NEW_SCHEMAS | AUTH_SCHEMAS
 
 
 def test_list_records_asset_type_parameter_is_optional_enum(current: dict[str, Any]) -> None:
@@ -155,6 +165,7 @@ def test_case_result_structure(current: dict[str, Any]) -> None:
         "error",
         "output",
         "skip_reason",
+        "auth",
     }
     assert schemas["CaseSummary"]["required"] == ["total", "success", "failed", "skipped"]
     assert set(_literal(schemas["CaseSystemError"]["properties"]["kind"])) == {

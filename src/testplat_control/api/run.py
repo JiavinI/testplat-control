@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session
 
+from testplat_control.api.schemas import ExecutionAuth, parse_execution_auth
 from testplat_control.database.models import ExecutionRecord, Project
 from testplat_control.database.session import get_db
 from testplat_control.deps import get_engine_port
@@ -75,6 +76,11 @@ class RunResponse(BaseModel):
     status: RunStatus = Field(..., description="执行状态：success 或 failed")
     duration: float | None = Field(None, description="执行时长（秒）")
     result: Any = Field(None, description="执行结果")
+    # H3（单 API 同理）：result 是自由 JSON，auth 在其中原样保留；这里再显式声明一份
+    # 有类型的副本，让 OpenAPI 与前端有稳定契约。
+    auth: ExecutionAuth | None = Field(
+        None, description="本次请求使用的身份（Phase 3.3a）；匿名为 null，与 result.auth 相同"
+    )
 
 
 def build_param_infos(inputs: Any) -> list[ParamInfo]:
@@ -332,6 +338,7 @@ def _run_response(record: ExecutionRecord) -> RunResponse:
         status=record.status,
         duration=duration,
         result=result,
+        auth=parse_execution_auth(result if isinstance(result, dict) else None),
     )
 
 

@@ -15,8 +15,8 @@ from packaging.version import InvalidVersion, Version
 logger = logging.getLogger(__name__)
 
 # Phase 3 兼容范围：与 pyproject 中 testplat-engine 约束一致。
-# 0.2 在保持单 API DTO 的同时新增 Case DTO / invalid_input；0.1.x 不再受支持。
-ENGINE_VERSION_SPEC = SpecifierSet(">=0.2.0,<0.3")
+# 0.3 在 0.2（Case DTO / invalid_input）基础上新增鉴权 DTO 与公开 auth 字段；0.2.x 不再受支持。
+ENGINE_VERSION_SPEC = SpecifierSet(">=0.3.0,<0.4")
 ENGINE_DISTRIBUTION = "testplat-engine"
 _REQUIRED_EXPORTS = (
     "ApiExecutionRequest",
@@ -26,6 +26,11 @@ _REQUIRED_EXPORTS = (
     "StepOutcome",
     "EngineError",
     "InvalidInputError",
+    # Phase 3.3a 鉴权 DTO：auth_loader 构造身份表必需。
+    "AuthTable",
+    "StaticHeaderAuth",
+    "UnavailableAuth",
+    "SecretStr",
     "EnginePort",
     "__version__",
 )
@@ -80,14 +85,12 @@ def ensure_engine_compatible() -> str:
     try:
         parsed = Version(check_version)
     except InvalidVersion as exc:
-        raise EngineBootstrapError(
-            f"无法解析 testplat-engine 版本号: {check_version!r}"
-        ) from exc
+        raise EngineBootstrapError(f"无法解析 testplat-engine 版本号: {check_version!r}") from exc
 
     if parsed not in ENGINE_VERSION_SPEC:
         raise EngineBootstrapError(
             f"testplat-engine 版本不兼容: 当前 {check_version}，"
-            f"需要满足 {ENGINE_VERSION_SPEC}（Phase 3 锁定 0.2.x）。"
+            f"需要满足 {ENGINE_VERSION_SPEC}（Phase 3.3a 锁定 0.3.x）。"
         )
 
     missing = [name for name in _REQUIRED_EXPORTS if not hasattr(eng, name)]
@@ -103,7 +106,7 @@ def ensure_engine_compatible() -> str:
         raise EngineBootstrapError(
             "testplat-engine 缺少公开 runtime 入口 create_engine()。"
             f"当前版本 {check_version} 可能只安装了 Interface 契约；"
-            "请安装含真实执行实现的 0.2.x（见 README）。"
+            "请安装含真实执行实现的 0.3.x（见 README）。"
         )
 
     try:
@@ -117,8 +120,7 @@ def ensure_engine_compatible() -> str:
     execute = getattr(runtime, "execute", None)
     if execute is None or not callable(execute):
         raise EngineBootstrapError(
-            "testplat-engine.create_engine() 返回值缺少可调用的 execute；"
-            "无法作为 EnginePort 使用。"
+            "testplat-engine.create_engine() 返回值缺少可调用的 execute；无法作为 EnginePort 使用。"
         )
     if not inspect.iscoroutinefunction(execute):
         raise EngineBootstrapError(

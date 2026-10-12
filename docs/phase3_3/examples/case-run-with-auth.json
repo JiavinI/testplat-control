@@ -1,0 +1,83 @@
+{
+  "record_id": "1110725b-e363-4a94-a2a1-0e049c847a14",
+  "status": "success",
+  "duration": 5.9e-05,
+  "result": {
+    "case_id": "case.demo.create_then_get",
+    "status": "success",
+    "duration_seconds": 0.02,
+    "steps": [
+      {
+        "step_id": "create",
+        "name": "步骤 create",
+        "type": "api",
+        "status": "success",
+        "duration_seconds": 0.01,
+        "request": {
+          "method": "GET",
+          "url": "http://127.0.0.1/fake/create",
+          "headers": {
+            "X-Api-Key": "***"
+          },
+          "body": null
+        },
+        "response": {
+          "status_code": 200,
+          "headers": {},
+          "body": {
+            "id": "create-1"
+          }
+        },
+        "error": null,
+        "output": "created",
+        "skip_reason": null,
+        "auth": {
+          "identity": "partner",
+          "header_names": [
+            "X-Api-Key"
+          ],
+          "overridden_headers": []
+        }
+      },
+      {
+        "step_id": "get",
+        "name": "步骤 get",
+        "type": "api",
+        "status": "success",
+        "duration_seconds": 0.01,
+        "request": {
+          "method": "GET",
+          "url": "http://127.0.0.1/fake/get",
+          "headers": {
+            "X-Api-Key": "***"
+          },
+          "body": null
+        },
+        "response": {
+          "status_code": 200,
+          "headers": {},
+          "body": {
+            "id": "get-1"
+          }
+        },
+        "error": null,
+        "output": null,
+        "skip_reason": null,
+        "auth": {
+          "identity": "partner",
+          "header_names": [
+            "X-Api-Key"
+          ],
+          "overridden_headers": []
+        }
+      }
+    ],
+    "summary": {
+      "total": 2,
+      "success": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "error": null
+  }
+}
