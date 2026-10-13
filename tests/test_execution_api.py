@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from testplat_control.api.schemas import (
     ExecutionRecordDetailResponse,
     ExecutionRecordListResponse,
+    derive_login_failed,
     parse_result_json,
 )
 from testplat_control.database.models import ExecutionRecord
@@ -119,7 +120,14 @@ def test_list_filters_by_status_and_asset_id() -> None:
     assert len(both.json()) == 1
     assert both.json()[0]["status"] == "failed"
     assert both.json()[0]["asset_id"] == "api.user.login"
-    assert set(both.json()[0]) == {"id", "asset_id", "status", "start_time", "duration"}
+    assert set(both.json()[0]) == {
+        "id",
+        "asset_id",
+        "status",
+        "start_time",
+        "duration",
+        "login_failed",
+    }
 
 
 def test_list_defaults_to_start_time_desc_and_can_sort_asc() -> None:
@@ -305,6 +313,7 @@ def test_from_model_helpers_parse_result() -> None:
     listed = ExecutionRecordListResponse.from_orm(record)
     assert listed.id == "rec-1"
     assert listed.duration is None
+    assert listed.login_failed is False
 
     detail = ExecutionRecordDetailResponse.from_model(record)
     assert detail.result == {"value": ["not", "a", "dict"]}
@@ -312,3 +321,129 @@ def test_from_model_helpers_parse_result() -> None:
     assert detail.display.end_time is None
     assert detail.display.duration is None
     assert detail.request is None
+
+
+def test_list_item_login_failed_true_for_single_api() -> None:
+    """单 API：顶层 error.kind == login_failed → 列表项 login_failed=true。"""
+    project_id = _create_project()
+    record_id = _add_record(
+        project_id,
+        asset_id="api.user.login",
+        status="failed",
+        start_time=datetime(2026, 10, 10, 9, 0, 0),
+        duration=0.12,
+        result={
+            "status": "failed",
+            "request": None,
+            "response": None,
+            "error": {"kind": "login_failed", "message": "登录失败"},
+        },
+    )
+    listed = client.get(f"/projects/{project_id}/execution-records").json()
+    item = next(row for row in listed if row["id"] == record_id)
+    assert item["login_failed"] is True
+
+    record = ExecutionRecord(
+        id=record_id,
+        project_id=project_id,
+        asset_type="api",
+        asset_id="api.user.login",
+        status="failed",
+        start_time=datetime(2026, 10, 10, 9, 0, 0),
+        end_time=None,
+        duration=0.12,
+        result_json=json.dumps(
+            {"error": {"kind": "login_failed", "message": "登录失败"}},
+        ),
+    )
+    assert ExecutionRecordListResponse.from_model(record).login_failed is True
+
+
+def test_list_item_login_failed_true_for_case_step() -> None:
+    """Case：任一步骤 error.kind == login_failed → 列表项 login_failed=true。"""
+    project_id = _create_project()
+    record_id = _add_record(
+        project_id,
+        asset_id="case.order.create",
+        status="failed",
+        start_time=datetime(2026, 10, 10, 9, 5, 0),
+        duration=0.2,
+        asset_type="case",
+        result={
+            "case_id": "case.order.create",
+            "status": "failed",
+            "duration_seconds": 0.2,
+            "error": None,
+            "steps": [
+                {
+                    "step_id": "login",
+                    "type": "api",
+                    "status": "failed",
+                    "duration_seconds": 0.05,
+                    "error": {"kind": "login_failed", "message": "登录失败"},
+                },
+                {
+                    "step_id": "create",
+                    "type": "api",
+                    "status": "skipped",
+                    "duration_seconds": 0,
+                    "skip_reason": "login_failed",
+                    "error": None,
+                },
+            ],
+            "summary": {"total": 2, "success": 0, "failed": 1, "skipped": 1},
+        },
+    )
+    listed = client.get(f"/projects/{project_id}/execution-records").json()
+    item = next(row for row in listed if row["id"] == record_id)
+    assert item["login_failed"] is True
+
+
+def test_list_item_login_failed_false_when_absent_or_other_error() -> None:
+    """无 error / 其它 kind / 畸形 result_json → login_failed 保持 false。"""
+    project_id = _create_project()
+    ok_id = _add_record(
+        project_id,
+        asset_id="api.user.profile",
+        status="success",
+        start_time=datetime(2026, 10, 10, 9, 10, 0),
+        duration=0.05,
+        result={"status": "success", "error": None},
+    )
+    assert_id = _add_record(
+        project_id,
+        asset_id="api.user.profile",
+        status="failed",
+        start_time=datetime(2026, 10, 10, 9, 11, 0),
+        duration=0.05,
+        result={"status": "failed", "error": {"kind": "assertion", "message": "断言失败"}},
+    )
+    bad_id = _add_record(
+        project_id,
+        asset_id="api.user.profile",
+        status="failed",
+        start_time=datetime(2026, 10, 10, 9, 12, 0),
+        duration=0.01,
+        result_json="{not-json",
+    )
+    none_id = _add_record(
+        project_id,
+        asset_id="api.user.profile",
+        status="failed",
+        start_time=datetime(2026, 10, 10, 9, 13, 0),
+        duration=0.01,
+        result_json=None,
+    )
+    listed = {
+        row["id"]: row
+        for row in client.get(f"/projects/{project_id}/execution-records").json()
+    }
+    assert listed[ok_id]["login_failed"] is False
+    assert listed[assert_id]["login_failed"] is False
+    assert listed[bad_id]["login_failed"] is False
+    assert listed[none_id]["login_failed"] is False
+
+    assert derive_login_failed(None) is False
+    assert derive_login_failed("{") is False
+    assert derive_login_failed(json.dumps({"error": "not-a-dict"})) is False
+    assert derive_login_failed(json.dumps({"steps": [{"error": {"kind": "assertion"}}]})) is False

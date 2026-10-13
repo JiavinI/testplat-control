@@ -22,6 +22,8 @@ BASELINE = json.loads(
 )
 FROZEN = ROOT / "docs" / "phase3_3" / "openapi-phase3_3.json"
 AUTH_PROPERTY_ADDED = {"RunResponse", "ExecutionRecordDetailResponse", "CaseStepResult"}
+# 列表项新增 login_failed，供历史页「登录失败」标记（相对 Phase 3 基线白名单）
+LIST_PROPERTY_ADDED = {"ExecutionRecordListResponse": {"login_failed"}}
 CASE_RESULT_ADDED = {"logins"}
 CASE_STEP_REQUEST_ADDED = {"body_type", "query"}
 
@@ -66,6 +68,12 @@ def test_only_auth_additions_vs_phase3(current: dict[str, Any]) -> None:
             assert set(skip.get("enum", [])) == {"fail_fast", "login_failed"}
             # 与基线比较时还原 skip_reason 整段（枚举 + 描述）
             now["properties"]["skip_reason"] = copy.deepcopy(schema["properties"]["skip_reason"])
+        if name in LIST_PROPERTY_ADDED:
+            for key in LIST_PROPERTY_ADDED[name]:
+                assert key in now["properties"]
+                assert key not in now.get("required", [])
+                assert now["properties"][key]["type"] == "boolean"
+                now["properties"].pop(key)
         assert now == schema, f"schema {name} 发生漂移"
 
 
@@ -99,6 +107,14 @@ def test_case_result_has_logins(current: dict[str, Any]) -> None:
     result = current["components"]["schemas"]["CaseResult"]
     assert "logins" in result["properties"]
     assert "logins" not in result.get("required", [])
+
+
+def test_list_response_has_login_failed(current: dict[str, Any]) -> None:
+    """历史列表项携带 login_failed，供前端标记；默认 false，不进 required。"""
+    listed = current["components"]["schemas"]["ExecutionRecordListResponse"]
+    assert listed["properties"]["login_failed"]["type"] == "boolean"
+    assert listed["properties"]["login_failed"]["default"] is False
+    assert "login_failed" not in listed.get("required", [])
 
 
 def test_frozen_openapi_document_matches(current: dict[str, Any]) -> None:

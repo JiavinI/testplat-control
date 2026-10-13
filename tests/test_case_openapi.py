@@ -47,6 +47,8 @@ NEW_SCHEMAS = {
 # Phase 3.3a 新增的非 Case schema 与给既有 schema 追加的属性。
 AUTH_SCHEMAS = {"ExecutionAuth"}
 AUTH_PROPERTY_ADDED = {"RunResponse", "ExecutionRecordDetailResponse"}
+# Phase 3.3b：列表项 login_failed（相对 Phase 2.5 基线白名单）
+LIST_PROPERTY_ADDED = {"ExecutionRecordListResponse": {"login_failed"}}
 
 
 @pytest.fixture(scope="module")
@@ -76,6 +78,10 @@ def test_phase_2_5_component_schemas_do_not_drift(current: dict[str, Any]) -> No
             # 3.3a 唯一允许的变化：追加可选 auth（不进 required）；其余逐字相等。
             assert "auth" in now["properties"] and "auth" not in now.get("required", [])
             now["properties"].pop("auth")
+        if name in LIST_PROPERTY_ADDED:
+            for key in LIST_PROPERTY_ADDED[name]:
+                assert key in now["properties"] and key not in now.get("required", [])
+                now["properties"].pop(key)
         assert now == schema, f"schema {name} 发生漂移"
 
 

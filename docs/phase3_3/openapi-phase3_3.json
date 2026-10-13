@@ -955,6 +955,12 @@
             "title": "Id",
             "type": "string"
           },
+          "login_failed": {
+            "default": false,
+            "description": "结果中是否含 login_failed（单 API 顶层 error，或 Case 任一步骤 error）",
+            "title": "Login Failed",
+            "type": "boolean"
+          },
           "start_time": {
             "description": "开始时间",
             "format": "date-time",

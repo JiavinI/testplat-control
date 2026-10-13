@@ -90,6 +90,34 @@ def format_duration(seconds: float | None) -> str | None:
     return f"{int(minutes)}m {rest:.2f}s"
 
 
+def derive_login_failed(result_json: str | None) -> bool:
+    """从 result_json 判断列表项是否应标记 login_failed。
+
+    - 单 API：顶层 ``error.kind == "login_failed"``
+    - Case：任一步骤 ``error.kind == "login_failed"``
+    缺失或畸形时返回 False，绝不抛错（列表映射不得因单条坏数据失败）。
+    """
+    try:
+        result = parse_result_json(result_json)
+        if not isinstance(result, dict):
+            return False
+        error = result.get("error")
+        if isinstance(error, dict) and error.get("kind") == "login_failed":
+            return True
+        steps = result.get("steps")
+        if isinstance(steps, list):
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                step_error = step.get("error")
+                if isinstance(step_error, dict) and step_error.get("kind") == "login_failed":
+                    return True
+        return False
+    except Exception:
+        # 列表映射硬约束：任何意外都当 false，不向上抛
+        return False
+
+
 class ExecutionRecordListResponse(BaseModel):
     """执行记录列表项。"""
 
@@ -98,6 +126,10 @@ class ExecutionRecordListResponse(BaseModel):
     status: str = Field(..., description="执行状态")
     start_time: datetime = Field(..., description="开始时间")
     duration: float | None = Field(None, description="执行时长（秒）")
+    login_failed: bool = Field(
+        False,
+        description="结果中是否含 login_failed（单 API 顶层 error，或 Case 任一步骤 error）",
+    )
 
     @classmethod
     def from_model(cls, record: Any) -> "ExecutionRecordListResponse":
@@ -107,7 +139,7 @@ class ExecutionRecordListResponse(BaseModel):
             record: 数据库执行记录。
 
         Returns:
-            列表响应。
+            列表响应。``login_failed`` 由 result_json 推导，畸形时为 false。
         """
         duration = None if record.duration is None else float(record.duration)
         return cls(
@@ -116,6 +148,7 @@ class ExecutionRecordListResponse(BaseModel):
             status=record.status,
             start_time=record.start_time,
             duration=duration,
+            login_failed=derive_login_failed(getattr(record, "result_json", None)),
         )
 
     @classmethod

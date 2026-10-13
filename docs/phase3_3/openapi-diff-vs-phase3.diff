@@ -1,13 +1,16 @@
 --- docs/phase3/openapi-phase3.json
 +++ docs/phase3_3/openapi-phase3_3.json
-@@ -239,5 +239,5 @@
+@@ -238,7 +238,7 @@
+         "type": "object"
        },
        "CaseResult": {
 -        "description": "Case 完整结果：run 响应与历史详情共用同一形状。\n\n- 业务 success / failed：``error`` 为 null，``steps`` 来自 Engine 的 outcome。\n- execution 系统错误（只在历史里出现）：``status=failed``，``steps`` 来自异常携带的\n  ``partial_outcome``（前序 success、当前 failed、其后 skipped），``error`` 说明系统错误。",
 +        "description": "Case 完整结果：run 响应与历史详情共用同一形状。\n\n- 业务 success / failed：``error`` 为 null，``steps`` 来自 Engine 的 outcome。\n- execution 系统错误（只在历史里出现）：``status=failed``，``steps`` 来自异常携带的\n  ``partial_outcome``（前序 success、当前 failed、其后 skipped），``error`` 说明系统错误。\n- Phase 3.3b：``logins`` 只在 Case / 单 API 结果顶层（A7）；无登录时仍为 ``[]``（A8）。",
          "properties": {
            "case_id": {
-@@ -262,4 +262,13 @@
+             "description": "Case ID",
+@@ -261,6 +261,15 @@
+               }
              ],
              "description": "仅 execution 系统错误记录非 null"
 +          },
@@ -21,14 +24,18 @@
 +            "type": "array"
            },
            "status": {
-@@ -414,5 +423,5 @@
+             "description": "success 当且仅当全部步骤 success",
+@@ -413,7 +422,7 @@
+       },
        "CaseStepRequest": {
          "additionalProperties": true,
 -        "description": "步骤实际发出的请求快照（已脱敏）。变量解析失败的步骤没有请求（为 null）。",
 +        "description": "步骤实际发出的请求快照（已脱敏）。变量解析失败的步骤没有请求（为 null）。\n\nPhase 3.3b：``body_type`` 默认 json（A8）；``query`` 类型请求的参数在 ``query`` 字段，\n不进 ``url``（Q8）。",
          "properties": {
            "body": {
-@@ -425,4 +434,10 @@
+             "anyOf": [
+@@ -424,6 +433,12 @@
+             ],
              "description": "已脱敏的请求体（自由 JSON）",
              "title": "Body"
 +          },
@@ -39,7 +46,9 @@
 +            "type": "string"
            },
            "headers": {
-@@ -437,4 +452,17 @@
+             "additionalProperties": true,
+@@ -436,6 +451,19 @@
+             "title": "Method",
              "type": "string"
            },
 +          "query": {
@@ -57,7 +66,9 @@
 +          },
            "url": {
              "description": "完整请求 URL",
-@@ -485,4 +513,15 @@
+             "title": "Url",
+@@ -484,6 +512,17 @@
+       "CaseStepResult": {
          "description": "单个声明步骤的结果；顺序与 Case 资产 steps 声明顺序一一对应。",
          "properties": {
 +          "auth": {
@@ -73,7 +84,9 @@
 +          },
            "duration_seconds": {
              "description": "步骤耗时（秒）；skipped 恒为 0",
-@@ -551,5 +590,8 @@
+             "minimum": 0.0,
+@@ -550,14 +589,17 @@
+           "skip_reason": {
              "anyOf": [
                {
 -                "const": "fail_fast",
@@ -83,14 +96,17 @@
 +                ],
                  "type": "string"
                },
-@@ -558,5 +600,5 @@
+               {
+                 "type": "null"
                }
              ],
 -            "description": "仅 skipped 步骤：fail_fast 表示被前序失败跳过",
 +            "description": "仅 skipped 步骤：fail_fast=前序业务/系统失败；login_failed=前序登录失败（H4）",
              "title": "Skip Reason"
            },
-@@ -657,4 +699,77 @@
+           "status": {
+@@ -656,6 +698,79 @@
+         "title": "CaseSystemError",
          "type": "object"
        },
 +      "ExecutionAuth": {
@@ -168,7 +184,9 @@
 +      },
        "ExecutionDisplay": {
          "description": "详情页使用的格式化时间与耗时。",
-@@ -708,4 +823,15 @@
+         "properties": {
+@@ -707,6 +822,17 @@
+             "description": "资产类型",
              "title": "Asset Type",
              "type": "string"
 +          },
@@ -184,7 +202,22 @@
 +            "description": "单 API 结果中的身份信息（Phase 3.3a）；匿名、Case 记录或旧记录为 null"
            },
            "display": {
-@@ -1095,4 +1221,15 @@
+             "$ref": "#/components/schemas/ExecutionDisplay",
+@@ -829,6 +955,12 @@
+             "title": "Id",
+             "type": "string"
+           },
++          "login_failed": {
++            "default": false,
++            "description": "结果中是否含 login_failed（单 API 顶层 error，或 Case 任一步骤 error）",
++            "title": "Login Failed",
++            "type": "boolean"
++          },
+           "start_time": {
+             "description": "开始时间",
+             "format": "date-time",
+@@ -1094,6 +1226,17 @@
+       "RunResponse": {
          "description": "单次 API 执行结果。",
          "properties": {
 +          "auth": {
@@ -200,3 +233,4 @@
 +          },
            "duration": {
              "anyOf": [
+               {
