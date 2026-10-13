@@ -337,14 +337,14 @@
     }
   ],
   "projects": {
-    "auth": "0c5d7a40-006a-4caa-a75e-f0e13afd1e4a",
-    "bad-yaml": "bdd115a9-5c1f-4441-a4a5-4c9d70aa8377",
-    "literal-cr": "98fc7964-32d8-4f16-b770-6575445c7852",
-    "literal-lf": "ae772e90-ecd8-481c-916e-6e6cd1320246",
-    "literal-nul": "dbe6f1fc-aea5-4828-83a9-17f430345fa9",
-    "default-missing": "edf6a61d-06a7-4702-ad3b-c633f74a1ef3",
-    "header-case-dup": "079b6810-57c8-4d4f-9a52-cafe6da37840",
-    "noauth": "be75f2c1-3bab-435d-badf-f89e1d038931"
+    "auth": "3e1e23b8-f0d2-4819-9f42-07d811a106ce",
+    "bad-yaml": "830a6d5a-2553-4f58-9ea1-3d84b0fbe013",
+    "literal-cr": "9b4b7e26-987a-4727-8077-03d525c8ca26",
+    "literal-lf": "22a78bec-7e9e-4c97-bf7a-f6cf78720409",
+    "literal-nul": "63bc3d10-9014-430d-8c5f-e72015f8e500",
+    "default-missing": "5968a47f-cc8d-4f49-b145-daaf1a997c09",
+    "header-case-dup": "445c7d0f-cece-45ac-803f-9f3cb2bf27eb",
+    "noauth": "5d6f2d27-4da1-4ddd-a268-fd3678ed25df"
   },
   "passed": 28,
   "total": 28

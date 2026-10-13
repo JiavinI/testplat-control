@@ -16,7 +16,6 @@ dependencies = [
     "packaging>=24.0",
     # Phase 3.3b：登录鉴权需要 Engine 0.4.x（LoginAuth / logins / 七键 auth）。
     # 具体 commit 由 uv sources 锁定；见文件下方 [tool.uv.sources] 说明。
-    # 合并前必须改为远程精确锁定（勿保留 file://）。
     "testplat-engine>=0.4.0,<0.5",
 ]
 
@@ -37,9 +36,8 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 临时 file:// 锁定：Agent 1 已审查 Engine commit 7a7ebb8（0.4.0，分支 codex/phase3-3b-engine-login）。
-# 合并前必须改为远程精确锁定（https://github.com/JiavinI/testplat-engine.git + 已推送 rev），不得 path editable。
-testplat-engine = { git = "file:///Users/jiavin/Developer/products/testplat1/testplat-engine", rev = "7a7ebb8c47eb3a81e978c7346470618d181d4309" }
+# 远程精确锁定：Engine main 合并 commit f1a0c875（tag v0.4.0 / PR #14）。锁定精确 rev，不是分支名，也不是 path editable。
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "f1a0c875a8f596e145b8da51fd9ca4bfb809a88a" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

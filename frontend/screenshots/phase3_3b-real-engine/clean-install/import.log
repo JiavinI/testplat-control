@@ -1,4 +1,4 @@
 0.4.0
 engine 0.4.0
 control 0.1.0
-['fake_login']
+direct_url {"url":"https://github.com/JiavinI/testplat-engine.git","vcs_info":{"vcs":"git","commit_id":"f1a0c875a8f596e145b8da51fd9ca4bfb809a88a","requested_revision":"f1a0c875a8f596e145b8da51fd9ca4bfb809a88a"}}

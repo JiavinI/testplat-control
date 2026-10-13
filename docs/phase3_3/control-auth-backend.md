@@ -1,6 +1,6 @@
 # Phase 3.3b Control 后端：登录鉴权
 
-权威设计：`notes/phase3.3b-login-auth-design-draft.md`（已批准）。Engine 依赖：临时 `file://` 锁定已审查 commit `7a7ebb8`（0.4.0）；**合并前必须改为远程精确锁定**。
+权威设计：`notes/phase3.3b-login-auth-design-draft.md`（已批准）。Engine 依赖：远程精确锁定 `https://github.com/JiavinI/testplat-engine.git` rev `f1a0c875`（main 合并提交，tag `v0.4.0` / PR #14）。
 
 ## 配置
 

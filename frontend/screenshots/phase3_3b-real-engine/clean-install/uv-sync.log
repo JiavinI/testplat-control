@@ -1,22 +1,22 @@
 Using CPython 3.13.7
 Creating virtual environment at: .venv
-Resolved 32 packages in 18ms
-   Building testplat-control @ file:///private/tmp/testplat-clean-install.HJiwan/src/control
-   Updating file:///Users/jiavin/Developer/products/testplat1/testplat-engine (7a7ebb8c47eb3a81e978c7346470618d181d4309)
-    Updated file:///Users/jiavin/Developer/products/testplat1/testplat-engine (7a7ebb8c47eb3a81e978c7346470618d181d4309)
-   Building testplat-engine @ git+file:///Users/jiavin/Developer/products/testplat1/testplat-engine@7a7ebb8c47eb3a81e978c7346470618d181d4309
+Resolved 32 packages in 3ms
+   Updating https://github.com/JiavinI/testplat-engine.git (f1a0c875a8f596e145b8da51fd9ca4bfb809a88a)
+   Building testplat-control @ file:///private/tmp/testplat-clean-install.LD484l/src/control
 Downloading pygments (1.2MiB)
-Downloading pydantic-core (1.9MiB)
 Downloading sqlalchemy (2.3MiB)
 Downloading ruff (8.8MiB)
-      Built testplat-engine @ git+file:///Users/jiavin/Developer/products/testplat1/testplat-engine@7a7ebb8c47eb3a81e978c7346470618d181d4309
+Downloading pydantic-core (1.9MiB)
  Downloading pygments
-      Built testplat-control @ file:///private/tmp/testplat-clean-install.HJiwan/src/control
  Downloading pydantic-core
  Downloading sqlalchemy
+      Built testplat-control @ file:///private/tmp/testplat-clean-install.LD484l/src/control
  Downloading ruff
-Prepared 30 packages in 10.32s
-Installed 30 packages in 47ms
+    Updated https://github.com/JiavinI/testplat-engine.git (f1a0c875a8f596e145b8da51fd9ca4bfb809a88a)
+   Building testplat-engine @ git+https://github.com/JiavinI/testplat-engine.git@f1a0c875a8f596e145b8da51fd9ca4bfb809a88a
+      Built testplat-engine @ git+https://github.com/JiavinI/testplat-engine.git@f1a0c875a8f596e145b8da51fd9ca4bfb809a88a
+Prepared 30 packages in 13.94s
+Installed 30 packages in 30ms
  + annotated-doc==0.0.5
  + annotated-types==0.8.0
  + anyio==4.15.1
@@ -42,8 +42,8 @@ Installed 30 packages in 47ms
  + ruff==0.17.0
  + sqlalchemy==2.1.4
  + starlette==1.7.0
- + testplat-control==0.1.0 (from file:///private/tmp/testplat-clean-install.HJiwan/src/control)
- + testplat-engine==0.4.0 (from git+file:///Users/jiavin/Developer/products/testplat1/testplat-engine@7a7ebb8c47eb3a81e978c7346470618d181d4309)
+ + testplat-control==0.1.0 (from file:///private/tmp/testplat-clean-install.LD484l/src/control)
+ + testplat-engine==0.4.0 (from git+https://github.com/JiavinI/testplat-engine.git@f1a0c875a8f596e145b8da51fd9ca4bfb809a88a)
  + typing-extensions==4.16.0
  + typing-inspection==0.4.4
  + uvicorn==0.54.0

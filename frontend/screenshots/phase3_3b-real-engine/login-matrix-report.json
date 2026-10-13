@@ -235,11 +235,11 @@
     }
   ],
   "projects": {
-    "no-plugin": "9b6ef693-b372-4d80-9d43-7eda945e3dc9",
-    "unknown": "32cef868-374e-499d-87ed-6c3dd21394ee",
-    "login": "9122200a-8232-4341-8f09-dca2f73797c8",
-    "static": "d673d953-31ce-4b6c-83e9-df5bee10c2a5",
-    "legacy": "8118d628-7a49-4614-8a67-414f35496950"
+    "no-plugin": "85def514-f7b7-436b-9e6e-807208adb534",
+    "unknown": "8478b86c-b93b-49a9-b12a-30b7e2fa1d13",
+    "login": "b1cc8339-0740-4884-a3d1-fa0338c7dc36",
+    "static": "05a02195-1451-4d68-a152-12ec93766300",
+    "legacy": "b507192e-6c4f-4ec6-9fd2-f311039ae7fc"
   },
   "passed": 25,
   "total": 25,
