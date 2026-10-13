@@ -1,0 +1,212 @@
+# Phase 3.3b 登录矩阵主配置：占位符由矩阵脚本以环境变量注入
+login_plugins:
+  - fake_login
+identities:
+  buyer:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: buyer001
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+            - { source: body_json, path: $.data.userId, as: user_id, optional: true }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+          X-USER-ID: "${login:user_id}"
+  buyer_short_ttl:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: buyer001
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      validity:
+        ttl_seconds: 1
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  buyer_expires:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/short-ttl
+          body:
+            type: json
+            fields:
+              username: buyer001
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      validity:
+        expires_from: { source: body_json, path: $.data.expiresIn, unit: seconds }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  buyer_wrong:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/fail
+          body:
+            type: json
+            fields:
+              username: buyer001
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  buyer_timeout:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: GET
+          path: /login/slow
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  buyer_transport:
+    login:
+      host: dead
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: buyer001
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  buyer_extract_fail:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: buyer001
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.missingToken, as: token }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  buyer_probe_fail:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: buyer001
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      probe:
+        method: GET
+        path: /csrf/protected
+        success: { status_code: 200, body_not_contains: '<form id="loginFrom"' }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  seller:
+    login:
+      host: local
+      steps:
+        - name: bootstrap
+          method: GET
+          path: /csrf/login
+          extract:
+            - { source: html_meta, name: csrf-token, as: csrf }
+        - name: submit
+          method: POST
+          path: /csrf/login
+          headers: { Referer: "${login_host}/csrf/login" }
+          body:
+            type: form
+            fields:
+              _csrf: "${login:csrf}"
+              username: seller001
+              password: "${secret:TESTPLAT_SELLER_PASSWORD}"
+          success: { status_code: 302, reject_location_contains: /login }
+      session: cookie
+      probe:
+        method: GET
+        path: /csrf/protected
+        success: { status_code: 200, body_not_contains: '<form id="loginFrom"' }
+      inject:
+        headers:
+          X-CSRF-Token: "${login:csrf}"
+  plugged:
+    login:
+      strategy: fake_login
+      host: local
+      params:
+        behavior: values
+        api_key: "${secret:TESTPLAT_PLUGIN_KEY}"
+        redis: redis_main
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  plugged_raise:
+    login:
+      strategy: fake_login
+      host: local
+      params:
+        behavior: raise
+        api_key: "${secret:TESTPLAT_PLUGIN_KEY}"
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  admin:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_ADMIN_TOKEN}"
+default_identity: admin
+connections:
+  redis_main:
+    host: 10.0.0.5
+    port: 6379
+    db: 2
+    password: "${secret:TESTPLAT_REDIS_MAIN_PASSWORD}"

@@ -75,7 +75,7 @@ def test_package_adapter_raises_unavailable_when_runtime_missing(
 ) -> None:
     """模拟缺少 create_engine 时，构造期即抛 unavailable（不再延迟到 execute）。"""
 
-    def _boom() -> None:
+    def _boom(*_args, **_kwargs) -> None:
         raise EngineUnavailableError(
             public_message="执行引擎不可用：已安装包，但缺少公开 create_engine 入口",
             log_reason="simulated missing runtime",

@@ -36,7 +36,11 @@
           "header_names": [
             "X-Api-Key"
           ],
-          "overridden_headers": []
+          "overridden_headers": [],
+          "kind": "static_headers",
+          "tier": null,
+          "cookie_names": [],
+          "login_ref": null
         }
       },
       {
@@ -68,7 +72,11 @@
           "header_names": [
             "X-Api-Key"
           ],
-          "overridden_headers": []
+          "overridden_headers": [],
+          "kind": "static_headers",
+          "tier": null,
+          "cookie_names": [],
+          "login_ref": null
         }
       }
     ],
@@ -78,6 +86,7 @@
       "failed": 0,
       "skipped": 0
     },
-    "error": null
+    "error": null,
+    "logins": []
   }
 }

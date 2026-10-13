@@ -291,7 +291,7 @@ def test_startup_diagnostics_do_not_log_engine_exception_text(
     """启动期 create_engine 失败：诊断信息与日志只含异常类型名，不含构造异常原文。"""
     caplog.set_level(logging.DEBUG)
 
-    def _bad_factory() -> Any:
+    def _bad_factory(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError(LEAKY)
 
     monkeypatch.setattr(eng, "create_engine", _bad_factory)
@@ -310,7 +310,7 @@ def test_package_adapter_unavailable_reason_has_no_exception_text(
 ) -> None:
     """create_engine 构造失败转成 EngineUnavailableError：log_reason 只保留类型名。"""
 
-    def _bad_factory() -> Any:
+    def _bad_factory(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError(LEAKY)
 
     monkeypatch.setattr(eng, "create_engine", _bad_factory)

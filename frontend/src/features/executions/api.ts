@@ -107,13 +107,18 @@ export function parseRunResponse(payload: unknown): RunResponse {
 
 function parseListItem(payload: unknown, index: number): ExecutionRecordListItem {
   assertObject(payload, `ExecutionRecordListItem[${index}]`)
-  return {
+  const item: ExecutionRecordListItem = {
     id: requireString(payload, 'id', `ExecutionRecordListItem[${index}]`),
     asset_id: requireString(payload, 'asset_id', `ExecutionRecordListItem[${index}]`),
     status: requireString(payload, 'status', `ExecutionRecordListItem[${index}]`),
     start_time: requireString(payload, 'start_time', `ExecutionRecordListItem[${index}]`),
     duration: requireNullableNumber(payload, 'duration', `ExecutionRecordListItem[${index}]`),
   }
+  // 可选字段：后端未冻结时缺省；e2e mock / 后续列表契约可提供
+  if (payload.login_failed === true) {
+    item.login_failed = true
+  }
+  return item
 }
 
 export function parseRecordDetail(payload: unknown): ExecutionRecordDetail {

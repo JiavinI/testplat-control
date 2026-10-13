@@ -42,7 +42,15 @@ from tests.case_support import create_project, write_assets, write_env
 client = TestClient(app)
 API_ID = "api.demo.create"
 CASE_ID = "case.demo.create_then_get"
-ADMIN_AUTH = {"identity": "admin", "header_names": ["Authorization"], "overridden_headers": []}
+ADMIN_AUTH = {
+    "identity": "admin",
+    "kind": "static_headers",
+    "tier": None,
+    "header_names": ["Authorization"],
+    "overridden_headers": [],
+    "cookie_names": [],
+    "login_ref": None,
+}
 
 
 @pytest.fixture(autouse=True)
@@ -159,7 +167,15 @@ def test_case_step_auth_flows_to_response_and_typed_history(
     project_id = _project(dirs)
     response = _run_case(project_id)
     assert response.status_code == 200, response.text
-    partner = {"identity": "partner", "header_names": ["X-Api-Key"], "overridden_headers": []}
+    partner = {
+        "identity": "partner",
+        "kind": "static_headers",
+        "tier": None,
+        "header_names": ["X-Api-Key"],
+        "overridden_headers": [],
+        "cookie_names": [],
+        "login_ref": None,
+    }
     steps = response.json()["result"]["steps"]
     assert [step["auth"] for step in steps] == [partner, partner]
     record_id = response.json()["record_id"]

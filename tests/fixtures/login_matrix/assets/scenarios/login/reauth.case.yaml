@@ -1,0 +1,6 @@
+schema_version: "0.2"
+id: case.login.reauth
+name: 短 TTL 失效重登
+steps:
+  - {step_id: t1, type: api, api_id: api.login.buyer_short_ttl_echo}
+  - {step_id: t2, type: api, api_id: api.login.buyer_short_ttl_echo}

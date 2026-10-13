@@ -1,0 +1,9 @@
+id: api.login.buyer_transport_echo
+name: 登录连接失败
+host: local
+method: GET
+url: /echo/token
+auth: buyer_transport
+request: {}
+success:
+  status_code: 200

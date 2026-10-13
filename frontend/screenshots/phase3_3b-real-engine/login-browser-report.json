@@ -1,0 +1,111 @@
+{
+  "viewports": [
+    {
+      "label": "desktop-1440x900",
+      "dom": [
+        {
+          "screenshot": "desktop-1440x900-login-generic-success.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-login-configured-success.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-login-plugin-success.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-login-failed-assertion.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-login-failed-timeout.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-login-reauth-two-logins.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-login-case-skipped-login-failed.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-login-history-list-marker.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-login-history-detail-skipped.png",
+          "dom_secret_hits": 0
+        }
+      ],
+      "scenes": [
+        "generic-success",
+        "configured-success",
+        "plugin-success",
+        "login-failed-assertion",
+        "login-failed-timeout",
+        "reauth",
+        "skipped-login-failed",
+        "history-list",
+        "history-detail"
+      ],
+      "project_id": "24637508-991e-4f3b-9cc7-81780648016a"
+    },
+    {
+      "label": "mobile-390x844",
+      "dom": [
+        {
+          "screenshot": "mobile-390x844-login-generic-success.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-login-configured-success.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-login-plugin-success.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-login-failed-assertion.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-login-failed-timeout.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-login-reauth-two-logins.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-login-case-skipped-login-failed.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-login-history-list-marker.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-login-history-detail-skipped.png",
+          "dom_secret_hits": 0
+        }
+      ],
+      "scenes": [
+        "generic-success",
+        "configured-success",
+        "plugin-success",
+        "login-failed-assertion",
+        "login-failed-timeout",
+        "reauth",
+        "skipped-login-failed",
+        "history-list",
+        "history-detail"
+      ],
+      "project_id": "a8bb071f-e92c-4f59-b9af-2dc9131bf03b"
+    }
+  ],
+  "error": null
+}

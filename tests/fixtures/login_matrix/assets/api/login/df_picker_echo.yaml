@@ -1,0 +1,9 @@
+id: api.login.df_picker_echo
+name: legacy df_picker 回显
+host: local
+method: GET
+url: /echo/token
+auth: df_picker
+request: {}
+success:
+  status_code: 200

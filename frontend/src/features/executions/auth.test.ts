@@ -31,8 +31,12 @@ describe('parseExecutionAuth（冻结示例）', () => {
     const parsed = parseRunResponse(loadContractExample('api-run-with-auth.json'))
     expect(parsed.auth).toEqual({
       identity: 'admin',
+      kind: 'static_headers',
+      tier: null,
       header_names: ['Authorization'],
       overridden_headers: ['authorization'],
+      cookie_names: [],
+      login_ref: null,
     })
   })
 
@@ -60,16 +64,29 @@ describe('parseExecutionAuth（冻结示例）', () => {
     expect(legacy.auth).toBeNull()
   })
 
-  it('只保留三个名字键，多余键（即使含值）被丢弃', () => {
+  it('只保留七个公开键，多余键（即使含值）被丢弃', () => {
     const parsed = parseExecutionAuth(
       {
         identity: 'admin',
+        kind: 'static_headers',
+        tier: null,
         header_names: ['Authorization'],
         overridden_headers: [],
+        cookie_names: [],
+        login_ref: null,
         value: FAKE_SECRETS[0],
       },
       'x',
     )
+    expect(parsed).toEqual({
+      identity: 'admin',
+      kind: 'static_headers',
+      tier: null,
+      header_names: ['Authorization'],
+      overridden_headers: [],
+      cookie_names: [],
+      login_ref: null,
+    })
     expect(JSON.stringify(parsed)).not.toContain(FAKE_SECRETS[0])
   })
 
@@ -86,7 +103,7 @@ describe('parseExecutionAuth（冻结示例）', () => {
       expect((error as ApiParseError).message).not.toContain(FAKE_SECRETS[1])
     }
     expect(() =>
-      parseExecutionAuth({ identity: 'a', header_names: [1], overridden_headers: [] }, 'x'),
+      parseExecutionAuth({ identity: 'a', kind: 'static_headers', tier: null, header_names: [1], overridden_headers: [], cookie_names: [], login_ref: null }, 'x'),
     ).toThrow(ApiParseError)
   })
 })
@@ -95,7 +112,7 @@ describe('身份展示判定', () => {
   it('单 API：null 即匿名', () => {
     expect(apiAuthDisplayMode(null)).toBe('anonymous')
     expect(
-      apiAuthDisplayMode({ identity: 'admin', header_names: [], overridden_headers: [] }),
+      apiAuthDisplayMode({ identity: 'admin', kind: 'static_headers', tier: null, header_names: [], overridden_headers: [], cookie_names: [], login_ref: null }),
     ).toBe('identity')
   })
 

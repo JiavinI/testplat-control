@@ -1,0 +1,9 @@
+id: api.login.plugin_raise_echo
+name: 插件异常
+host: local
+method: GET
+url: /echo/token
+auth: plugged_raise
+request: {}
+success:
+  status_code: 200

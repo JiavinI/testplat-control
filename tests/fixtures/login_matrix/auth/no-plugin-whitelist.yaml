@@ -1,0 +1,15 @@
+identities:
+  plugged:
+    login:
+      strategy: fake_login
+      host: local
+      params:
+        behavior: values
+        api_key: "${secret:TESTPLAT_PLUGIN_KEY}"
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  anon_ok:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_ADMIN_TOKEN}"
+default_identity: anon_ok

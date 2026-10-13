@@ -25,8 +25,13 @@
       ],
       "overridden_headers": [
         "authorization"
-      ]
-    }
+      ],
+      "kind": "static_headers",
+      "tier": null,
+      "cookie_names": [],
+      "login_ref": null
+    },
+    "logins": []
   },
   "auth": {
     "identity": "admin",
@@ -35,6 +40,10 @@
     ],
     "overridden_headers": [
       "authorization"
-    ]
+    ],
+    "kind": "static_headers",
+    "tier": null,
+    "cookie_names": [],
+    "login_ref": null
   }
 }

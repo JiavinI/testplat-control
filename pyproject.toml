@@ -14,9 +14,9 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "packaging>=24.0",
-    # Phase 3.3a：静态 header 凭证需要 Engine 0.3.x（AuthTable / StaticHeaderAuth / 公开 auth 字段）。
+    # Phase 3.3b：登录鉴权需要 Engine 0.4.x（LoginAuth / logins / 七键 auth）。
     # 具体 commit 由 uv sources 锁定；见文件下方 [tool.uv.sources] 说明。
-    "testplat-engine>=0.3.0,<0.4",
+    "testplat-engine>=0.4.0,<0.5",
 ]
 
 [project.optional-dependencies]
@@ -36,8 +36,8 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 远程精确锁定：Engine main 合并 commit 8564040（tag v0.3.0）。锁定精确 rev，不是分支名，也不是 path editable。
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "8564040add59c027e5d2aa7edb8f56b6693a5960" }
+# 远程精确锁定：Engine main 合并 commit f1a0c875（tag v0.4.0 / PR #14）。锁定精确 rev，不是分支名，也不是 path editable。
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "f1a0c875a8f596e145b8da51fd9ca4bfb809a88a" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

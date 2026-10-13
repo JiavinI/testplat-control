@@ -1,0 +1,9 @@
+id: api.login.buyer_probe_fail_echo
+name: probe 失败
+host: local
+method: GET
+url: /echo/token
+auth: buyer_probe_fail
+request: {}
+success:
+  status_code: 200

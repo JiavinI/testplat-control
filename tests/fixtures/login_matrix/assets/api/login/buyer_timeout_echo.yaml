@@ -1,0 +1,9 @@
+id: api.login.buyer_timeout_echo
+name: 登录超时
+host: local
+method: GET
+url: /echo/token
+auth: buyer_timeout
+request: {}
+success:
+  status_code: 200

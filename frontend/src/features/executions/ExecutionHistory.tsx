@@ -16,6 +16,14 @@ import { CaseResultView } from './CaseResultView'
 import { apiAuthDisplayMode } from './auth'
 import { AuthSummary } from './AuthSummary'
 import { JsonBlock } from './JsonBlock'
+import { LoginFailedBanner } from './LoginFailedBanner'
+import { LoginProcessPanel } from './LoginProcessPanel'
+import {
+  apiResultHasLoginFailed,
+  caseHasLoginFailed,
+  extractLoginsFromResult,
+} from './loginDisplay'
+import { RequestSnapshot } from './RequestSnapshot'
 import { useCaseExecutionRecord, useExecutionRecord, useExecutionRecords } from './hooks'
 import {
   formatDurationSeconds,
@@ -142,10 +150,17 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       dataIndex: 'status',
       key: 'status',
       width: 110,
-      render: (value: string) => (
-        <Tag color={runStatusColor(value)}>
-          {runStatusLabel(value)}（{value}）
-        </Tag>
+      render: (value: string, record: ExecutionRecordListItem) => (
+        <Space wrap size={[4, 4]}>
+          <Tag color={runStatusColor(value)}>
+            {runStatusLabel(value)}（{value}）
+          </Tag>
+          {record.login_failed ? (
+            <Tag className="tp-login-failed-tag" data-testid={`history-login-failed-${record.id}`}>
+              登录失败
+            </Tag>
+          ) : null}
+        </Space>
       ),
     },
     {
@@ -357,9 +372,16 @@ function CaseDetailBody({ detail }: { detail: CaseExecutionRecordDetail }) {
           <Tag>case</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="状态">
-          <Tag color={runStatusColor(detail.status)}>
-            {runStatusLabel(detail.status)}（{detail.status}）
-          </Tag>
+          <Space wrap size={[8, 4]}>
+            <Tag color={runStatusColor(detail.status)}>
+              {runStatusLabel(detail.status)}（{detail.status}）
+            </Tag>
+            {detail.result && caseHasLoginFailed(detail.result) ? (
+              <Tag className="tp-login-failed-tag" data-testid="history-case-login-failed-marker">
+                登录失败
+              </Tag>
+            ) : null}
+          </Space>
         </Descriptions.Item>
         <Descriptions.Item label="开始">
           {detail.display.start_time}
@@ -390,9 +412,63 @@ function ApiDetailBody({ detail }: { detail: ExecutionRecordDetail }) {
     'parse_error' in detail.result
       ? String((detail.result as { parse_error: unknown }).parse_error)
       : null
+  const loginFailed = apiResultHasLoginFailed(detail.result)
+  const logins = extractLoginsFromResult(detail.result)
+  const errorValue =
+    detail.result && typeof detail.result === 'object'
+      ? (detail.result as Record<string, unknown>).error
+      : null
+  const errorObj =
+    errorValue && typeof errorValue === 'object' && !Array.isArray(errorValue)
+      ? (errorValue as Record<string, unknown>)
+      : null
+  const loginMeta =
+    errorObj?.login && typeof errorObj.login === 'object' && !Array.isArray(errorObj.login)
+      ? (errorObj.login as Record<string, unknown>)
+      : null
+  const requestRaw =
+    detail.request ??
+    (detail.result && typeof detail.result === 'object'
+      ? (detail.result as Record<string, unknown>).request
+      : null)
+  const requestForSnapshot =
+    requestRaw && typeof requestRaw === 'object' && !Array.isArray(requestRaw)
+      ? {
+          method:
+            typeof (requestRaw as Record<string, unknown>).method === 'string'
+              ? String((requestRaw as Record<string, unknown>).method)
+              : '—',
+          url:
+            typeof (requestRaw as Record<string, unknown>).url === 'string'
+              ? String((requestRaw as Record<string, unknown>).url)
+              : typeof (requestRaw as Record<string, unknown>).api_id === 'string'
+                ? String((requestRaw as Record<string, unknown>).api_id)
+                : '—',
+          headers:
+            (requestRaw as Record<string, unknown>).headers &&
+            typeof (requestRaw as Record<string, unknown>).headers === 'object'
+              ? ((requestRaw as Record<string, unknown>).headers as Record<string, unknown>)
+              : undefined,
+          body: (requestRaw as Record<string, unknown>).body,
+          body_type:
+            typeof (requestRaw as Record<string, unknown>).body_type === 'string'
+              ? String((requestRaw as Record<string, unknown>).body_type)
+              : 'json',
+          query:
+            (requestRaw as Record<string, unknown>).query &&
+            typeof (requestRaw as Record<string, unknown>).query === 'object'
+              ? ((requestRaw as Record<string, unknown>).query as Record<string, unknown>)
+              : null,
+        }
+      : null
 
   return (
-    <div data-testid="execution-detail" data-asset-type="api" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
+    <div
+      data-testid="execution-detail"
+      data-asset-type="api"
+      data-login-failed={loginFailed ? 'true' : 'false'}
+      style={{ maxWidth: '100%', overflowX: 'hidden' }}
+    >
       <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
         <Descriptions.Item label="运行 ID">
           <Typography.Text copyable code style={{ wordBreak: 'break-all' }}>
@@ -408,9 +484,16 @@ function ApiDetailBody({ detail }: { detail: ExecutionRecordDetail }) {
           <Tag>{detail.asset_type}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="状态">
-          <Tag color={runStatusColor(detail.status)}>
-            {runStatusLabel(detail.status)}（{detail.status}）
-          </Tag>
+          <Space wrap size={[8, 4]}>
+            <Tag color={runStatusColor(detail.status)}>
+              {runStatusLabel(detail.status)}（{detail.status}）
+            </Tag>
+            {loginFailed ? (
+              <Tag className="tp-login-failed-tag" data-testid="history-api-login-failed-marker">
+                登录失败
+              </Tag>
+            ) : null}
+          </Space>
         </Descriptions.Item>
         <Descriptions.Item label="开始">
           {detail.display.start_time}
@@ -430,6 +513,33 @@ function ApiDetailBody({ detail }: { detail: ExecutionRecordDetail }) {
         </Descriptions.Item>
       </Descriptions>
 
+      {loginFailed && errorObj && typeof errorObj.message === 'string' ? (
+        <div style={{ marginBottom: 12 }}>
+          <LoginFailedBanner
+            message={errorObj.message}
+            reason={typeof loginMeta?.reason === 'string' ? loginMeta.reason : null}
+            failedStep={
+              typeof loginMeta?.failed_step === 'string' ? loginMeta.failed_step : null
+            }
+            identity={
+              typeof loginMeta?.identity === 'string'
+                ? loginMeta.identity
+                : detail.auth?.identity
+            }
+          />
+        </div>
+      ) : null}
+
+      {logins.length > 0 ? (
+        <div style={{ marginBottom: 16 }}>
+          <LoginProcessPanel
+            logins={logins}
+            defaultExpanded={loginFailed}
+            highlightRef={detail.auth?.login_ref ?? null}
+          />
+        </div>
+      ) : null}
+
       {parseError ? (
         <Typography.Paragraph type="danger">
           结果解析失败：{parseError}
@@ -437,7 +547,11 @@ function ApiDetailBody({ detail }: { detail: ExecutionRecordDetail }) {
       ) : null}
 
       <Typography.Text strong>Request</Typography.Text>
-      <JsonBlock value={detail.request} aria-label="详情 request" />
+      {requestForSnapshot ? (
+        <RequestSnapshot request={requestForSnapshot} ariaLabel="详情 request" />
+      ) : (
+        <JsonBlock value={detail.request} aria-label="详情 request" />
+      )}
 
       <Typography.Text strong style={{ display: 'block', marginTop: 12 }}>
         Response

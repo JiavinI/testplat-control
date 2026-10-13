@@ -37,12 +37,16 @@ const OUT = process.env.E2E_OUT_DIR
 const AUTH_OUT = process.env.E2E_OUT_DIR
   ? OUT
   : path.join(frontendRoot, 'screenshots', 'phase3_3')
+const LOGIN_OUT = process.env.E2E_OUT_DIR
+  ? OUT
+  : path.join(frontendRoot, 'screenshots', 'phase3_3b')
 const EXAMPLES_DIR = path.join(repoRoot, 'docs', 'phase3_3', 'examples')
 // 测试用假秘密：只作为 DOM 泄密搜索目标，绝不写进任何 mock 响应
-const FAKE_SECRETS = ['tp-fake-secret-9f31c2a7', 'tp-fake-partner-4c8e11d0']
+const FAKE_SECRETS = ['tp-fake-secret-9f31c2a7', 'tp-fake-partner-4c8e11d0', 'tp-fake-login-token-aabbcc']
 
 fs.mkdirSync(OUT, { recursive: true })
 fs.mkdirSync(AUTH_OUT, { recursive: true })
+fs.mkdirSync(LOGIN_OUT, { recursive: true })
 
 function loadExample(name) {
   return JSON.parse(fs.readFileSync(path.join(EXAMPLES_DIR, name), 'utf8'))
@@ -57,6 +61,17 @@ async function findSecretsInDom(page) {
 
 async function authShot(page, name, secretHits) {
   const file = path.join(AUTH_OUT, name)
+  await page.screenshot({ path: file, fullPage: true })
+  console.log('screenshot', file)
+  const hits = await findSecretsInDom(page)
+  if (hits.length > 0) {
+    secretHits.push({ screenshot: name, hits: hits.length })
+  }
+  return file
+}
+
+async function loginShot(page, name, secretHits) {
+  const file = path.join(LOGIN_OUT, name)
   await page.screenshot({ path: file, fullPage: true })
   console.log('screenshot', file)
   const hits = await findSecretsInDom(page)
@@ -279,7 +294,7 @@ async function runFlow(page, viewportLabel, projectName) {
   // --- API 回归 ---
   await selectAsset(page, 'get_status', 'api.common.get_status', 'api-execution-panel')
   await page.getByTestId('params-empty').waitFor({ timeout: 10000 })
-  await page.getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
   await expectExecutionStatus(page, 'success')
 
   await selectAsset(page, 'login', 'api.user.login', 'api-execution-panel')
@@ -295,17 +310,17 @@ async function runFlow(page, viewportLabel, projectName) {
     })
   }, { times: 1 })
   await page.getByTestId('param-password').fill('invalid-for-422')
-  await page.getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
   await page.getByRole('alert').filter({ hasText: '执行失败' }).waitFor({ timeout: 10000 })
   await page.getByText('password 参数不合法').waitFor({ timeout: 10000 })
-  await page.unroute(runPattern)
+  await page.unroute(runPattern).catch(() => {})
 
   await page.getByTestId('param-password').fill('wrong-password')
-  await page.getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
   await expectExecutionStatus(page, 'failed')
 
   await page.getByTestId('param-password').fill('secret')
-  await page.getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
   await expectExecutionStatus(page, 'success')
   await shot(page, `${viewportLabel}-04-run-result.png`)
 
@@ -326,6 +341,7 @@ async function runFlow(page, viewportLabel, projectName) {
 
   const secretHits = []
   const authOverflow = await runAuthFlow(page, viewportLabel, executionProject, secretHits)
+  const loginOverflow = await runLoginFlow(page, viewportLabel, executionProject, secretHits)
 
   // --- Case 体验 ---
   await selectAsset(
@@ -564,7 +580,7 @@ async function runFlow(page, viewportLabel, projectName) {
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
   const clientWidth = await page.evaluate(() => document.documentElement.clientWidth)
   const pageOverflow = scrollWidth > clientWidth + 2
-  const overflow = pageOverflow || drawerOverflow || authOverflow
+  const overflow = pageOverflow || drawerOverflow || authOverflow || loginOverflow
 
   const unexpectedConsole = consoleErrors.filter((t) => !isAllowedConsoleError(t))
   const unexpectedFailed = failedRequests.filter((e) => !isAllowedFailedRequest(e))
@@ -602,7 +618,7 @@ async function runAuthFlow(page, viewportLabel, executionProject, secretHits) {
 
   // 1) 匿名：FakeEngine 在无 auth 配置的项目下真实执行，auth 为 null
   await page.getByTestId('param-password').fill('secret')
-  await page.getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
   await expectExecutionStatus(page, 'success')
   const anon = page.getByTestId('execution-result').getByTestId('auth-summary')
   await anon.waitFor({ timeout: 10000 })
@@ -620,16 +636,16 @@ async function runAuthFlow(page, viewportLabel, executionProject, secretHits) {
       body: JSON.stringify(loadExample('api-run-with-auth.json')),
     })
   }, { times: 1 })
-  await page.getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
   const identity = page.getByTestId('execution-result').getByTestId('auth-summary')
   await identity.getByText('身份：admin').waitFor({ timeout: 10000 })
   await authShot(page, `${viewportLabel}-auth-api-identity.png`, secretHits)
-  await identity.getByText('查看 header 名').click()
+  await identity.getByText('查看 header / Cookie 名').click()
   await page.getByTestId('auth-summary-overridden-headers').getByText('authorization').waitFor({ timeout: 5000 })
   await page.getByTestId('auth-summary-header-names').getByText('Authorization').waitFor({ timeout: 5000 })
   overflow = overflow || (await hasHorizontalOverflow(page))
   await authShot(page, `${viewportLabel}-auth-api-header-override.png`, secretHits)
-  await page.unroute(runPattern)
+  await page.unroute(runPattern).catch(() => {})
 
   // 3) 身份不可用 422：detail 取自冻结示例，前端须原样展示
   const unavailable = authErrors.identity_unavailable
@@ -640,11 +656,11 @@ async function runAuthFlow(page, viewportLabel, executionProject, secretHits) {
       body: JSON.stringify(unavailable.body),
     })
   }, { times: 1 })
-  await page.getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
   await page.getByRole('alert').filter({ hasText: '执行失败' }).waitFor({ timeout: 10000 })
   await page.getByText(unavailable.body.detail).waitFor({ timeout: 10000 })
   await authShot(page, `${viewportLabel}-auth-api-identity-unavailable-422.png`, secretHits)
-  await page.unroute(runPattern)
+  await page.unroute(runPattern).catch(() => {})
 
   // 4) API 历史详情：冻结示例 api-history-detail-with-auth.json
   const apiDetail = loadExample('api-history-detail-with-auth.json')
@@ -676,7 +692,7 @@ async function runAuthFlow(page, viewportLabel, executionProject, secretHits) {
   await page.getByTestId('execution-history').getByRole('button', { name: /查看记录/ }).first().click()
   const detail = page.getByTestId('execution-detail')
   await detail.getByText('身份：admin').waitFor({ timeout: 10000 })
-  await detail.getByText('查看 header 名').click()
+  await detail.getByText('查看 header / Cookie 名').click()
   overflow = overflow || (await hasHorizontalOverflow(page))
   await authShot(page, `${viewportLabel}-auth-history-api-identity.png`, secretHits)
   await page.keyboard.press('Escape')
@@ -784,6 +800,532 @@ async function runAuthFlow(page, viewportLabel, executionProject, secretHits) {
 
   // 回到 api.user.login，恢复既有 Case 段的前置状态（移动端重复点同一资产不会关闭抽屉）；
   // 等资产抽屉关闭动画结束，避免下一次 openAssetBrowser 误判抽屉仍打开
+  await selectAsset(page, 'login', 'api.user.login', 'api-execution-panel')
+  await page.getByLabel('过滤资产').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
+  await page.waitForTimeout(600)
+  return overflow
+}
+
+
+/**
+ * Phase 3.3b 登录鉴权门禁：route mock 覆盖通用/配置型/插件成功、断言失败、超时失败、
+ * 失效重登（两条 logins）、skipped(login_failed)；两视口截图；DOM 不得含假秘密。
+ * 前置：runAuthFlow 结束时已回到 api.user.login。
+ */
+function buildLoginRecord({ identity, strategy, tier, status, reason, multiStep, probe }) {
+  const steps = multiStep
+    ? [
+        {
+          name: 'csrf',
+          request: {
+            method: 'GET',
+            url: 'http://127.0.0.1/fake/csrf',
+            headers: {},
+            body: null,
+            body_type: 'json',
+          },
+          response: { status_code: 200, headers: {}, body: { csrf: '***' } },
+        },
+        {
+          name: 'login',
+          request: {
+            method: 'POST',
+            url: 'http://127.0.0.1/fake/login',
+            headers: {},
+            body: { username: 'buyer', password: '***' },
+            body_type: 'form',
+          },
+          response: {
+            status_code: status === 'success' ? 200 : 401,
+            headers: {},
+            body: status === 'success' ? { ok: true } : { error: 'bad' },
+          },
+        },
+      ]
+    : [
+        {
+          name: 'login',
+          request: {
+            method: 'POST',
+            url: 'http://127.0.0.1/fake/login',
+            headers: {},
+            body:
+              tier === 'plugin'
+                ? { plugin: 'fake' }
+                : { username: 'buyer', password: '***' },
+            body_type: tier === 'plugin' ? 'json' : 'json',
+          },
+          response: {
+            status_code: status === 'success' ? 200 : reason === 'timeout' ? 0 : 401,
+            headers: {},
+            body: status === 'success' ? { token: '***' } : { error: 'bad' },
+          },
+        },
+      ]
+  return {
+    identity,
+    strategy,
+    tier,
+    status,
+    duration_seconds: 0.02,
+    steps,
+    probe: probe
+      ? {
+          name: 'probe',
+          request: {
+            method: 'GET',
+            url: 'http://127.0.0.1/fake/probe',
+            headers: {},
+            body: null,
+            body_type: 'json',
+          },
+          response: { status_code: 200, headers: {}, body: { ok: true } },
+        }
+      : null,
+    error: status === 'failed' ? { reason, failed_step: 'login' } : null,
+  }
+}
+
+function buildLoginAuth({ identity, tier, loginRef, cookieNames }) {
+  return {
+    identity,
+    kind: 'login',
+    tier,
+    header_names: cookieNames?.length ? [] : ['Authorization'],
+    overridden_headers: [],
+    cookie_names: cookieNames || [],
+    login_ref: loginRef,
+  }
+}
+
+async function runLoginFlow(page, viewportLabel, executionProject, secretHits) {
+  let overflow = false
+  const runPattern = '**/api/projects/*/assets/api.user.login/run'
+  const caseRunPattern = '**/api/projects/*/cases/case.demo.create_then_get/run'
+
+  // auth 段末尾已回到 api.user.login；仅在面板不可见时再 select，避免移动端抽屉挡点击
+  if (!(await page.getByTestId('api-execution-panel').isVisible().catch(() => false))) {
+    await selectAsset(page, 'login', 'api.user.login', 'api-execution-panel')
+  }
+  await page.getByTestId('api-execution-panel').waitFor({ timeout: 10000 })
+  // 关闭可能残留的资产抽屉（移动端）
+  await page.keyboard.press('Escape').catch(() => {})
+  await page.getByLabel('过滤资产').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
+  await page.locator('.ant-drawer-open').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
+  await page.waitForTimeout(600)
+  const password = page.getByTestId('param-password')
+  if (await password.count()) {
+    await password.fill('secret')
+  }
+
+  // 1) 通用登录成功
+  const genericAuth = buildLoginAuth({ identity: 'buyer', tier: 'generic', loginRef: 0 })
+  const genericLogin = buildLoginRecord({
+    identity: 'buyer',
+    strategy: 'generic_flow',
+    tier: 'generic',
+    status: 'success',
+  })
+  await page.unroute(runPattern).catch(() => {})
+  await page.route(runPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        record_id: 'e2e-login-generic',
+        status: 'success',
+        duration: 0.05,
+        result: {
+          status: 'success',
+          request: {
+            method: 'GET',
+            url: 'http://127.0.0.1/fake/api',
+            headers: { Authorization: '***' },
+            body: null,
+            body_type: 'json',
+          },
+          response: { status_code: 200, body: { ok: true } },
+          error: null,
+          auth: genericAuth,
+          logins: [genericLogin],
+        },
+        auth: genericAuth,
+      }),
+    })
+  })
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('execution-result').getByTestId('auth-summary').getByText('身份：buyer').waitFor({ timeout: 10000 })
+  await page.getByTestId('login-process-panel').waitFor({ timeout: 5000 })
+  await page.getByTestId('auth-summary-tier').getByText('档位：通用').waitFor({ timeout: 5000 })
+  overflow = overflow || (await hasHorizontalOverflow(page))
+  await loginShot(page, `${viewportLabel}-login-generic-success.png`, secretHits)
+  await page.unroute(runPattern).catch(() => {})
+
+  // 2) 配置型多步登录成功
+  const configuredAuth = buildLoginAuth({
+    identity: 'csrf_user',
+    tier: 'configured',
+    loginRef: 0,
+    cookieNames: ['session'],
+  })
+  const configuredLogin = buildLoginRecord({
+    identity: 'csrf_user',
+    strategy: 'generic_flow',
+    tier: 'configured',
+    status: 'success',
+    multiStep: true,
+    probe: true,
+  })
+  await page.unroute(runPattern).catch(() => {})
+  await page.route(runPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        record_id: 'e2e-login-configured',
+        status: 'success',
+        duration: 0.08,
+        result: {
+          status: 'success',
+          request: {
+            method: 'GET',
+            url: 'http://127.0.0.1/fake/api',
+            headers: {},
+            body: null,
+            body_type: 'json',
+          },
+          response: { status_code: 200, body: { ok: true } },
+          error: null,
+          auth: configuredAuth,
+          logins: [configuredLogin],
+        },
+        auth: configuredAuth,
+      }),
+    })
+  }, { times: 1 })
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('execution-result').getByTestId('auth-summary').getByText('身份：csrf_user').waitFor({ timeout: 10000 })
+  await page.getByTestId('auth-summary-tier').getByText('档位：配置型').waitFor({ timeout: 5000 })
+  // 成功场景面板默认收起：点开第一条登录记录以展示多步
+  await page.getByTestId('login-process-panel-item-0').click()
+  await page.getByTestId('login-process-panel').getByText('步骤：csrf').waitFor({ timeout: 5000 })
+  await loginShot(page, `${viewportLabel}-login-configured-success.png`, secretHits)
+  await page.unroute(runPattern).catch(() => {})
+
+  // 3) 插件登录成功
+  const pluginAuth = buildLoginAuth({ identity: 'plugin_user', tier: 'plugin', loginRef: 0 })
+  const pluginLogin = buildLoginRecord({
+    identity: 'plugin_user',
+    strategy: 'fake_plugin',
+    tier: 'plugin',
+    status: 'success',
+  })
+  await page.route(runPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        record_id: 'e2e-login-plugin',
+        status: 'success',
+        duration: 0.04,
+        result: {
+          status: 'success',
+          request: {
+            method: 'GET',
+            url: 'http://127.0.0.1/fake/api',
+            headers: { Authorization: '***' },
+            body: null,
+            body_type: 'json',
+          },
+          response: { status_code: 200, body: { ok: true } },
+          error: null,
+          auth: pluginAuth,
+          logins: [pluginLogin],
+        },
+        auth: pluginAuth,
+      }),
+    })
+  }, { times: 1 })
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('execution-result').getByTestId('auth-summary').getByText('身份：plugin_user').waitFor({ timeout: 10000 })
+  await page.getByTestId('auth-summary-tier').getByText('档位：插件').waitFor({ timeout: 5000 })
+  await loginShot(page, `${viewportLabel}-login-plugin-success.png`, secretHits)
+  await page.unroute(runPattern).catch(() => {})
+
+  // 4) 登录失败（断言）
+  const failAuth = buildLoginAuth({ identity: 'buyer', tier: 'generic', loginRef: 0 })
+  const failLogin = buildLoginRecord({
+    identity: 'buyer',
+    strategy: 'generic_flow',
+    tier: 'generic',
+    status: 'failed',
+    reason: 'assertion',
+  })
+  await page.route(runPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        record_id: 'e2e-login-fail-assertion',
+        status: 'failed',
+        duration: 0.03,
+        result: {
+          status: 'failed',
+          request: null,
+          response: null,
+          error: {
+            kind: 'login_failed',
+            message: '登录失败：断言未满足',
+            login: {
+              identity: 'buyer',
+              strategy: 'generic_flow',
+              failed_step: 'login',
+              reason: 'assertion',
+            },
+          },
+          auth: failAuth,
+          logins: [failLogin],
+        },
+        auth: failAuth,
+      }),
+    })
+  }, { times: 1 })
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('login-failed-banner').waitFor({ timeout: 10000 })
+  await page.getByTestId('login-failed-banner').getByText('登录失败', { exact: true }).waitFor()
+  await page.getByTestId('api-login-failed-marker').waitFor()
+  // 登录过程面板默认展开
+  await page.getByTestId('login-process-panel-item-0').waitFor({ timeout: 5000 })
+  await loginShot(page, `${viewportLabel}-login-failed-assertion.png`, secretHits)
+  await page.unroute(runPattern).catch(() => {})
+
+  // 5) 登录失败（超时）
+  const timeoutLogin = buildLoginRecord({
+    identity: 'buyer',
+    strategy: 'generic_flow',
+    tier: 'generic',
+    status: 'failed',
+    reason: 'timeout',
+  })
+  await page.route(runPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        record_id: 'e2e-login-fail-timeout',
+        status: 'failed',
+        duration: 0.03,
+        result: {
+          status: 'failed',
+          request: null,
+          response: null,
+          error: {
+            kind: 'login_failed',
+            message: '登录失败：请求超时',
+            login: {
+              identity: 'buyer',
+              strategy: 'generic_flow',
+              failed_step: 'login',
+              reason: 'timeout',
+            },
+          },
+          auth: failAuth,
+          logins: [timeoutLogin],
+        },
+        auth: failAuth,
+      }),
+    })
+  }, { times: 1 })
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('login-failed-banner-reason').getByText(/超时/).waitFor({ timeout: 10000 })
+  await loginShot(page, `${viewportLabel}-login-failed-timeout.png`, secretHits)
+  await page.unroute(runPattern).catch(() => {})
+
+  // 6) 失效重登：两条 logins，login_ref 指向第二次
+  const reAuth = buildLoginAuth({ identity: 'buyer', tier: 'generic', loginRef: 1 })
+  const reLogin1 = buildLoginRecord({
+    identity: 'buyer',
+    strategy: 'generic_flow',
+    tier: 'generic',
+    status: 'success',
+  })
+  const reLogin2 = buildLoginRecord({
+    identity: 'buyer',
+    strategy: 'generic_flow',
+    tier: 'generic',
+    status: 'success',
+  })
+  await page.route(runPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        record_id: 'e2e-login-reauth',
+        status: 'success',
+        duration: 0.1,
+        result: {
+          status: 'success',
+          request: {
+            method: 'GET',
+            url: 'http://127.0.0.1/fake/api',
+            headers: { Authorization: '***' },
+            body: null,
+            body_type: 'json',
+          },
+          response: { status_code: 200, body: { ok: true } },
+          error: null,
+          auth: reAuth,
+          logins: [reLogin1, reLogin2],
+        },
+        auth: reAuth,
+      }),
+    })
+  }, { times: 1 })
+  await page.getByTestId('api-execution-panel').getByRole('button', { name: '执行 API' }).click()
+  await page.getByTestId('login-process-panel-ref-0').waitFor({ timeout: 10000 })
+  await page.getByTestId('login-process-panel-ref-1').waitFor({ timeout: 5000 })
+  await page.getByTestId('auth-summary-login-ref').getByText('login_ref：1').waitFor({ timeout: 5000 })
+  await loginShot(page, `${viewportLabel}-login-reauth-two-logins.png`, secretHits)
+  await page.unroute(runPattern).catch(() => {})
+
+  // 7) Case：login_failed + skipped(login_failed)；历史列表带标记
+  const caseAuth = buildLoginAuth({ identity: 'buyer', tier: 'generic', loginRef: 0 })
+  const caseFailLogin = buildLoginRecord({
+    identity: 'buyer',
+    strategy: 'generic_flow',
+    tier: 'generic',
+    status: 'failed',
+    reason: 'assertion',
+  })
+  const caseRunBody = {
+    record_id: 'e2e-case-login-failed',
+    status: 'failed',
+    duration: 0.05,
+    result: {
+      case_id: 'case.demo.create_then_get',
+      status: 'failed',
+      duration_seconds: 0.05,
+      steps: [
+        {
+          step_id: 'create',
+          name: '步骤 create',
+          type: 'api',
+          status: 'failed',
+          duration_seconds: 0.02,
+          request: null,
+          response: null,
+          error: {
+            kind: 'login_failed',
+            message: '登录失败：断言未满足',
+            stage: null,
+            step_id: null,
+            path: null,
+            login: {
+              identity: 'buyer',
+              strategy: 'generic_flow',
+              failed_step: 'login',
+              reason: 'assertion',
+            },
+          },
+          output: null,
+          skip_reason: null,
+          auth: caseAuth,
+        },
+        {
+          step_id: 'get',
+          name: '步骤 get',
+          type: 'api',
+          status: 'skipped',
+          duration_seconds: 0,
+          request: null,
+          response: null,
+          error: null,
+          output: null,
+          skip_reason: 'login_failed',
+          auth: null,
+        },
+      ],
+      summary: { total: 2, success: 0, failed: 1, skipped: 1 },
+      error: null,
+      logins: [caseFailLogin],
+    },
+  }
+  await selectAsset(page, 'create_then_get', 'case.demo.create_then_get', 'case-execution-panel')
+  await page.route(caseRunPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(caseRunBody),
+    })
+  }, { times: 1 })
+  await page.getByRole('button', { name: '执行 Case' }).click()
+  await page.getByTestId('case-result-view').waitFor({ timeout: 15000 })
+  await page.getByTestId('case-login-failed-marker').waitFor({ timeout: 5000 })
+  await page.getByTestId('step-login-failed-marker-create').waitFor({ timeout: 5000 })
+  await page.getByTestId('step-skipped-login-failed-get').waitFor({ timeout: 5000 })
+  await page.getByTestId('login-process-panel').waitFor({ timeout: 5000 })
+  await loginShot(page, `${viewportLabel}-login-case-skipped-login-failed.png`, secretHits)
+  await page.unroute(caseRunPattern)
+
+  // 历史列表标记（mock list 带 login_failed）
+  const histId = 'e2e-hist-login-failed'
+  const caseListPattern = '**/api/projects/*/execution-records?**'
+  await page.route(caseListPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: histId,
+          asset_id: 'case.demo.create_then_get',
+          status: 'failed',
+          start_time: '2026-10-13T03:00:00Z',
+          duration: 0.05,
+          login_failed: true,
+        },
+      ]),
+    })
+  })
+  await page.route(`**/api/projects/*/case-execution-records/${histId}`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: histId,
+        project_id: executionProject.id,
+        asset_id: 'case.demo.create_then_get',
+        asset_type: 'case',
+        status: 'failed',
+        start_time: '2026-10-13T03:00:00Z',
+        end_time: '2026-10-13T03:00:01Z',
+        duration: 0.05,
+        display: {
+          start_time: '2026-10-13 11:00:00',
+          end_time: '2026-10-13 11:00:01',
+          duration: '50ms',
+        },
+        result: caseRunBody.result,
+      }),
+    })
+  })
+  await page.getByTestId('filter-status').click()
+  await page.getByTitle('failed', { exact: true }).click()
+  await page.waitForTimeout(400)
+  await page.getByTestId(`history-login-failed-${histId}`).waitFor({ timeout: 10000 })
+  await loginShot(page, `${viewportLabel}-login-history-list-marker.png`, secretHits)
+  await page.getByTestId('execution-history').getByRole('button', { name: /查看记录/ }).first().click()
+  await page.getByTestId('history-case-login-failed-marker').waitFor({ timeout: 10000 })
+  await page.getByText('因登录失败跳过').first().waitFor({ timeout: 5000 })
+  overflow = overflow || (await hasHorizontalOverflow(page))
+  await loginShot(page, `${viewportLabel}-login-history-detail-skipped.png`, secretHits)
+  await page.keyboard.press('Escape')
+  await page.unroute(caseListPattern)
+  await page.unroute(`**/api/projects/*/case-execution-records/${histId}`)
+  await page.getByTestId('filter-status').click()
+  await page.getByTitle('全部状态').click().catch(() => {})
+  await page.waitForTimeout(300)
+
+  // 回到 api.user.login
   await selectAsset(page, 'login', 'api.user.login', 'api-execution-panel')
   await page.getByLabel('过滤资产').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
   await page.waitForTimeout(600)

@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
     try:
         version = ensure_engine_compatible()
     except EngineBootstrapError as exc:
-        logger.error("Engine 启动诊断失败: %s", exc)
+        logger.error("Engine 启动诊断失败: exc_type=%s", type(exc).__name__)
         raise
     app.state.engine_port = create_default_engine_port()
     logger.info("已挂载默认 PackageEngineAdapter（engine %s）", version)

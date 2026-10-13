@@ -1,0 +1,8 @@
+identities:
+  admin:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_ADMIN_TOKEN}"
+  partner:
+    headers:
+      X-Api-Key: "${secret:TESTPLAT_PARTNER_KEY}"
+default_identity: admin

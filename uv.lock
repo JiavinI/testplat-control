@@ -691,15 +691,15 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "testplat-engine", git = "https://github.com/JiavinI/testplat-engine.git?rev=8564040add59c027e5d2aa7edb8f56b6693a5960" },
+    { name = "testplat-engine", git = "https://github.com/JiavinI/testplat-engine.git?rev=f1a0c875a8f596e145b8da51fd9ca4bfb809a88a" },
     { name = "uvicorn", specifier = ">=0.24" },
 ]
 provides-extras = ["dev"]
 
 [[package]]
 name = "testplat-engine"
-version = "0.3.0"
-source = { git = "https://github.com/JiavinI/testplat-engine.git?rev=8564040add59c027e5d2aa7edb8f56b6693a5960#8564040add59c027e5d2aa7edb8f56b6693a5960" }
+version = "0.4.0"
+source = { git = "https://github.com/JiavinI/testplat-engine.git?rev=f1a0c875a8f596e145b8da51fd9ca4bfb809a88a#f1a0c875a8f596e145b8da51fd9ca4bfb809a88a" }
 dependencies = [
     { name = "httpx" },
     { name = "pyyaml" },

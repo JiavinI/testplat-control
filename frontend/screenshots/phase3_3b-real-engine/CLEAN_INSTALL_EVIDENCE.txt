@@ -1,0 +1,29 @@
+Phase 3.3b 干净安装证据
+日期: 2026-10-13 14:50 CST
+干净目录: /tmp/testplat-clean-install.LD484l
+UV_CACHE_DIR: /tmp/testplat-uv-cache.RERhR2
+uv sync --extra dev 退出码: 0
+
+Engine 锁定状态:
+  远程精确锁定 https://github.com/JiavinI/testplat-engine.git
+  rev = f1a0c875a8f596e145b8da51fd9ca4bfb809a88a
+  （Engine PR #14 merge commit，annotated tag v0.4.0）
+  版本约束: >=0.4.0,<0.5
+  已排除 file:// / path editable
+
+干净安装结果见:
+  frontend/screenshots/phase3_3b-real-engine/clean-install/uv-sync.log
+  frontend/screenshots/phase3_3b-real-engine/clean-install/import.log
+
+import 证明:
+  testplat_engine.__version__ == 0.4.0
+  dist 来源 git+https://github.com/JiavinI/testplat-engine.git@f1a0c875a8f596e145b8da51fd9ca4bfb809a88a
+  direct_url.commit_id == f1a0c875a8f596e145b8da51fd9ca4bfb809a88a
+
+门禁（远程锁定后）:
+  uv run ruff check .          → All checks passed
+  uv run pytest -q             → 327 passed
+  frontend pnpm lint           → 0
+  frontend pnpm test           → 17 files / 106 tests passed
+  frontend pnpm build          → ok
+  scripts/run_real_engine_matrix.sh → AUTH 28/28, LOGIN 25/25, screenshots/leak OK

@@ -152,6 +152,7 @@ describe('Case executions api', () => {
             steps: [],
             summary: { total: 0, success: 0, failed: 0, skipped: 0 },
             error: null,
+            logins: [],
           },
         }),
       )
@@ -173,6 +174,7 @@ describe('Case executions api', () => {
             steps: [],
             summary: { total: 0, success: 0, failed: 0, skipped: 0 },
             error: null,
+            logins: [],
           },
         }),
       )

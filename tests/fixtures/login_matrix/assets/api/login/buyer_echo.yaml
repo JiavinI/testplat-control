@@ -1,0 +1,9 @@
+id: api.login.buyer_echo
+name: buyer 回显
+host: local
+method: GET
+url: /echo/token
+auth: buyer
+request: {}
+success:
+  status_code: 200

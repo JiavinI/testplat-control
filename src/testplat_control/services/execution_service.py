@@ -9,7 +9,7 @@
   校验、步骤执行与 fail-fast 全部发生在 ``EnginePort.execute(request)`` 之内。
   本模块不解析 Case YAML，只把 Engine 返回的 outcome / 异常原样落库和映射为 HTTP。
 - Control 只负责：项目与环境（``load_project_environment``）、身份表
-  （``load_auth_table``，Phase 3.3a）、调用与计时、
+  （``load_auth``，Phase 3.3b）、调用与计时、
   ``ExecutionRecord`` 持久化、HTTP 状态码映射。
 
 记录生命周期（单次写入）
@@ -61,7 +61,6 @@ from sqlalchemy.orm import Session
 from testplat_engine import (
     ApiExecutionOutcome,
     ApiExecutionRequest,
-    AuthTable,
     CaseExecutionOutcome,
     CaseExecutionRequest,
     EngineError,
@@ -69,7 +68,7 @@ from testplat_engine import (
 
 from testplat_control.database.models import ExecutionRecord, Project
 from testplat_control.ports.engine import EnginePort
-from testplat_control.services.auth_loader import load_auth_table
+from testplat_control.services.auth_loader import AuthLoadResult, load_auth
 from testplat_control.services.env_loader import load_project_environment
 
 logger = logging.getLogger(__name__)
@@ -187,20 +186,47 @@ def _load_environment(project: Project) -> dict[str, Any]:
         ) from exc
 
 
-def _load_auth(project: Project) -> AuthTable | None:
-    """加载项目环境的身份表；失败属 Control 侧 preflight，不写记录。
+def _load_auth(project: Project) -> AuthLoadResult | None:
+    """加载项目环境的身份表与 login_plugins；失败属 Control 侧 preflight，不写记录。
 
     日志沿用 ``_log_engine_error`` 的安全字段；``public_message`` 由 auth_loader 保证
-    只含身份名 / header 名 / 变量名。
+    只含身份名 / header 名 / 变量名 / 策略名。
     """
     try:
-        return load_auth_table(project.config_root, project.env)
+        return load_auth(project.config_root, project.env)
     except EngineError as exc:
         _log_engine_error(
             project=project,
             asset_id="-",
             exc=exc,
             what=f"鉴权配置 preflight 失败 env={project.env}",
+        )
+        raise HTTPException(
+            status_code=map_engine_error_http_status(exc),
+            detail=exc.public_message,
+        ) from exc
+
+
+def _engine_for_auth(
+    engine: EnginePort, loaded: AuthLoadResult | None, project: Project
+) -> EnginePort:
+    """按项目白名单切换真实适配器上的插件注册（E1）；Fake 无此方法则原样返回。
+
+    白名单列出但未安装的插件在此暴露（按项目切换，无法在启动期发现）；
+    属 preflight 失败，按错误表映射状态码，不写记录。
+    """
+    plugins = () if loaded is None else loaded.login_plugins
+    binder = getattr(engine, "for_login_plugins", None)
+    if not callable(binder):
+        return engine
+    try:
+        return binder(plugins)  # type: ignore[no-any-return]
+    except EngineError as exc:
+        _log_engine_error(
+            project=project,
+            asset_id="-",
+            exc=exc,
+            what=f"登录插件注册失败 env={project.env}",
         )
         raise HTTPException(
             status_code=map_engine_error_http_status(exc),
@@ -254,7 +280,9 @@ async def run_single_api(
         HTTPException: 按错误表映射的状态码；detail 仅含安全外显信息。
     """
     environment = _load_environment(project)
-    auth = _load_auth(project)
+    loaded = _load_auth(project)
+    auth = None if loaded is None else loaded.table
+    engine = _engine_for_auth(engine, loaded, project)
 
     try:
         request = ApiExecutionRequest(
@@ -398,7 +426,9 @@ async def run_case(
         HTTPException: 按错误表映射的状态码；detail 仅含安全外显信息。
     """
     environment = _load_environment(project)
-    auth = _load_auth(project)
+    loaded = _load_auth(project)
+    auth = None if loaded is None else loaded.table
+    engine = _engine_for_auth(engine, loaded, project)
 
     try:
         request = CaseExecutionRequest(

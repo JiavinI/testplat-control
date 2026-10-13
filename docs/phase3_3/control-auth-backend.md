@@ -1,6 +1,6 @@
-# Phase 3.3a Control 后端：静态 header 凭证
+# Phase 3.3b Control 后端：登录鉴权
 
-权威设计：`notes/phase3.3-auth-design-draft.md`（D1–D6、§6.1、§6.2）。Engine 依赖：远程精确锁定 `8564040`（v0.3.0，https://github.com/JiavinI/testplat-engine.git main；内容由已审查的 `f631e2e` 合并而来）。
+权威设计：`notes/phase3.3b-login-auth-design-draft.md`（已批准）。Engine 依赖：远程精确锁定 `https://github.com/JiavinI/testplat-engine.git` rev `f1a0c875`（main 合并提交，tag `v0.4.0` / PR #14）。
 
 ## 配置
 
@@ -8,28 +8,47 @@
 
 ```yaml
 identities:
-  admin:
+  admin:                                    # 3.3a 静态 header
     headers:
       Authorization: "Bearer ${secret:TESTPLAT_ADMIN_TOKEN}"
-  partner:
-    headers:
-      X-Api-Key: "${secret:TESTPLAT_PARTNER_KEY}"
-default_identity: admin   # 可选
+  buyer:                                    # 第 1 档 generic
+    login:
+      host: main
+      steps:
+        - name: login
+          method: POST
+          path: /api/user/login
+          body: { type: json, fields: { username: "buyer001", password: "${secret:TESTPLAT_BUYER_PASSWORD}" } }
+          extract: [{ source: body_json, path: $.data.token, as: token }]
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+default_identity: admin
+connections:                                # 可选；插件用
+  redis_main: { host: 10.0.0.5, port: 6379, password: "${secret:TESTPLAT_REDIS_MAIN_PASSWORD}" }
+login_plugins: [vcode_redis]                # 可选；entry point ∩ 白名单才注册
 ```
 
-秘密只来自 Control 进程环境变量，变量名必须匹配 `^TESTPLAT_[A-Z0-9_]+$`。本地 `.env*` 已加入 `.gitignore`。
+占位符只允许 `${secret:NAME}`、`${login:名字}`、`${login_host}`。身份必须是 `headers` 或 `login` 之一（互斥）。
 
-| 情况 | 结果 |
-|---|---|
-| 文件不存在 | `auth=None`，与 Phase 3 一致 |
-| YAML 非法 / 未知字段 / 身份名非法或为 `none` / header 名非法或同一身份内仅大小写不同 / 模板不含 `${secret:}` 或含其它占位符 / `default_identity` 指向不存在的身份 | 加载即 422（`invalid_environment`，不写记录） |
-| 变量不在白名单 / 未设置 / 为空 / 短于 8 / 含换行或 NUL | 该身份为 `UnavailableAuth`，被用到时由 Engine 报 422；未用到不影响 |
+身份级 inject 约束（§12 Q1/Q2，handbook §5 已更正）：**至少一个 inject 值引用 `${login:}`，或声明 `session: cookie`**；`session: cookie` 时可省略 inject。字面量注入头同样按名遮蔽。
 
-`StaticHeaderAuth.secret_values` 总是显式传入该身份模板引用的全部变量原始值（按首次出现顺序、按值去重）。
+档位：`generic`（单步 + 单条 body_json/response_header 且 as=token + inject 只引用 token + 无 session/probe）/ `configured` / `plugin`。
 
-## 公开契约（相对 Phase 3 的 OpenAPI 差异：`openapi-diff-vs-phase3.diff`）
+### Agent 1 交付说明（§13，写入配置文档）
 
-- 新 schema `ExecutionAuth {identity, header_names, overridden_headers}`。
-- `RunResponse.auth`、`ExecutionRecordDetailResponse.auth`、`CaseStepResult.auth`：`ExecutionAuth | null`。
-- 路由不变；完整文档 `openapi-phase3_3.json`；示例见 `examples/`：成功响应由 Fake Engine 生成；`auth-error-responses.json` 已由 Agent 4 用真实 Engine（`f631e2e`）重新生成（B5），见 `integration-real-engine.md`。
-- 请求 DTO 构造失败的 422 detail 改为固定文案 `执行请求无效：参数或环境配置不合法`（不再回显 `str(exc)`）。
+1. **多步插件应自行拆分超时**：`LoginContext.timeout_seconds` 是每个请求的超时，插件 `login()` 整体另有一份总限时；多步插件不要依赖 Engine 再给一层总预算（A2）。
+2. **短于 8 的附属命名值不会按值脱敏**：`token_too_short` 只约束名为 `token` 的值；其它命名值（如 `user_id`）长度不限，&lt; 8 的不进入按值替换。需要脱敏的附属值必须 ≥ 8（A3）。
+3. **共享 `http_client` 仅限测试**：生产路径 `create_engine(login_strategies=...)` 必须走 `client_factory` 每次新建；注入共享 client 时 login 身份之间无 jar 隔离（A9）。
+
+## 公开契约（相对 Phase 3）
+
+- `ExecutionAuth` 七键：`{identity, kind, tier, header_names, overridden_headers, cookie_names, login_ref}`，`extra=forbid`。
+- Case / 单 API 结果顶层 `logins`（默认 `[]`）；步骤请求快照含 `body_type`（默认 `"json"`）与可选 `query`。
+- `skip_reason`：`fail_fast | login_failed`。
+- `parse_execution_auth` 形状不符时记 warning（只含记录 id），不再静默丢身份而不留痕迹（H5）。
+- 完整文档：`openapi-phase3_3.json`；示例见 `examples/`。
+
+## 插件（E1）
+
+`engine_bootstrap.resolve_login_strategies(whitelist)`：`entry_points(group=testplat_engine.login_strategies)` ∩ `login_plugins`。白名单列出但未安装 → `EngineBootstrapError`（只含策略名）；安装未列出 → info 日志并跳过。`ensure_engine_compatible` 与 `PackageEngineAdapter` 共用该解析（L1）。

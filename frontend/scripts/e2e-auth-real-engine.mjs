@@ -138,7 +138,7 @@ async function runViewport(browser, vp) {
   // 3) header 覆盖：展开后可见被覆盖的资产头原始写法（小写 authorization）
   await runApi(page, 'echo_override', 'api.authm.echo_override')
   await result().getByTestId('auth-summary-overridden-flag').waitFor({ timeout: 30000 })
-  await result().getByText('查看 header 名').click()
+  await result().getByText('查看 header / Cookie 名').click()
   await page.getByTestId('auth-summary-overridden-headers').getByText('authorization').waitFor({ timeout: 5000 })
   await shot(page, ctx, 'auth-api-header-override')
   ctx.scenes.push('api-header-override')
@@ -194,7 +194,7 @@ async function runViewport(browser, vp) {
   await page.getByTestId('execution-history').getByRole('button', { name: /查看记录/ }).first().click()
   const detail = page.getByTestId('execution-detail')
   await detail.getByText('身份：admin').waitFor({ timeout: 10000 })
-  await detail.getByText('查看 header 名').click()
+  await detail.getByText('查看 header / Cookie 名').click()
   await detail.getByTestId('auth-summary-overridden-headers').getByText('authorization').waitFor({ timeout: 5000 })
   await shot(page, ctx, 'auth-history-api-detail')
   await page.keyboard.press('Escape')

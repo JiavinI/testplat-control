@@ -1,0 +1,6 @@
+schema_version: "0.2"
+id: case.login.buyer_twice
+name: 同身份两次业务（同执行内复用会话）
+steps:
+  - {step_id: b1, type: api, api_id: api.login.buyer_echo}
+  - {step_id: b2, type: api, api_id: api.login.buyer_echo}

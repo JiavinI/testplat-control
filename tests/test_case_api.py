@@ -512,9 +512,10 @@ def test_history_pagination_and_ordering_for_cases(seeded: dict[str, Any]) -> No
 
 
 def test_history_list_item_shape_is_unchanged(seeded: dict[str, Any]) -> None:
-    """列表项字段与 Phase 2.5 完全相同（不新增字段）。"""
+    """列表项在既有五字段上追加 login_failed（Phase 3.3b 历史标记）。"""
     item = _records(seeded["project_id"], asset_type="case", limit=1)[0]
-    assert set(item) == {"id", "asset_id", "status", "start_time", "duration"}
+    assert set(item) == {"id", "asset_id", "status", "start_time", "duration", "login_failed"}
+    assert item["login_failed"] is False
 
 
 def test_history_generic_detail_stays_compatible_for_case_records(seeded: dict[str, Any]) -> None:

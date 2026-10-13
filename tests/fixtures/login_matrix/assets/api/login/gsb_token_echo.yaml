@@ -1,0 +1,9 @@
+id: api.login.gsb_token_echo
+name: legacy gsb_token 回显
+host: local
+method: GET
+url: /echo/token
+auth: gsb_token
+request: {}
+success:
+  status_code: 200

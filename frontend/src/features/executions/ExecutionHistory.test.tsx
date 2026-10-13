@@ -268,6 +268,7 @@ describe('ExecutionHistory', () => {
         ],
         summary: { total: 2, success: 0, failed: 1, skipped: 1 },
         error: null,
+        logins: [],
       },
     })
 

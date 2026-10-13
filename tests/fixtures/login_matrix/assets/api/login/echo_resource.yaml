@@ -1,0 +1,11 @@
+id: api.login.echo_resource
+name: 把 alias 值放进 X-Resource-Id
+host: local
+method: GET
+url: /echo/token
+auth: none
+request:
+  headers:
+    X-Resource-Id: "${resource_id}"
+success:
+  status_code: 200

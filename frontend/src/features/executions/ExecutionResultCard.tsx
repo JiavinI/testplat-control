@@ -1,8 +1,15 @@
-import { Alert, Descriptions, Tag, Typography } from 'antd'
+import { Alert, Descriptions, Space, Tag, Typography } from 'antd'
 import { apiAuthDisplayMode } from './auth'
 import { AuthSummary } from './AuthSummary'
 import { JsonBlock } from './JsonBlock'
-import type { RunResponse } from './types'
+import { LoginFailedBanner } from './LoginFailedBanner'
+import { LoginProcessPanel } from './LoginProcessPanel'
+import {
+  apiResultHasLoginFailed,
+  extractLoginsFromResult,
+} from './loginDisplay'
+import { RequestSnapshot } from './RequestSnapshot'
+import type { CaseStepRequest, RunResponse } from './types'
 
 interface ExecutionResultCardProps {
   result: RunResponse
@@ -18,6 +25,47 @@ function formatDurationSeconds(seconds: number | null): string {
   return `${seconds.toFixed(2)}s`
 }
 
+function asRequestSnapshot(value: unknown): CaseStepRequest | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const obj = value as Record<string, unknown>
+  if (typeof obj.method !== 'string' || typeof obj.url !== 'string') {
+    // 单 API 快照可能是 {api_id, params, body_type, headers}，无 method/url
+    return {
+      method: typeof obj.method === 'string' ? obj.method : '—',
+      url: typeof obj.url === 'string' ? obj.url : typeof obj.api_id === 'string' ? String(obj.api_id) : '—',
+      headers:
+        obj.headers && typeof obj.headers === 'object' && !Array.isArray(obj.headers)
+          ? (obj.headers as Record<string, unknown>)
+          : undefined,
+      body: 'body' in obj ? obj.body : 'params' in obj ? obj.params : undefined,
+      body_type: typeof obj.body_type === 'string' ? obj.body_type : 'json',
+      query:
+        obj.query && typeof obj.query === 'object' && !Array.isArray(obj.query)
+          ? (obj.query as Record<string, unknown>)
+          : null,
+    }
+  }
+  return {
+    method: obj.method,
+    url: obj.url,
+    headers:
+      obj.headers && typeof obj.headers === 'object' && !Array.isArray(obj.headers)
+        ? (obj.headers as Record<string, unknown>)
+        : undefined,
+    body: obj.body,
+    body_type: typeof obj.body_type === 'string' ? obj.body_type : 'json',
+    query:
+      obj.query && typeof obj.query === 'object' && !Array.isArray(obj.query)
+        ? (obj.query as Record<string, unknown>)
+        : null,
+  }
+}
+
 export function ExecutionResultCard({ result }: ExecutionResultCardProps) {
   const payload =
     result.result && typeof result.result === 'object'
@@ -26,14 +74,34 @@ export function ExecutionResultCard({ result }: ExecutionResultCardProps) {
   const errorValue = payload?.error
   const requestValue = payload?.request
   const responseValue = payload?.response
+  const logins = extractLoginsFromResult(result.result)
+  const loginFailed = apiResultHasLoginFailed(result.result)
+  const errorObj =
+    errorValue && typeof errorValue === 'object' && !Array.isArray(errorValue)
+      ? (errorValue as Record<string, unknown>)
+      : null
+  const loginMeta =
+    errorObj?.login && typeof errorObj.login === 'object' && !Array.isArray(errorObj.login)
+      ? (errorObj.login as Record<string, unknown>)
+      : null
 
   return (
-    <div data-testid="execution-result">
+    <div
+      data-testid="execution-result"
+      data-login-failed={loginFailed ? 'true' : 'false'}
+    >
       <Descriptions size="small" column={2} style={{ marginBottom: 12 }}>
         <Descriptions.Item label="状态">
-          <Tag color={result.status === 'success' ? 'success' : 'error'}>
-            {result.status}
-          </Tag>
+          <Space wrap size={[8, 4]}>
+            <Tag color={result.status === 'success' ? 'success' : 'error'}>
+              {result.status}
+            </Tag>
+            {loginFailed ? (
+              <Tag className="tp-login-failed-tag" data-testid="api-login-failed-marker">
+                登录失败
+              </Tag>
+            ) : null}
+          </Space>
         </Descriptions.Item>
         <Descriptions.Item label="耗时">
           {formatDurationSeconds(result.duration)}
@@ -52,7 +120,24 @@ export function ExecutionResultCard({ result }: ExecutionResultCardProps) {
         </Descriptions.Item>
       </Descriptions>
 
-      {errorValue != null && errorValue !== '' ? (
+      {loginFailed && errorObj && typeof errorObj.message === 'string' ? (
+        <div style={{ marginBottom: 12 }}>
+          <LoginFailedBanner
+            message={errorObj.message}
+            reason={typeof loginMeta?.reason === 'string' ? loginMeta.reason : null}
+            failedStep={
+              typeof loginMeta?.failed_step === 'string' ? loginMeta.failed_step : null
+            }
+            identity={
+              typeof loginMeta?.identity === 'string'
+                ? loginMeta.identity
+                : result.auth?.identity
+            }
+          />
+        </div>
+      ) : null}
+
+      {!loginFailed && errorValue != null && errorValue !== '' ? (
         <Alert
           type="error"
           showIcon
@@ -64,8 +149,25 @@ export function ExecutionResultCard({ result }: ExecutionResultCardProps) {
         />
       ) : null}
 
+      {logins.length > 0 ? (
+        <div style={{ marginBottom: 16 }}>
+          <LoginProcessPanel
+            logins={logins}
+            defaultExpanded={loginFailed}
+            highlightRef={result.auth?.login_ref ?? null}
+          />
+        </div>
+      ) : null}
+
       <Typography.Text strong>Request</Typography.Text>
-      <JsonBlock value={requestValue ?? null} aria-label="执行 request" />
+      {asRequestSnapshot(requestValue) ? (
+        <RequestSnapshot
+          request={asRequestSnapshot(requestValue)}
+          ariaLabel="执行 request"
+        />
+      ) : (
+        <JsonBlock value={requestValue ?? null} aria-label="执行 request" />
+      )}
 
       <Typography.Text strong style={{ display: 'block', marginTop: 12 }}>
         Response

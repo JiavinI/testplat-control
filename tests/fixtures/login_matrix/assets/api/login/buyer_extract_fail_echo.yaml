@@ -1,0 +1,9 @@
+id: api.login.buyer_extract_fail_echo
+name: 提取失败
+host: local
+method: GET
+url: /echo/token
+auth: buyer_extract_fail
+request: {}
+success:
+  status_code: 200

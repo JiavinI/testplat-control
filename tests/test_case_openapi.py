@@ -47,6 +47,8 @@ NEW_SCHEMAS = {
 # Phase 3.3a 新增的非 Case schema 与给既有 schema 追加的属性。
 AUTH_SCHEMAS = {"ExecutionAuth"}
 AUTH_PROPERTY_ADDED = {"RunResponse", "ExecutionRecordDetailResponse"}
+# Phase 3.3b：列表项 login_failed（相对 Phase 2.5 基线白名单）
+LIST_PROPERTY_ADDED = {"ExecutionRecordListResponse": {"login_failed"}}
 
 
 @pytest.fixture(scope="module")
@@ -76,6 +78,10 @@ def test_phase_2_5_component_schemas_do_not_drift(current: dict[str, Any]) -> No
             # 3.3a 唯一允许的变化：追加可选 auth（不进 required）；其余逐字相等。
             assert "auth" in now["properties"] and "auth" not in now.get("required", [])
             now["properties"].pop("auth")
+        if name in LIST_PROPERTY_ADDED:
+            for key in LIST_PROPERTY_ADDED[name]:
+                assert key in now["properties"] and key not in now.get("required", [])
+                now["properties"].pop(key)
         assert now == schema, f"schema {name} 发生漂移"
 
 
@@ -142,6 +148,7 @@ def test_case_result_structure(current: dict[str, Any]) -> None:
         "steps",
         "summary",
         "error",
+        "logins",
     }
     assert set(result["required"]) == {"case_id", "status", "duration_seconds", "steps", "summary"}
     assert _literal(result["properties"]["status"]) == ["success", "failed"]
@@ -152,7 +159,7 @@ def test_case_result_structure(current: dict[str, Any]) -> None:
     assert set(step["required"]) == {"step_id", "type", "status", "duration_seconds"}
     assert _literal(step["properties"]["status"]) == ["success", "failed", "skipped"]
     skip_reason = step["properties"]["skip_reason"]["anyOf"][0]
-    assert _literal(skip_reason) == ["fail_fast"]
+    assert _literal(skip_reason) == ["fail_fast", "login_failed"]
     assert step["properties"]["duration_seconds"]["minimum"] == 0
     assert set(step["properties"]) == {
         "step_id",
@@ -190,9 +197,11 @@ def test_no_unconstrained_object_in_case_surface(current: dict[str, Any]) -> Non
     allowed_open = {
         ("CaseStepRequest", "headers"),
         ("CaseStepRequest", "body"),
+        ("CaseStepRequest", "query"),
         ("CaseStepResponse", "headers"),
         ("CaseStepResponse", "body"),
         ("CaseRunRequest", "params"),
+        ("CaseResult", "logins"),
     }
     schemas = current["components"]["schemas"]
     for name in NEW_SCHEMAS:
