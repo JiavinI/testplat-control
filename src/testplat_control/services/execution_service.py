@@ -207,13 +207,31 @@ def _load_auth(project: Project) -> AuthLoadResult | None:
         ) from exc
 
 
-def _engine_for_auth(engine: EnginePort, loaded: AuthLoadResult | None) -> EnginePort:
-    """按项目白名单切换真实适配器上的插件注册（E1）；Fake 无此方法则原样返回。"""
+def _engine_for_auth(
+    engine: EnginePort, loaded: AuthLoadResult | None, project: Project
+) -> EnginePort:
+    """按项目白名单切换真实适配器上的插件注册（E1）；Fake 无此方法则原样返回。
+
+    白名单列出但未安装的插件在此暴露（按项目切换，无法在启动期发现）；
+    属 preflight 失败，按错误表映射状态码，不写记录。
+    """
     plugins = () if loaded is None else loaded.login_plugins
     binder = getattr(engine, "for_login_plugins", None)
-    if callable(binder):
+    if not callable(binder):
+        return engine
+    try:
         return binder(plugins)  # type: ignore[no-any-return]
-    return engine
+    except EngineError as exc:
+        _log_engine_error(
+            project=project,
+            asset_id="-",
+            exc=exc,
+            what=f"登录插件注册失败 env={project.env}",
+        )
+        raise HTTPException(
+            status_code=map_engine_error_http_status(exc),
+            detail=exc.public_message,
+        ) from exc
 
 
 # 请求 DTO 构造失败的固定外显文案（M1：不回显 str(exc)）。
@@ -264,7 +282,7 @@ async def run_single_api(
     environment = _load_environment(project)
     loaded = _load_auth(project)
     auth = None if loaded is None else loaded.table
-    engine = _engine_for_auth(engine, loaded)
+    engine = _engine_for_auth(engine, loaded, project)
 
     try:
         request = ApiExecutionRequest(
@@ -410,7 +428,7 @@ async def run_case(
     environment = _load_environment(project)
     loaded = _load_auth(project)
     auth = None if loaded is None else loaded.table
-    engine = _engine_for_auth(engine, loaded)
+    engine = _engine_for_auth(engine, loaded, project)
 
     try:
         request = CaseExecutionRequest(

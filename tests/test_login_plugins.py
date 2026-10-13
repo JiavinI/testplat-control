@@ -78,3 +78,50 @@ def test_create_engine_with_plugins_uses_same_resolver(
     monkeypatch.setattr(eng, "create_engine", lambda **kwargs: _Eng())
     create_engine_with_plugins(("fake_login",))
     assert calls == [("fake_login",)]
+
+
+def test_whitelisted_plugin_not_installed_is_503_without_record(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """白名单列出但未安装：按项目切换引擎时失败 → 503 安全文案，不写记录，不是 500。"""
+    import copy
+
+    from fastapi.testclient import TestClient
+
+    from testplat_control.adapters.fake_engine import FakeEngineAdapter
+    from testplat_control.adapters.package_engine import PackageEngineAdapter
+    from testplat_control.deps import get_engine_port
+    from testplat_control.main import app
+    from tests.auth_support import STANDARD_CONFIG, STANDARD_ENV, write_auth
+    from tests.case_support import create_project, write_assets, write_env
+
+    for key, value in STANDARD_ENV.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(
+        "testplat_control.engine_bootstrap.discover_installed_login_strategies", lambda: {}
+    )
+    assets, config = tmp_path / "assets", tmp_path / "config"
+    assets.mkdir()
+    config.mkdir()
+    write_assets(assets)
+    write_env(config, "http://127.0.0.1:9")
+    auth_config = copy.deepcopy(STANDARD_CONFIG)
+    auth_config["login_plugins"] = ["not_installed"]
+    write_auth(config, auth_config)
+
+    client = TestClient(app, raise_server_exceptions=False)
+    project_id = create_project(client, assets, config)
+    app.dependency_overrides[get_engine_port] = lambda: PackageEngineAdapter(
+        delegate=FakeEngineAdapter()
+    )
+    try:
+        response = client.post(
+            f"/projects/{project_id}/assets/api.demo.create/run", json={"params": {}}
+        )
+    finally:
+        app.dependency_overrides.pop(get_engine_port, None)
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "执行引擎不可用：create_engine 调用失败"
+    records = client.get(f"/projects/{project_id}/execution-records").json()
+    assert records == []
