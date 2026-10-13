@@ -1,0 +1,215 @@
+{
+  "search_targets": 11,
+  "sources": [
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3b-real-engine/login-matrix-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3b-real-engine/phase3-regression-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3b-real-engine/auth-matrix-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3b-real-engine/dom-secret-search.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3b-real-engine/dom-secret-search-auth.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3b-real-engine/login-browser-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/auth-browser-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/phase3-regression-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/auth-matrix-report.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/auth-matrix-projects.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/dom-secret-search.json",
+      "hits": 0
+    },
+    {
+      "kind": "report",
+      "path": "frontend/screenshots/phase3_3-real-engine/auth-422-real-engine.json",
+      "hits": 0
+    },
+    {
+      "kind": "log",
+      "path": "frontend/screenshots/phase3_3b-real-engine/backend.log",
+      "hits": 0
+    },
+    {
+      "kind": "log",
+      "path": "frontend/screenshots/phase3_3b-real-engine/frontend.log",
+      "hits": 0
+    },
+    {
+      "kind": "log",
+      "path": "frontend/screenshots/phase3_3b-real-engine/backend-auth-retry.log",
+      "hits": 0
+    },
+    {
+      "kind": "log",
+      "path": "frontend/screenshots/phase3_3b-real-engine/target.log",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/openapi-phase3.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/openapi-diff-vs-phase2_5.diff",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/case-backend-contract.md",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3_3/control-auth-backend.md",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3_3/openapi-phase3_3.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3_3/integration-real-engine.md",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3_3/openapi-diff-vs-phase3.diff",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3_3/examples/api-run-with-auth.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3_3/examples/case-run-with-auth.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3_3/examples/case-history-detail-with-auth.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3_3/examples/auth-error-responses.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3_3/examples/api-history-detail-with-auth.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-run-error-responses.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-run-success.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-history-detail-timeout.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-history-detail-transport.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-run-business-failed-variable-resolution.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-history-generic-detail-compat.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-run-business-failed-assertion.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-history-list-filtered.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-detail.json",
+      "hits": 0
+    },
+    {
+      "kind": "docs",
+      "path": "docs/phase3/examples/case-history-detail-success.json",
+      "hits": 0
+    },
+    {
+      "kind": "dom",
+      "path": "frontend/screenshots/phase3_3b-real-engine/dom-secret-search.json",
+      "hits": 0,
+      "screenshots": 18
+    },
+    {
+      "kind": "dom",
+      "path": "frontend/screenshots/phase3_3b-real-engine/dom-secret-search-auth.json",
+      "hits": 0,
+      "screenshots": 16
+    },
+    {
+      "kind": "dom",
+      "path": "frontend/screenshots/phase3_3-real-engine/dom-secret-search.json",
+      "hits": 0,
+      "screenshots": 16
+    }
+  ],
+  "note": "post-matrix static resurface scan (logs/reports/DOM/docs)",
+  "total_unexpected_hits": 0
+}

@@ -1,0 +1,13 @@
+schema_version: "0.2"
+id: case.login.alias_leak
+name: alias 引用回显 token 应得到 ***
+steps:
+  - step_id: echo
+    type: api
+    api_id: api.login.buyer_echo
+    output: echoed
+  - step_id: reuse
+    type: api
+    api_id: api.login.echo_resource
+    params:
+      resource_id: "${echoed.body.echo.x_token}"

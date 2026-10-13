@@ -1,0 +1,132 @@
+identities:
+  gsb_token:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: GET
+          path: /login/query
+          body:
+            type: query
+            fields:
+              username: buyer001
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+              source: gsb
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.hash, as: token }
+            - { source: body_json, path: $.data.userId, as: user_id }
+      validity: { ttl_seconds: 14400 }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+          X-USER-ID: "${login:user_id}"
+  gsb_csrf:
+    login:
+      host: local
+      steps:
+        - name: fetch_csrf
+          method: GET
+          path: /login/query-csrf
+          body:
+            type: query
+            fields:
+              username: buyer001
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          extract:
+            - { source: body_json, path: $.data.csrfToken, as: visit_csrf_token }
+            - { source: body_json, path: $.data.userId, as: user_id }
+      inject:
+        headers:
+          X-CSRF-Token: "${login:visit_csrf_token}"
+          X-USER-ID: "${login:user_id}"
+          X-SOURCE: web-h5
+  admin_go2:
+    login:
+      host: local
+      steps:
+        - name: bootstrap
+          method: GET
+          path: /csrf/login
+          extract:
+            - { source: html_meta, name: csrf-token, as: csrf }
+        - name: submit
+          method: POST
+          path: /csrf/login
+          body:
+            type: form
+            fields:
+              _csrf: "${login:csrf}"
+              username: admin
+              password: "${secret:TESTPLAT_SELLER_PASSWORD}"
+          success: { status_code: 302 }
+      validity: { ttl_seconds: 1000 }
+      session: cookie
+      probe:
+        method: GET
+        path: /csrf/protected
+        success:
+          status_code: 200
+          reject_location_contains: /login
+          body_not_contains: '<form id="loginFrom"'
+  df_picker:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/form
+          headers:
+            Content-Type: "application/x-www-form-urlencoded;charset=UTF-8"
+          body:
+            type: form
+            fields:
+              username: picker
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+              source: df
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+            - { source: body_json, path: $.data.userId, as: user_id }
+      validity: { ttl_seconds: 14400 }
+      inject:
+        headers:
+          Authorization: "${login:token}"
+  cat_api:
+    login:
+      host: local
+      steps:
+        - name: bootstrap
+          method: GET
+          path: /csrf/login
+          extract:
+            - { source: cookies, format: cookie_header, as: cookie_jar }
+            - { source: cookies, name: _csrf, as: csrf_seed }
+            - { source: html_meta, name: csrf-token, as: csrf_token }
+        - name: submit
+          method: POST
+          path: /csrf/login
+          headers: { Referer: "${login_host}/login" }
+          body:
+            type: form
+            fields:
+              _csrf: "${login:csrf_token}"
+              "LoginForm[username]": cat
+              "LoginForm[password]": "${secret:TESTPLAT_SELLER_PASSWORD}"
+              login-button: ""
+          success: { status_code: 302, reject_location_contains: /login }
+          extract:
+            - { source: cookies, format: cookie_header, as: cookie_jar2 }
+            - { source: cookies, name: _csrf, as: csrf_seed2, optional: true }
+        - name: probe_uid
+          method: GET
+          path: /csrf/protected
+          extract:
+            - { source: response_header, name: x-uid, as: user_id, optional: true }
+      validity: { ttl_seconds: 7200 }
+      session: cookie
+      inject:
+        headers:
+          X-CSRF-Token: "${login:csrf_token}"
+          X-UID: "${login:user_id}"
+default_identity: null

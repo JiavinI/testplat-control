@@ -1,0 +1,18 @@
+Phase 3.3b 干净安装证据
+日期: 2026-10-13 14:22 CST
+干净目录: /tmp/testplat-clean-install.HJiwan
+UV_CACHE_DIR: /tmp/testplat-clean-install.HJiwan/uv-cache
+uv sync --extra dev 退出码: 0
+
+Engine 锁定状态:
+  当前 Control pyproject 仍为临时 file:// 钉住
+  rev = 7a7ebb8c47eb3a81e978c7346470618d181d4309
+  路径 = file:///Users/jiavin/Developer/products/testplat1/testplat-engine
+  远程精确锁定（https://github.com/JiavinI/testplat-engine.git + 已推送 rev）:
+    **BLOCKED** — 需用户明确授权推送 Engine 分支/tag 后才能改远程锁并复跑干净安装。
+
+本地干净安装（file:// 钉）结果见:
+  /tmp/testplat-clean-install.HJiwan/uv-sync.log
+  /tmp/testplat-clean-install.HJiwan/import.log
+
+假插件以 path 安装进干净环境，entry point 发现见 import.log。

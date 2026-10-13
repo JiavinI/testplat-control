@@ -1,0 +1,9 @@
+id: api.login.ghost_echo
+name: 未注册策略身份
+host: local
+method: GET
+url: /echo/token
+auth: ghost
+request: {}
+success:
+  status_code: 200

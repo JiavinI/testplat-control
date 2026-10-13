@@ -1,0 +1,9 @@
+id: api.login.admin_echo
+name: 静态 admin 回显
+host: local
+method: GET
+url: /echo/headers
+auth: admin
+request: {}
+success:
+  status_code: 200

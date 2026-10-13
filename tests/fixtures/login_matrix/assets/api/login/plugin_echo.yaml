@@ -1,0 +1,9 @@
+id: api.login.plugin_echo
+name: 插件登录回显
+host: local
+method: GET
+url: /echo/token
+auth: plugged
+request: {}
+success:
+  status_code: 200

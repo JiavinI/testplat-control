@@ -1,4 +1,4 @@
-"""Phase 3.3a 泄密全文搜索（手册 §7-3）：把各公开面/落盘面对假秘密的命中次数写入证据文件。
+"""Phase 3.3a/3.3b 泄密全文搜索（手册 §7-3）：把各公开面/落盘面对假秘密的命中次数写入证据文件。
 
 搜索面：Control/Engine 后端日志（同一进程，DEBUG 级）、target 与前端 dev server 日志、
 SQLite 文件原始字节（含 -wal/-journal）与逐表逐行的单元格、截图目录下的矩阵/浏览器报告 JSON、
@@ -18,7 +18,20 @@ import sys
 import tempfile
 from pathlib import Path
 
-SECRETS = ("tp-fake-secret-9f31c2a7", "tp-fake-partner-4c8e11d0", "tp-fake-aws-7d2e9b10")
+SECRETS = (
+    "tp-fake-secret-9f31c2a7",
+    "tp-fake-partner-4c8e11d0",
+    "tp-fake-aws-7d2e9b10",
+    # Phase 3.3b 登录秘密
+    "tp-fake-buyer-pass-71c2",
+    "tp-fake-seller-pass-93ab",
+    "tp-fake-redis-pass-5e0d",
+    "tp-fake-plugin-key-11aa",
+    "plug-token-5f5f5f5f5f",
+    "csrf-ff00ee11dd22",
+    "seed-0a0b0c0d0e",
+    "detail-0123456789abcdefghij",
+)
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -103,11 +116,13 @@ def main() -> int:
         if report.name == "leak-search-evidence.json":
             continue
         add("report", report, count_file(report))
-    dom = out_dir / "dom-secret-search.json"
-    if dom.exists():
+    for dom in sorted(out_dir.glob("dom-secret-search*.json")):
         data = json.loads(dom.read_text("utf-8"))
         add(
-            "dom_per_screenshot", dom, int(data["total_hits"]), screenshots=len(data["screenshots"])
+            "dom_per_screenshot",
+            dom,
+            int(data.get("total_hits", 0)),
+            screenshots=len(data.get("screenshots", [])),
         )
     docs_hits = {
         str(p.relative_to(ROOT)): count_file(p) for p in (ROOT / "docs").rglob("*") if p.is_file()

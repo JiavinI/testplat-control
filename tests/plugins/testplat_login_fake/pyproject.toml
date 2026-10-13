@@ -1,0 +1,13 @@
+[project]
+name = "testplat-login-fake"
+version = "0.0.1"
+description = "Phase 3.3b 矩阵专用假登录插件（不发布）"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.entry-points."testplat_engine.login_strategies"]
+fake_login = "testplat_login_fake.strategy:FakeLoginStrategy"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

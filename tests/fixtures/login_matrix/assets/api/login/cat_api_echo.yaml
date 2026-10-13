@@ -1,0 +1,9 @@
+id: api.login.cat_api_echo
+name: legacy cat_api 回显
+host: local
+method: GET
+url: /echo/token
+auth: cat_api
+request: {}
+success:
+  status_code: 200

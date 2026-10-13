@@ -1,0 +1,9 @@
+id: api.login.buyer_401
+name: 业务 401
+host: local
+method: GET
+url: /protected/401
+auth: buyer
+request: {}
+success:
+  status_code: 200

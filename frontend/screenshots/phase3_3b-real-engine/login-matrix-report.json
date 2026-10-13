@@ -1,0 +1,247 @@
+{
+  "rows": [
+    {
+      "id": "E1",
+      "item": "§6-18,E1",
+      "desc": "假插件 entry point ∩ 白名单；缺失时不注册且 422",
+      "pass": true,
+      "discovered": [
+        "fake_login"
+      ],
+      "empty_intersection": [],
+      "selected": [
+        "fake_login"
+      ]
+    },
+    {
+      "id": "E1b",
+      "item": "§6-18",
+      "desc": "未注册策略名 → 422 且无出站请求",
+      "pass": true,
+      "http": 422
+    },
+    {
+      "id": "L11",
+      "item": "§6-11",
+      "desc": "登录密码/token 不出现在公开结果；login_ref 可见",
+      "pass": true,
+      "logins": 1,
+      "login_ref": 0
+    },
+    {
+      "id": "L11c",
+      "item": "§6-11",
+      "desc": "Cookie 会话值 / CSRF 不出现在公开结果",
+      "pass": true,
+      "cookie_names": [
+        "SESSION",
+        "_csrf",
+        "lang"
+      ]
+    },
+    {
+      "id": "L12",
+      "item": "§6-12",
+      "desc": "业务回显 token → ***；alias → ***",
+      "pass": true,
+      "echo_x_token": "***",
+      "alias_masked": true
+    },
+    {
+      "id": "L13",
+      "item": "§6-13",
+      "desc": "两 login 身份交替不串号；匿名无 Cookie",
+      "pass": true,
+      "identities": [
+        "buyer",
+        "seller",
+        null,
+        "buyer",
+        "seller"
+      ]
+    },
+    {
+      "id": "L14",
+      "item": "§6-14",
+      "desc": "两次独立执行各自重新登录，token 不同",
+      "pass": true,
+      "login_requests": 2,
+      "mid": 2
+    },
+    {
+      "id": "L15",
+      "item": "§6-15",
+      "desc": "按需登录：首次用前无登录；同身份复用",
+      "pass": true,
+      "paths_prefix": [
+        "/echo/token",
+        "/login/json",
+        "/echo/token",
+        "/echo/token"
+      ],
+      "login_count": 1
+    },
+    {
+      "id": "L16",
+      "item": "§6-16",
+      "desc": "短 TTL → 两条 logins，login_ref 不同",
+      "pass": true,
+      "logins": 2,
+      "login_refs": [
+        0,
+        1
+      ]
+    },
+    {
+      "id": "L17a",
+      "item": "§6-17",
+      "desc": "login_failed (assert) → 200 + 可见脱敏",
+      "pass": true,
+      "asset": "api.login.buyer_wrong_echo",
+      "logins": 1,
+      "reason_hint": "assert"
+    },
+    {
+      "id": "L17b",
+      "item": "§6-17",
+      "desc": "login_failed (extract) → 200 + 可见脱敏",
+      "pass": true,
+      "asset": "api.login.buyer_extract_fail_echo",
+      "logins": 1,
+      "reason_hint": "extract"
+    },
+    {
+      "id": "L17c",
+      "item": "§6-17",
+      "desc": "login_failed (probe) → 200 + 可见脱敏",
+      "pass": true,
+      "asset": "api.login.buyer_probe_fail_echo",
+      "logins": 1,
+      "reason_hint": "probe"
+    },
+    {
+      "id": "L17d",
+      "item": "§6-17",
+      "desc": "login_failed (timeout) → 200 + 可见脱敏",
+      "pass": true,
+      "asset": "api.login.buyer_timeout_echo",
+      "logins": 1,
+      "reason_hint": "timeout"
+    },
+    {
+      "id": "L17e",
+      "item": "§6-17",
+      "desc": "login_failed (transport) → 200 + 可见脱敏",
+      "pass": true,
+      "asset": "api.login.buyer_transport_echo",
+      "logins": 1,
+      "reason_hint": "transport"
+    },
+    {
+      "id": "L17f",
+      "item": "§6-17",
+      "desc": "login_failed (plugin) → 200 + 可见脱敏",
+      "pass": true,
+      "asset": "api.login.plugin_raise_echo",
+      "logins": 1,
+      "reason_hint": "plugin"
+    },
+    {
+      "id": "L17g",
+      "item": "§6-17",
+      "desc": "login_failed 后后续 skipped(login_failed)",
+      "pass": true,
+      "statuses": [
+        "success",
+        "failed",
+        "skipped"
+      ],
+      "skip": "login_failed"
+    },
+    {
+      "id": "L18",
+      "item": "§6-18",
+      "desc": "假插件注册后注入并脱敏",
+      "pass": true,
+      "plugin_redacted": true
+    },
+    {
+      "id": "L19",
+      "item": "§6-19",
+      "desc": "connections 密码不出现在任何公开面",
+      "pass": true
+    },
+    {
+      "id": "L20",
+      "item": "§6-20",
+      "desc": "form/query/raw 脱敏；multipart → invalid_asset",
+      "pass": true,
+      "bodies": {
+        "form": "redacted",
+        "query": "redacted",
+        "raw": "redacted"
+      },
+      "multipart": 422
+    },
+    {
+      "id": "L21",
+      "item": "§6-21",
+      "desc": "静态 header 项目行为与 0.3.0 一致（允许多出 auth 键）",
+      "pass": true,
+      "auth_keys": [
+        "cookie_names",
+        "header_names",
+        "identity",
+        "kind",
+        "login_ref",
+        "overridden_headers",
+        "tier"
+      ]
+    },
+    {
+      "id": "P1",
+      "item": "legacy",
+      "desc": "旧 profile 等价配置 api.login.gsb_token_echo",
+      "pass": true,
+      "asset": "api.login.gsb_token_echo"
+    },
+    {
+      "id": "P2",
+      "item": "legacy",
+      "desc": "旧 profile 等价配置 api.login.gsb_csrf_echo",
+      "pass": true,
+      "asset": "api.login.gsb_csrf_echo"
+    },
+    {
+      "id": "P3",
+      "item": "legacy",
+      "desc": "旧 profile 等价配置 api.login.admin_go2_echo",
+      "pass": true,
+      "asset": "api.login.admin_go2_echo"
+    },
+    {
+      "id": "P4",
+      "item": "legacy",
+      "desc": "旧 profile 等价配置 api.login.df_picker_echo",
+      "pass": true,
+      "asset": "api.login.df_picker_echo"
+    },
+    {
+      "id": "P5",
+      "item": "legacy",
+      "desc": "旧 profile 等价配置 api.login.cat_api_echo",
+      "pass": true,
+      "asset": "api.login.cat_api_echo"
+    }
+  ],
+  "projects": {
+    "no-plugin": "9b6ef693-b372-4d80-9d43-7eda945e3dc9",
+    "unknown": "32cef868-374e-499d-87ed-6c3dd21394ee",
+    "login": "9122200a-8232-4341-8f09-dca2f73797c8",
+    "static": "d673d953-31ce-4b6c-83e9-df5bee10c2a5",
+    "legacy": "8118d628-7a49-4614-8a67-414f35496950"
+  },
+  "passed": 25,
+  "total": 25,
+  "section": "phase3_3b_login_§6.11-21"
+}

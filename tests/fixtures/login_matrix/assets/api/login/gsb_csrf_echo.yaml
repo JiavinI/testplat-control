@@ -1,0 +1,9 @@
+id: api.login.gsb_csrf_echo
+name: legacy gsb_csrf 回显
+host: local
+method: GET
+url: /echo/token
+auth: gsb_csrf
+request: {}
+success:
+  status_code: 200

@@ -1,0 +1,9 @@
+id: api.login.buyer_wrong_echo
+name: 错误密码登录
+host: local
+method: GET
+url: /echo/token
+auth: buyer_wrong
+request: {}
+success:
+  status_code: 200

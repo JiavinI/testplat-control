@@ -1,0 +1,14 @@
+login_plugins:
+  - fake_login
+identities:
+  ghost:
+    login:
+      strategy: totally_unknown
+      host: local
+      params:
+        behavior: values
+        api_key: "${secret:TESTPLAT_PLUGIN_KEY}"
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+default_identity: null

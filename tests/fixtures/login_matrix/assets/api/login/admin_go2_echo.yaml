@@ -1,0 +1,9 @@
+id: api.login.admin_go2_echo
+name: legacy admin_go2 回显
+host: local
+method: GET
+url: /echo/token
+auth: admin_go2
+request: {}
+success:
+  status_code: 200

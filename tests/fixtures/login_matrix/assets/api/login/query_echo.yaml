@@ -1,0 +1,15 @@
+id: api.login.query_echo
+name: query 请求体回显
+host: local
+method: GET
+url: /echo/query
+auth: buyer
+request:
+  type: query
+  inputs:
+    note: 备注 (required)
+  body:
+    note: "${note}"
+    q: ping
+success:
+  status_code: 200

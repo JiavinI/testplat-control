@@ -1,0 +1,351 @@
+{
+  "rows": [
+    {
+      "id": "S1",
+      "item": "§6-1,§6-2",
+      "desc": "单 API admin：凭证确实发出，回显被按值替换",
+      "pass": true,
+      "http": 200,
+      "status": "success",
+      "auth": {
+        "identity": "admin",
+        "kind": "static_headers",
+        "tier": null,
+        "header_names": [
+          "Authorization"
+        ],
+        "overridden_headers": [],
+        "cookie_names": [],
+        "login_ref": null
+      },
+      "echo_masked_keys": [
+        "seen_a"
+      ],
+      "secret_hits_in_response": 0
+    },
+    {
+      "id": "S2",
+      "item": "§6-2",
+      "desc": "单 API partner（X-Api-Key 裸值）",
+      "pass": true,
+      "http": 200,
+      "status": "success",
+      "auth": {
+        "identity": "partner",
+        "kind": "static_headers",
+        "tier": null,
+        "header_names": [
+          "X-Api-Key"
+        ],
+        "overridden_headers": [],
+        "cookie_names": [],
+        "login_ref": null
+      },
+      "echo_masked_keys": [
+        "seen_k"
+      ],
+      "secret_hits_in_response": 0
+    },
+    {
+      "id": "S3",
+      "item": "§6-2,H1,Q5",
+      "desc": "自定义头 X-Tenant-Token + 一个 header 两个秘密",
+      "pass": true,
+      "http": 200,
+      "status": "success",
+      "auth": {
+        "identity": "combo",
+        "kind": "static_headers",
+        "tier": null,
+        "header_names": [
+          "X-Tenant-Token"
+        ],
+        "overridden_headers": [],
+        "cookie_names": [],
+        "login_ref": null
+      },
+      "echo_masked_keys": [
+        "seen_t"
+      ],
+      "secret_hits_in_response": 0
+    },
+    {
+      "id": "S4",
+      "item": "§5.3",
+      "desc": "未声明 auth → default_identity(admin)",
+      "pass": true,
+      "http": 200,
+      "status": "success",
+      "auth": {
+        "identity": "admin",
+        "kind": "static_headers",
+        "tier": null,
+        "header_names": [
+          "Authorization"
+        ],
+        "overridden_headers": [],
+        "cookie_names": [],
+        "login_ref": null
+      },
+      "echo_masked_keys": [
+        "seen_a"
+      ],
+      "secret_hits_in_response": 0
+    },
+    {
+      "id": "S5",
+      "item": "§6-8",
+      "desc": "auth: none 且配置了 default_identity → 不带凭证",
+      "pass": true,
+      "http": 200,
+      "status": "success",
+      "auth": null,
+      "echo_masked_keys": [],
+      "secret_hits_in_response": 0
+    },
+    {
+      "id": "S6",
+      "item": "§6-9,Q3,M3",
+      "desc": "资产小写 authorization 与凭证同名 → 凭证优先、只发一份、记录原始写法",
+      "pass": true,
+      "http": 200,
+      "status": "success",
+      "auth": {
+        "identity": "admin",
+        "kind": "static_headers",
+        "tier": null,
+        "header_names": [
+          "Authorization"
+        ],
+        "overridden_headers": [
+          "authorization"
+        ],
+        "cookie_names": [],
+        "login_ref": null
+      },
+      "echo_masked_keys": [
+        "seen_a"
+      ],
+      "secret_hits_in_response": 0
+    },
+    {
+      "id": "S7",
+      "item": "§6-3",
+      "desc": "目标把凭证写进 401 错误正文 → 失败结果为 ***，记录已保存",
+      "pass": true,
+      "http": 200,
+      "status": "failed",
+      "secret_hits_in_response": 0
+    },
+    {
+      "id": "S8",
+      "item": "§6-5,§6-4,H2",
+      "desc": "单 API 与 Case 混跑两身份交替不串号；alias 拿到 ***",
+      "pass": true,
+      "requests_checked": 12,
+      "case_step_identities": [
+        "admin",
+        "partner",
+        null,
+        "admin",
+        "combo",
+        "admin",
+        null
+      ],
+      "alias_sent_masked": true
+    },
+    {
+      "id": "U1",
+      "item": "§6-7",
+      "desc": "单 API echo_missing → 422",
+      "pass": true,
+      "http": 422,
+      "detail": "身份 missing 不可用: 环境变量 TESTPLAT_MISSING_TOKEN 未设置",
+      "records_delta": 0
+    },
+    {
+      "id": "U2",
+      "item": "§6-7",
+      "desc": "单 API echo_empty → 422",
+      "pass": true,
+      "http": 422,
+      "detail": "身份 empty 不可用: 环境变量 TESTPLAT_EMPTY_TOKEN 为空",
+      "records_delta": 0
+    },
+    {
+      "id": "U3",
+      "item": "§6-7",
+      "desc": "单 API echo_short → 422",
+      "pass": true,
+      "http": 422,
+      "detail": "身份 short 不可用: 环境变量 TESTPLAT_SHORT_TOKEN 长度不足 8",
+      "records_delta": 0
+    },
+    {
+      "id": "U4",
+      "item": "§6-6",
+      "desc": "单 API echo_home → 422",
+      "pass": true,
+      "http": 422,
+      "detail": "身份 homevar 不可用: 环境变量 HOME 不在 TESTPLAT_ 白名单内",
+      "records_delta": 0
+    },
+    {
+      "id": "U5",
+      "item": "§6-6",
+      "desc": "单 API echo_aws → 422",
+      "pass": true,
+      "http": 422,
+      "detail": "身份 awsvar 不可用: 环境变量 AWS_SECRET_ACCESS_KEY 不在 TESTPLAT_ 白名单内",
+      "records_delta": 0
+    },
+    {
+      "id": "U6",
+      "item": "B2",
+      "desc": "单 API echo_crlf → 422",
+      "pass": true,
+      "http": 422,
+      "detail": "身份 crlf 不可用: 环境变量 TESTPLAT_CRLF_TOKEN 含非法控制字符",
+      "records_delta": 0
+    },
+    {
+      "id": "U7",
+      "item": "B2",
+      "desc": "单 API echo_lf → 422",
+      "pass": true,
+      "http": 422,
+      "detail": "身份 lf 不可用: 环境变量 TESTPLAT_LF_TOKEN 含非法控制字符",
+      "records_delta": 0
+    },
+    {
+      "id": "U8",
+      "item": "§6-7",
+      "desc": "单 API echo_ghost → 422",
+      "pass": true,
+      "http": 422,
+      "detail": "身份不存在: ghost",
+      "records_delta": 0
+    },
+    {
+      "id": "C1",
+      "item": "§5.3,B2",
+      "desc": "Case unavailable：预检一次性检查，首步也不发出",
+      "pass": true,
+      "http": 422,
+      "detail": "身份 missing 不可用: 环境变量 TESTPLAT_MISSING_TOKEN 未设置",
+      "records_delta": 0
+    },
+    {
+      "id": "C2",
+      "item": "§5.3,B2",
+      "desc": "Case ghost：预检一次性检查，首步也不发出",
+      "pass": true,
+      "http": 422,
+      "detail": "身份不存在: ghost",
+      "records_delta": 0
+    },
+    {
+      "id": "C3",
+      "item": "§5.3,B2",
+      "desc": "Case crlf：预检一次性检查，首步也不发出",
+      "pass": true,
+      "http": 422,
+      "detail": "身份 crlf 不可用: 环境变量 TESTPLAT_CRLF_TOKEN 含非法控制字符",
+      "records_delta": 0
+    },
+    {
+      "id": "Y1",
+      "item": "§6-7,B2,Q3,Q7",
+      "desc": "配置 bad-yaml → 加载即 422（匿名资产也不执行）",
+      "pass": true,
+      "http": 422,
+      "detail": "鉴权配置 YAML 无效: test",
+      "records_delta": 0
+    },
+    {
+      "id": "Y2",
+      "item": "§6-7,B2,Q3,Q7",
+      "desc": "配置 literal-cr → 加载即 422（匿名资产也不执行）",
+      "pass": true,
+      "http": 422,
+      "detail": "鉴权配置无效 (test): 身份 admin 的 header Authorization 含非法控制字符",
+      "records_delta": 0
+    },
+    {
+      "id": "Y3",
+      "item": "§6-7,B2,Q3,Q7",
+      "desc": "配置 literal-lf → 加载即 422（匿名资产也不执行）",
+      "pass": true,
+      "http": 422,
+      "detail": "鉴权配置无效 (test): 身份 admin 的 header Authorization 含非法控制字符",
+      "records_delta": 0
+    },
+    {
+      "id": "Y4",
+      "item": "§6-7,B2,Q3,Q7",
+      "desc": "配置 literal-nul → 加载即 422（匿名资产也不执行）",
+      "pass": true,
+      "http": 422,
+      "detail": "鉴权配置无效 (test): 身份 admin 的 header Authorization 含非法控制字符",
+      "records_delta": 0
+    },
+    {
+      "id": "Y5",
+      "item": "§6-7,B2,Q3,Q7",
+      "desc": "配置 default-missing → 加载即 422（匿名资产也不执行）",
+      "pass": true,
+      "http": 422,
+      "detail": "鉴权配置无效 (test): default_identity 指向不存在的身份: ghost",
+      "records_delta": 0
+    },
+    {
+      "id": "Y6",
+      "item": "§6-7,B2,Q3,Q7",
+      "desc": "配置 header-case-dup → 加载即 422（匿名资产也不执行）",
+      "pass": true,
+      "http": 422,
+      "detail": "鉴权配置无效 (test): 身份 admin 的 header X-Token 与 x-token 仅大小写不同",
+      "records_delta": 0
+    },
+    {
+      "id": "R1",
+      "item": "§6-10,Q2",
+      "desc": "无 auth 配置 + 资产声明身份 → 422",
+      "pass": true,
+      "http": 422,
+      "detail": "API 资产声明了身份 admin，但项目未配置 auth",
+      "records_delta": 0
+    },
+    {
+      "id": "R2",
+      "item": "§6-10",
+      "desc": "无 auth 配置 + auth: none → 匿名，与 v0.2.0 一致",
+      "pass": true,
+      "http": 200,
+      "status": "success",
+      "auth": null,
+      "echo_masked_keys": [],
+      "secret_hits_in_response": 0
+    },
+    {
+      "id": "R3",
+      "item": "§6-10",
+      "desc": "无 auth 配置的 Phase 3 资产：结果不变、auth 恒为 null",
+      "pass": true,
+      "api": "failed(既有断言失败)",
+      "case": "success"
+    }
+  ],
+  "projects": {
+    "auth": "0c5d7a40-006a-4caa-a75e-f0e13afd1e4a",
+    "bad-yaml": "bdd115a9-5c1f-4441-a4a5-4c9d70aa8377",
+    "literal-cr": "98fc7964-32d8-4f16-b770-6575445c7852",
+    "literal-lf": "ae772e90-ecd8-481c-916e-6e6cd1320246",
+    "literal-nul": "dbe6f1fc-aea5-4828-83a9-17f430345fa9",
+    "default-missing": "edf6a61d-06a7-4702-ad3b-c633f74a1ef3",
+    "header-case-dup": "079b6810-57c8-4d4f-9a52-cafe6da37840",
+    "noauth": "be75f2c1-3bab-435d-badf-f89e1d038931"
+  },
+  "passed": 28,
+  "total": 28
+}

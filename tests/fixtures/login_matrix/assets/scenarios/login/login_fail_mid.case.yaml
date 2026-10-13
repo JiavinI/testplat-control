@@ -1,0 +1,7 @@
+schema_version: "0.2"
+id: case.login.login_fail_mid
+name: 中途登录失败后 skipped
+steps:
+  - {step_id: a1, type: api, api_id: api.login.anon_echo}
+  - {step_id: bad, type: api, api_id: api.login.buyer_wrong_echo}
+  - {step_id: later, type: api, api_id: api.login.buyer_echo}

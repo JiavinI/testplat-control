@@ -1,0 +1,9 @@
+id: api.login.buyer_short_ttl_echo
+name: 短 TTL buyer 回显
+host: local
+method: GET
+url: /echo/token
+auth: buyer_short_ttl
+request: {}
+success:
+  status_code: 200
