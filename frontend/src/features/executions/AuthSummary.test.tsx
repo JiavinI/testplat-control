@@ -56,7 +56,7 @@ describe('单 API 结果身份展示', () => {
     expect(summary).toHaveAttribute('data-auth-mode', 'identity')
     expect(within(summary).getByText('身份：admin')).toBeInTheDocument()
     expect(screen.getByTestId('auth-summary-overridden-flag')).toHaveTextContent('覆盖 1 个 header')
-    await user.click(within(summary).getByText('查看 header 名'))
+    await user.click(within(summary).getByText('查看 header / Cookie 名'))
     expect(screen.getByTestId('auth-summary-header-names')).toHaveTextContent('Authorization')
     expect(screen.getByTestId('auth-summary-overridden-headers')).toHaveTextContent('authorization')
     expect(within(summary).queryByText('匿名')).not.toBeInTheDocument()
@@ -109,7 +109,7 @@ describe('Case 步骤身份展示', () => {
     await user.click(screen.getByText('步骤 create'))
     const auth = await screen.findByTestId('step-auth-create')
     expect(auth).toHaveTextContent('身份：partner')
-    await user.click(within(auth).getByText('查看 header 名'))
+    await user.click(within(auth).getByText('查看 header / Cookie 名'))
     expect(screen.getByTestId('step-auth-create-header-names')).toHaveTextContent('X-Api-Key')
     expect(screen.getByTestId('step-auth-create-overridden-headers')).toHaveTextContent('无')
     expectNoSecrets(container)
@@ -126,7 +126,7 @@ describe('Case 步骤身份展示', () => {
         step({
           step_id: 'admin',
           name: '管理员步骤',
-          auth: { identity: 'admin', header_names: ['Authorization'], overridden_headers: [] },
+          auth: { identity: 'admin', kind: 'static_headers', tier: null, header_names: ['Authorization'], overridden_headers: [], cookie_names: [], login_ref: null },
         }),
         step({
           step_id: 'slow',
@@ -139,6 +139,7 @@ describe('Case 步骤身份展示', () => {
       ],
       summary: { total: 3, success: 2, failed: 1, skipped: 0 },
       error: { kind: 'timeout', stage: 'execution', message: backendMessage },
+      logins: [],
     }
     const user = userEvent.setup({ delay: null })
     wrap(<CaseResultView result={result} />)

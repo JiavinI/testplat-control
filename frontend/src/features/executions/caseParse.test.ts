@@ -62,6 +62,7 @@ const successRun = {
     ],
     summary: { total: 2, success: 2, failed: 0, skipped: 0 },
     error: null,
+    logins: [],
   },
 }
 
@@ -107,6 +108,7 @@ const failedRun = {
     ],
     summary: { total: 2, success: 0, failed: 1, skipped: 1 },
     error: null,
+    logins: [],
   },
 }
 
@@ -201,6 +203,7 @@ describe('caseParse', () => {
         ],
         summary: { total: 3, success: 1, failed: 1, skipped: 1 },
         error: { kind: 'timeout', stage: 'execution', message: 'API 请求超时' },
+        logins: [],
       },
     })
     expect(detail.asset_type).toBe('case')

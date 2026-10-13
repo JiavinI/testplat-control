@@ -57,6 +57,7 @@ const successResponse: CaseRunResponse = {
     ],
     summary: { total: 2, success: 2, failed: 0, skipped: 0 },
     error: null,
+    logins: [],
   },
 }
 
@@ -96,6 +97,7 @@ const failedSkipped: CaseRunResponse = {
     ],
     summary: { total: 2, success: 0, failed: 1, skipped: 1 },
     error: null,
+    logins: [],
   },
 }
 
@@ -213,6 +215,7 @@ describe('CaseExecutionPanel', () => {
         ],
         summary: { total: 1, success: 0, failed: 1, skipped: 0 },
         error: { kind: 'timeout', stage: 'execution', message: 'API 请求超时' },
+        logins: [],
       },
     })
 

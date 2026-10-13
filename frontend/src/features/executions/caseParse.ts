@@ -1,4 +1,5 @@
 import { parseExecutionAuth } from './auth'
+import { parseLoginRecords } from './loginDisplay'
 import { ApiParseError } from '@/shared/api/errors'
 import {
   assertArray,
@@ -34,12 +35,12 @@ function parseCaseStepStatus(value: string, label: string): CaseStepStatus {
 function parseSkipReason(
   value: unknown,
   label: string,
-): 'fail_fast' | null {
+): 'fail_fast' | 'login_failed' | null {
   if (value === null || value === undefined) {
     return null
   }
-  if (value === 'fail_fast') {
-    return 'fail_fast'
+  if (value === 'fail_fast' || value === 'login_failed') {
+    return value
   }
   throw new ApiParseError(`${label} 非法`, JSON.stringify(value))
 }
@@ -69,6 +70,24 @@ function parseStepRequest(
   }
   if ('body' in value) {
     request.body = value.body
+  }
+  if ('body_type' in value && value.body_type !== undefined && value.body_type !== null) {
+    if (typeof value.body_type !== 'string') {
+      throw new ApiParseError(`${label}.body_type 非法`, JSON.stringify(value.body_type))
+    }
+    request.body_type = value.body_type
+  } else {
+    request.body_type = 'json'
+  }
+  if ('query' in value) {
+    const q = value.query
+    if (q === null || q === undefined) {
+      request.query = null
+    } else if (typeof q === 'object' && !Array.isArray(q)) {
+      request.query = q as Record<string, unknown>
+    } else {
+      throw new ApiParseError(`${label}.query 非法`, JSON.stringify(q))
+    }
   }
   return request
 }
@@ -126,13 +145,20 @@ function parseStepError(value: unknown, label: string): CaseStepError | null {
   } else {
     throw new ApiParseError(`${label}.stage 非法`, JSON.stringify(stageRaw))
   }
-  return {
+  const error: CaseStepError = {
     kind: requireString(value, 'kind', label),
     message: requireString(value, 'message', label),
     stage,
     step_id: optionalNullableString(value, 'step_id', label),
     path: optionalNullableString(value, 'path', label),
   }
+  if ('login' in value && value.login !== undefined && value.login !== null) {
+    if (typeof value.login !== 'object' || Array.isArray(value.login)) {
+      throw new ApiParseError(`${label}.login 非法`, JSON.stringify(value.login))
+    }
+    error.login = value.login as CaseStepError['login']
+  }
+  return error
 }
 
 function parseStepResult(value: unknown, index: number): CaseStepResult {
@@ -207,6 +233,10 @@ export function parseCaseResult(payload: unknown, label = 'CaseResult'): CaseRes
     error: parseSystemError(
       'error' in payload ? payload.error : null,
       `${label}.error`,
+    ),
+    logins: parseLoginRecords(
+      'logins' in payload ? payload.logins : [],
+      `${label}.logins`,
     ),
   }
 }

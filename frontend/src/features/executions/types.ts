@@ -12,14 +12,54 @@ export type CaseStepStatus = 'success' | 'failed' | 'skipped'
 export type CaseSystemErrorKind = 'timeout' | 'transport' | 'internal'
 
 /**
- * Phase 3.3a 公开身份：只有名字，没有值。null 的含义由上下文决定：
- * 单 API / 历史详情里是匿名执行；Case 步骤里也可能是“没有发出请求”（见 auth.ts）。
+ * Phase 3.3b 公开身份（七键）：只有名字与档位，没有秘密值。
+ * null 的含义由上下文决定：单 API / 历史详情里是匿名执行；
+ * Case 步骤里也可能是“没有发出请求”（见 auth.ts）。
  */
 export interface ExecutionAuth {
   identity: string
+  /** static_headers | login */
+  kind: string
+  /** generic | configured | plugin；静态 header 为 null */
+  tier: string | null
   header_names: string[]
   overridden_headers: string[]
+  /** 携带的 Cookie 名（不含值）；静态 header 恒为 [] */
+  cookie_names: string[]
+  /** 指向结果顶层 logins 下标；静态 header 或未登录为 null */
+  login_ref: number | null
 }
+
+/** 登录失败 reason 枚举（与 Engine LOGIN_FAILURE_REASONS 对齐） */
+export type LoginFailureReason =
+  | 'assertion'
+  | 'extract_missing'
+  | 'token_too_short'
+  | 'probe_failed'
+  | 'timeout'
+  | 'transport'
+  | 'strategy_error'
+  | string
+
+/** 结果顶层 logins[] 单条（已脱敏） */
+export interface LoginRecord {
+  identity: string
+  strategy: string
+  tier: string | null
+  status: 'success' | 'failed' | string
+  duration_seconds: number
+  steps: LoginStepRecord[]
+  probe: LoginStepRecord | null
+  error: { reason?: string; failed_step?: string | null; [key: string]: unknown } | null
+}
+
+export interface LoginStepRecord {
+  name: string
+  request: CaseStepRequest | null
+  response: CaseStepResponse | null
+}
+
+export type BodyType = 'json' | 'form' | 'query' | 'raw' | string
 
 export interface ParamInfo {
   name: string
@@ -52,6 +92,11 @@ export interface ExecutionRecordListItem {
   status: string
   start_time: string
   duration: number | null
+  /**
+   * 可选：历史列表标记「登录失败」。
+   * 后端列表契约暂未冻结此字段；e2e mock 与后续后端可提供。
+   */
+  login_failed?: boolean
 }
 
 export interface ExecutionDisplay {
@@ -122,6 +167,10 @@ export interface CaseStepRequest {
   url: string
   headers?: Record<string, unknown>
   body?: unknown
+  /** Phase 3.3b：json/form/query/raw，缺省视为 json（A8） */
+  body_type?: BodyType
+  /** query 类型请求的参数对象（已脱敏）；其它类型为 null/缺省 */
+  query?: Record<string, unknown> | null
 }
 
 export interface CaseStepResponse {
@@ -136,6 +185,14 @@ export interface CaseStepError {
   stage?: 'preflight' | 'execution' | null
   step_id?: string | null
   path?: string | null
+  /** login_failed 时后端附带的登录错误摘要（无秘密） */
+  login?: {
+    identity?: string | null
+    strategy?: string | null
+    failed_step?: string | null
+    reason?: LoginFailureReason | null
+    [key: string]: unknown
+  } | null
 }
 
 export interface CaseStepResult {
@@ -148,7 +205,7 @@ export interface CaseStepResult {
   response: CaseStepResponse | null
   error: CaseStepError | null
   output: string | null
-  skip_reason: 'fail_fast' | null
+  skip_reason: 'fail_fast' | 'login_failed' | null
   /** 步骤公开身份；null 时需结合 status / error / request 区分“匿名”与“—” */
   auth?: ExecutionAuth | null
 }
@@ -166,6 +223,8 @@ export interface CaseResult {
   steps: CaseStepResult[]
   summary: CaseSummary
   error: CaseSystemError | null
+  /** 本次执行的登录记录（已脱敏）；无登录时为 []（A8） */
+  logins: LoginRecord[]
 }
 
 export interface CaseRunResponse {
