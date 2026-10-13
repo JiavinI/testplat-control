@@ -1,10 +1,13 @@
 """Pydantic 请求/响应模型"""
 
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectCreate(BaseModel):
@@ -122,23 +125,40 @@ class ExecutionRecordListResponse(BaseModel):
 
 
 class ExecutionAuth(BaseModel):
-    """一次 API 请求实际使用的身份（Phase 3.3a，Engine 0.3 公开 ``auth`` 字段，Q1）。
+    """一次 API / 步骤实际使用的身份（Phase 3.3b，Engine 0.4 公开 ``auth`` 七键，U3/H5）。
 
-    只含身份名与 header **名**，永不含秘密值；匿名执行时整个字段为 null。
-    ``extra="forbid"``：Engine 的公开 auth 恰好三个键，多出的键说明契约漂移，宁可解析失败。
+    只含身份名、kind、tier 与 header/Cookie **名**，永不含秘密值；匿名执行时整个字段为 null。
+    ``extra="forbid"``：Engine 的公开 auth 恰好七键，多出的键说明契约漂移，宁可解析失败。
+    静态 header 身份：``kind=static_headers``、``tier=null``、
+    ``cookie_names=[]``、``login_ref=null``。
     """
 
     model_config = ConfigDict(extra="forbid")
 
     identity: str = Field(..., description="身份名，例如 admin")
+    kind: str = Field(..., description="凭证 kind：static_headers 或 login")
+    tier: str | None = Field(
+        None, description="登录档位 generic/configured/plugin；静态 header 为 null"
+    )
     header_names: list[str] = Field(..., description="注入的凭证 header 名（不含值）")
     overridden_headers: list[str] = Field(
         ..., description="被凭证覆盖的资产 header 名（资产里的原始写法）"
     )
+    cookie_names: list[str] = Field(
+        ..., description="本次携带的 Cookie 名（不含值）；静态 header 恒为 []"
+    )
+    login_ref: int | None = Field(
+        None, description="指向结果顶层 logins 的下标；静态 header 或未登录为 null"
+    )
 
 
-def parse_execution_auth(result: dict[str, Any] | None) -> ExecutionAuth | None:
-    """从结果字典中取出公开 ``auth``；缺失（旧记录）或形状不符时返回 None，不让详情 500。"""
+def parse_execution_auth(
+    result: dict[str, Any] | None, *, record_id: str | None = None
+) -> ExecutionAuth | None:
+    """从结果字典中取出公开 ``auth``；缺失（旧记录）返回 None。
+
+    形状不符时记 warning（只含记录 id，H5），返回 None，不让详情 500。
+    """
     if not isinstance(result, dict):
         return None
     raw = result.get("auth")
@@ -147,6 +167,10 @@ def parse_execution_auth(result: dict[str, Any] | None) -> ExecutionAuth | None:
     try:
         return ExecutionAuth.model_validate(raw)
     except ValidationError:
+        logger.warning(
+            "公开 auth 字段无法解析 record_id=%s",
+            record_id if record_id is not None else "-",
+        )
         return None
 
 
@@ -206,7 +230,7 @@ class ExecutionRecordDetailResponse(BaseModel):
             result=result,
             request=None if result is None else result.get("request"),
             response=None if result is None else result.get("response"),
-            auth=parse_execution_auth(result),
+            auth=parse_execution_auth(result, record_id=getattr(record, "id", None)),
         )
 
     @classmethod

@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 from testplat_control.api.schemas import (
     ExecutionAuth,
@@ -33,7 +33,11 @@ CaseStatus = Literal["success", "failed"]
 
 
 class CaseStepRequest(BaseModel):
-    """步骤实际发出的请求快照（已脱敏）。变量解析失败的步骤没有请求（为 null）。"""
+    """步骤实际发出的请求快照（已脱敏）。变量解析失败的步骤没有请求（为 null）。
+
+    Phase 3.3b：``body_type`` 默认 json（A8）；``query`` 类型请求的参数在 ``query`` 字段，
+    不进 ``url``（Q8）。
+    """
 
     model_config = ConfigDict(extra="allow")
 
@@ -41,6 +45,21 @@ class CaseStepRequest(BaseModel):
     url: str = Field(..., description="完整请求 URL")
     headers: dict[str, Any] = Field(default_factory=dict, description="已脱敏的请求头")
     body: Any | None = Field(None, description="已脱敏的请求体（自由 JSON）")
+    body_type: str = Field(
+        default="json",
+        description="请求体类型 json/form/query/raw；未声明资产时仍为 json（A8）",
+    )
+    query: dict[str, Any] | None = Field(
+        None, description="query 类型请求的参数对象（已脱敏）；其它类型为 null/缺省"
+    )
+
+    @model_serializer(mode="wrap")
+    def _omit_null_query(self, handler):  # noqa: ANN001, ANN201
+        """与 Engine 快照对齐：非 query 类型不输出 query 键（避免 API 多出 null）。"""
+        data = handler(self)
+        if isinstance(data, dict) and data.get("query") is None:
+            data.pop("query", None)
+        return data
 
 
 class CaseStepResponse(BaseModel):
@@ -83,15 +102,19 @@ class CaseStepResult(BaseModel):
     response: CaseStepResponse | None = Field(None, description="响应快照；skipped/变量失败为 null")
     error: CaseStepError | None = Field(None, description="failed 步骤的安全错误；其余为 null")
     output: str | None = Field(None, description="成功步骤声明的 output alias 名（不含响应值）")
-    skip_reason: Literal["fail_fast"] | None = Field(
-        None, description="仅 skipped 步骤：fail_fast 表示被前序失败跳过"
+    skip_reason: Literal["fail_fast", "login_failed"] | None = Field(
+        None,
+        description=(
+            "仅 skipped 步骤：fail_fast=前序业务/系统失败；login_failed=前序登录失败（H4）"
+        ),
     )
     # H3：显式声明而不是改成 extra="allow"——本模型对未知字段静默丢弃，
     # 漏声明会让 Engine 0.3 的步骤 auth 在响应和历史详情里消失。
     auth: ExecutionAuth | None = Field(
         None,
         description=(
-            "步骤实际使用的身份（Phase 3.3a）；匿名、skipped、系统错误归属的失败步骤为 null"
+            "步骤实际使用的身份（Phase 3.3b 七键）；"
+            "匿名、skipped、login_failed 步骤的 request/response 为 null 时仍可带 login_ref（A6）"
         ),
     )
 
@@ -122,6 +145,7 @@ class CaseResult(BaseModel):
     - 业务 success / failed：``error`` 为 null，``steps`` 来自 Engine 的 outcome。
     - execution 系统错误（只在历史里出现）：``status=failed``，``steps`` 来自异常携带的
       ``partial_outcome``（前序 success、当前 failed、其后 skipped），``error`` 说明系统错误。
+    - Phase 3.3b：``logins`` 只在 Case / 单 API 结果顶层（A7）；无登录时仍为 ``[]``（A8）。
     """
 
     case_id: str = Field(..., description="Case ID")
@@ -130,6 +154,10 @@ class CaseResult(BaseModel):
     steps: list[CaseStepResult] = Field(..., description="按声明顺序的步骤结果")
     summary: CaseSummary = Field(..., description="步骤计数汇总")
     error: CaseSystemError | None = Field(None, description="仅 execution 系统错误记录非 null")
+    logins: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="本次执行的登录记录（已脱敏）；无登录时为 []（A8）",
+    )
 
 
 class CaseRunRequest(BaseModel):

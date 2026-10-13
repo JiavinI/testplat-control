@@ -238,7 +238,7 @@
         "type": "object"
       },
       "CaseResult": {
-        "description": "Case 完整结果：run 响应与历史详情共用同一形状。\n\n- 业务 success / failed：``error`` 为 null，``steps`` 来自 Engine 的 outcome。\n- execution 系统错误（只在历史里出现）：``status=failed``，``steps`` 来自异常携带的\n  ``partial_outcome``（前序 success、当前 failed、其后 skipped），``error`` 说明系统错误。",
+        "description": "Case 完整结果：run 响应与历史详情共用同一形状。\n\n- 业务 success / failed：``error`` 为 null，``steps`` 来自 Engine 的 outcome。\n- execution 系统错误（只在历史里出现）：``status=failed``，``steps`` 来自异常携带的\n  ``partial_outcome``（前序 success、当前 failed、其后 skipped），``error`` 说明系统错误。\n- Phase 3.3b：``logins`` 只在 Case / 单 API 结果顶层（A7）；无登录时仍为 ``[]``（A8）。",
         "properties": {
           "case_id": {
             "description": "Case ID",
@@ -261,6 +261,15 @@
               }
             ],
             "description": "仅 execution 系统错误记录非 null"
+          },
+          "logins": {
+            "description": "本次执行的登录记录（已脱敏）；无登录时为 []（A8）",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Logins",
+            "type": "array"
           },
           "status": {
             "description": "success 当且仅当全部步骤 success",
@@ -413,7 +422,7 @@
       },
       "CaseStepRequest": {
         "additionalProperties": true,
-        "description": "步骤实际发出的请求快照（已脱敏）。变量解析失败的步骤没有请求（为 null）。",
+        "description": "步骤实际发出的请求快照（已脱敏）。变量解析失败的步骤没有请求（为 null）。\n\nPhase 3.3b：``body_type`` 默认 json（A8）；``query`` 类型请求的参数在 ``query`` 字段，\n不进 ``url``（Q8）。",
         "properties": {
           "body": {
             "anyOf": [
@@ -425,6 +434,12 @@
             "description": "已脱敏的请求体（自由 JSON）",
             "title": "Body"
           },
+          "body_type": {
+            "default": "json",
+            "description": "请求体类型 json/form/query/raw；未声明资产时仍为 json（A8）",
+            "title": "Body Type",
+            "type": "string"
+          },
           "headers": {
             "additionalProperties": true,
             "description": "已脱敏的请求头",
@@ -435,6 +450,19 @@
             "description": "HTTP 方法",
             "title": "Method",
             "type": "string"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "query 类型请求的参数对象（已脱敏）；其它类型为 null/缺省",
+            "title": "Query"
           },
           "url": {
             "description": "完整请求 URL",
@@ -493,7 +521,7 @@
                 "type": "null"
               }
             ],
-            "description": "步骤实际使用的身份（Phase 3.3a）；匿名、skipped、系统错误归属的失败步骤为 null"
+            "description": "步骤实际使用的身份（Phase 3.3b 七键）；匿名、skipped、login_failed 步骤的 request/response 为 null 时仍可带 login_ref（A6）"
           },
           "duration_seconds": {
             "description": "步骤耗时（秒）；skipped 恒为 0",
@@ -561,14 +589,17 @@
           "skip_reason": {
             "anyOf": [
               {
-                "const": "fail_fast",
+                "enum": [
+                  "fail_fast",
+                  "login_failed"
+                ],
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "仅 skipped 步骤：fail_fast 表示被前序失败跳过",
+            "description": "仅 skipped 步骤：fail_fast=前序业务/系统失败；login_failed=前序登录失败（H4）",
             "title": "Skip Reason"
           },
           "status": {
@@ -669,8 +700,16 @@
       },
       "ExecutionAuth": {
         "additionalProperties": false,
-        "description": "一次 API 请求实际使用的身份（Phase 3.3a，Engine 0.3 公开 ``auth`` 字段，Q1）。\n\n只含身份名与 header **名**，永不含秘密值；匿名执行时整个字段为 null。\n``extra=\"forbid\"``：Engine 的公开 auth 恰好三个键，多出的键说明契约漂移，宁可解析失败。",
+        "description": "一次 API / 步骤实际使用的身份（Phase 3.3b，Engine 0.4 公开 ``auth`` 七键，U3/H5）。\n\n只含身份名、kind、tier 与 header/Cookie **名**，永不含秘密值；匿名执行时整个字段为 null。\n``extra=\"forbid\"``：Engine 的公开 auth 恰好七键，多出的键说明契约漂移，宁可解析失败。\n静态 header 身份：``kind=static_headers``、``tier=null``、\n``cookie_names=[]``、``login_ref=null``。",
         "properties": {
+          "cookie_names": {
+            "description": "本次携带的 Cookie 名（不含值）；静态 header 恒为 []",
+            "items": {
+              "type": "string"
+            },
+            "title": "Cookie Names",
+            "type": "array"
+          },
           "header_names": {
             "description": "注入的凭证 header 名（不含值）",
             "items": {
@@ -684,6 +723,23 @@
             "title": "Identity",
             "type": "string"
           },
+          "kind": {
+            "description": "凭证 kind：static_headers 或 login",
+            "title": "Kind",
+            "type": "string"
+          },
+          "login_ref": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "指向结果顶层 logins 的下标；静态 header 或未登录为 null",
+            "title": "Login Ref"
+          },
           "overridden_headers": {
             "description": "被凭证覆盖的资产 header 名（资产里的原始写法）",
             "items": {
@@ -691,12 +747,26 @@
             },
             "title": "Overridden Headers",
             "type": "array"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "登录档位 generic/configured/plugin；静态 header 为 null",
+            "title": "Tier"
           }
         },
         "required": [
           "identity",
+          "kind",
           "header_names",
-          "overridden_headers"
+          "overridden_headers",
+          "cookie_names"
         ],
         "title": "ExecutionAuth",
         "type": "object"

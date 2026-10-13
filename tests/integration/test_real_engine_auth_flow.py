@@ -166,7 +166,15 @@ def test_single_api_sends_credential_and_redacts_echo(
         body = response.json()
         detail = client.get(f"/projects/{project_id}/execution-records/{body['record_id']}")
     assert RECEIVED[-1]["authorization"] == f"Bearer {FAKE_SECRET}"
-    expected = {"identity": "admin", "header_names": ["Authorization"], "overridden_headers": []}
+    expected = {
+        "identity": "admin",
+        "kind": "static_headers",
+        "tier": None,
+        "header_names": ["Authorization"],
+        "overridden_headers": [],
+        "cookie_names": [],
+        "login_ref": None,
+    }
     assert body["auth"] == expected and detail.json()["auth"] == expected
     # 非敏感键下的回显被按值替换。
     assert "***" in json.dumps(body["result"]["response"])

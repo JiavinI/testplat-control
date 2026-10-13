@@ -338,7 +338,9 @@ def _run_response(record: ExecutionRecord) -> RunResponse:
         status=record.status,
         duration=duration,
         result=result,
-        auth=parse_execution_auth(result if isinstance(result, dict) else None),
+        auth=parse_execution_auth(
+            result if isinstance(result, dict) else None, record_id=record.id
+        ),
     )
 
 

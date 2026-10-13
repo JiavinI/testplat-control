@@ -142,6 +142,7 @@ def test_case_result_structure(current: dict[str, Any]) -> None:
         "steps",
         "summary",
         "error",
+        "logins",
     }
     assert set(result["required"]) == {"case_id", "status", "duration_seconds", "steps", "summary"}
     assert _literal(result["properties"]["status"]) == ["success", "failed"]
@@ -152,7 +153,7 @@ def test_case_result_structure(current: dict[str, Any]) -> None:
     assert set(step["required"]) == {"step_id", "type", "status", "duration_seconds"}
     assert _literal(step["properties"]["status"]) == ["success", "failed", "skipped"]
     skip_reason = step["properties"]["skip_reason"]["anyOf"][0]
-    assert _literal(skip_reason) == ["fail_fast"]
+    assert _literal(skip_reason) == ["fail_fast", "login_failed"]
     assert step["properties"]["duration_seconds"]["minimum"] == 0
     assert set(step["properties"]) == {
         "step_id",
@@ -190,9 +191,11 @@ def test_no_unconstrained_object_in_case_surface(current: dict[str, Any]) -> Non
     allowed_open = {
         ("CaseStepRequest", "headers"),
         ("CaseStepRequest", "body"),
+        ("CaseStepRequest", "query"),
         ("CaseStepResponse", "headers"),
         ("CaseStepResponse", "body"),
         ("CaseRunRequest", "params"),
+        ("CaseResult", "logins"),
     }
     schemas = current["components"]["schemas"]
     for name in NEW_SCHEMAS:
