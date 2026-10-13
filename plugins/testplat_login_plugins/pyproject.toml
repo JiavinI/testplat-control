@@ -1,0 +1,40 @@
+[project]
+name = "testplat-login-plugins"
+version = "0.1.0"
+description = "testplat 登录策略插件包（vcode_redis 等）"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "testplat team" }
+]
+dependencies = [
+    "testplat-engine>=0.4.0,<0.5",
+]
+
+[project.optional-dependencies]
+redis = [
+    "redis==8.1.0",
+]
+
+[project.entry-points."testplat_engine.login_strategies"]
+vcode_redis = "testplat_login_plugins.vcode_redis:VcodeRedisStrategy"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/testplat_login_plugins"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
