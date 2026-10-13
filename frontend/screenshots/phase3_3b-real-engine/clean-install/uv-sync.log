@@ -1,0 +1,49 @@
+Using CPython 3.13.7
+Creating virtual environment at: .venv
+Resolved 32 packages in 18ms
+   Building testplat-control @ file:///private/tmp/testplat-clean-install.HJiwan/src/control
+   Updating file:///Users/jiavin/Developer/products/testplat1/testplat-engine (7a7ebb8c47eb3a81e978c7346470618d181d4309)
+    Updated file:///Users/jiavin/Developer/products/testplat1/testplat-engine (7a7ebb8c47eb3a81e978c7346470618d181d4309)
+   Building testplat-engine @ git+file:///Users/jiavin/Developer/products/testplat1/testplat-engine@7a7ebb8c47eb3a81e978c7346470618d181d4309
+Downloading pygments (1.2MiB)
+Downloading pydantic-core (1.9MiB)
+Downloading sqlalchemy (2.3MiB)
+Downloading ruff (8.8MiB)
+      Built testplat-engine @ git+file:///Users/jiavin/Developer/products/testplat1/testplat-engine@7a7ebb8c47eb3a81e978c7346470618d181d4309
+ Downloading pygments
+      Built testplat-control @ file:///private/tmp/testplat-clean-install.HJiwan/src/control
+ Downloading pydantic-core
+ Downloading sqlalchemy
+ Downloading ruff
+Prepared 30 packages in 10.32s
+Installed 30 packages in 47ms
+ + annotated-doc==0.0.5
+ + annotated-types==0.8.0
+ + anyio==4.15.1
+ + certifi==2026.7.22
+ + click==8.5.0
+ + coverage==7.16.2
+ + fastapi==0.143.0
+ + h11==0.16.0
+ + httpcore==1.0.9
+ + httpx==0.28.1
+ + idna==3.20
+ + iniconfig==2.3.1
+ + opentelemetry-api==1.45.1
+ + packaging==26.3
+ + pluggy==1.6.0
+ + pydantic==2.14.0
+ + pydantic-core==2.50.0
+ + pygments==2.21.0
+ + pytest==9.1.1
+ + pytest-asyncio==1.4.0
+ + pytest-cov==7.1.0
+ + pyyaml==6.0.3
+ + ruff==0.17.0
+ + sqlalchemy==2.1.4
+ + starlette==1.7.0
+ + testplat-control==0.1.0 (from file:///private/tmp/testplat-clean-install.HJiwan/src/control)
+ + testplat-engine==0.4.0 (from git+file:///Users/jiavin/Developer/products/testplat1/testplat-engine@7a7ebb8c47eb3a81e978c7346470618d181d4309)
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.4
+ + uvicorn==0.54.0
