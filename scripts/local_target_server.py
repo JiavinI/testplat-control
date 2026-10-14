@@ -3,6 +3,7 @@
 Phase 3.3a 回显端点保留；Phase 3.3b 新增登录相关端点（对齐 Engine FakeTarget）：
 JSON/表单/query 登录、CSRF 预取 + Cookie 登录 + probe、短 TTL、回显 token/Cookie、
 401、raw/form/query/json 回显、慢/挂端点。
+Phase 3.3c：POST /createVCode、POST /vcode/login；验证码写入矩阵 Redis；签发秘密追加到临时文件。
 
 本服务自身绝不打印凭证原值：/__inspect 只暴露摘要与路径。
 """
@@ -16,6 +17,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
 
 SECRET = "srv-secret-token-matrix-9f31"
 
@@ -30,6 +32,9 @@ PLUGIN_TOKEN = "plug-token-5f5f5f5f5f"
 CSRF_TOKEN = "csrf-ff00ee11dd22"
 CSRF_SEED = "seed-0a0b0c0d0e"
 FAIL_DETAIL = "detail-0123456789abcdefghij"
+# Phase 3.3c：验证码登录假秘密（与矩阵环境变量一致；亦为泄密搜索目标）
+DF_ADMIN_PASSWORD = "tp-fake-df-admin-pass-9f3a"
+VCODE_KEY_PREFIX = "gsb:vcode:prefix:"
 
 _RECEIVED: list[dict[str, object]] = []
 _RECEIVED_LOCK = threading.Lock()
@@ -39,6 +44,17 @@ _SESSIONS: set[str] = set()
 _COUNTER = 0
 _EXPIRES_IN = 3600
 _SESSION_MAX_AGE: int | None = None
+# 3.3c 矩阵 Redis（目标服务写验证码用独立连接；插件只读 GET）
+_REDIS_HOST = "127.0.0.1"
+_REDIS_PORT = 0
+_REDIS_PASSWORD: str | None = None
+_REDIS_KEY_PREFIX = VCODE_KEY_PREFIX
+_SKIP_REDIS_WRITE = False
+_CREATE_VCODE_STATUS = 200
+_VCODE_OMIT_TOKEN = False
+_VCODE_FORCE_LOGIN_FAIL = False
+_ISSUED_SECRETS_PATH: str | None = None
+_REDIS_WRITE_COUNT = 0
 
 
 def _digest(value: str) -> str:
@@ -66,12 +82,53 @@ def _record(path: str, method: str, headers) -> None:  # noqa: ANN001
         _RECEIVED.append(entry)
 
 
+def _append_issued_secret_unlocked(value: str) -> None:
+    """调用方已持有 ``_STATE_LOCK`` 时写入签发秘密（锁不可重入，禁止再抢）。"""
+    if not value or not _ISSUED_SECRETS_PATH:
+        return
+    with open(_ISSUED_SECRETS_PATH, "a", encoding="utf-8") as fh:
+        fh.write(value + "\n")
+
+
+def _append_issued_secret(value: str) -> None:
+    """把签发的秘密追加到临时文件（不进证据目录）；供泄密搜索作动态目标。"""
+    if not value or not _ISSUED_SECRETS_PATH:
+        return
+    with _STATE_LOCK:
+        _append_issued_secret_unlocked(value)
+
+
+def _redis_write_code(uuid_value: str, code: str) -> None:
+    """目标服务独立连接写入验证码；计入写次数供 commandstats 对账。"""
+    global _REDIS_WRITE_COUNT
+    if _SKIP_REDIS_WRITE or _REDIS_PORT <= 0:
+        return
+    import redis  # 仅矩阵目标服务使用；不进入 Control 运行时依赖
+
+    client = redis.Redis(
+        host=_REDIS_HOST,
+        port=_REDIS_PORT,
+        password=_REDIS_PASSWORD,
+        db=0,
+        socket_timeout=2.0,
+        socket_connect_timeout=2.0,
+        decode_responses=True,
+    )
+    try:
+        client.set(f"{_REDIS_KEY_PREFIX}{uuid_value}", code)
+        with _STATE_LOCK:
+            _REDIS_WRITE_COUNT += 1
+    finally:
+        client.close()
+
+
 def _next_token(user: str) -> str:
     global _COUNTER
     with _STATE_LOCK:
         _COUNTER += 1
         token = f"tok-{user}-{_COUNTER:04d}-a8f3e2c1d0"
         _ISSUED.append(token)
+        _append_issued_secret_unlocked(token)
         return token
 
 
@@ -82,11 +139,12 @@ def _next_session() -> str:
         session = f"sess-{_COUNTER:04d}-7b7b7b7b"
         _ISSUED.append(session)
         _SESSIONS.add(session)
+        _append_issued_secret_unlocked(session)
         return session
 
 
 class Handler(BaseHTTPRequestHandler):
-    """本地 demo 目标：3.3a 回显 + 3.3b 登录端点。"""
+    """本地 demo 目标：3.3a 回显 + 3.3b 登录端点 + 3.3c 验证码。"""
 
     def _read_body(self) -> bytes:
         length = int(self.headers.get("Content-Length") or 0)
@@ -144,7 +202,8 @@ class Handler(BaseHTTPRequestHandler):
         token = _next_token(user)
         data: dict[str, object] = {
             "token": token,
-            "hash": token,
+            # hash 不得镜像 token 原值：登录快照按键脱敏只覆盖 token 键，镜像字段会进 SQLite。
+            "hash": _digest(token),
             "userId": "10001",
             "expiresIn": expires_in if expires_in is not None else _EXPIRES_IN,
         }
@@ -159,27 +218,38 @@ class Handler(BaseHTTPRequestHandler):
         text = body.decode("utf-8", errors="replace")
 
         if path == "/__inspect/reset":
+            global _REDIS_WRITE_COUNT
             with _RECEIVED_LOCK:
                 _RECEIVED.clear()
             with _STATE_LOCK:
                 _ISSUED.clear()
                 _SESSIONS.clear()
+                _REDIS_WRITE_COUNT = 0
             self._json(200, {"reset": True})
             return
         if path == "/__inspect/config":
-            # 矩阵可调短 TTL / Cookie Max-Age；仅接受 JSON 数字，不回显秘密
+            # 矩阵可调短 TTL / Cookie Max-Age / 3.3c 验证码行为；仅接受 JSON，不回显秘密
             try:
                 cfg = json.loads(text or "{}")
             except json.JSONDecodeError:
                 self._json(400, {"error": "bad json"})
                 return
-            global _EXPIRES_IN, _SESSION_MAX_AGE
+            global _EXPIRES_IN, _SESSION_MAX_AGE, _SKIP_REDIS_WRITE
+            global _CREATE_VCODE_STATUS, _VCODE_OMIT_TOKEN, _VCODE_FORCE_LOGIN_FAIL
             with _STATE_LOCK:
                 if "expires_in" in cfg:
                     _EXPIRES_IN = int(cfg["expires_in"])
                 if "session_max_age" in cfg:
                     val = cfg["session_max_age"]
                     _SESSION_MAX_AGE = None if val is None else int(val)
+                if "skip_redis_write" in cfg:
+                    _SKIP_REDIS_WRITE = bool(cfg["skip_redis_write"])
+                if "create_vcode_status" in cfg:
+                    _CREATE_VCODE_STATUS = int(cfg["create_vcode_status"])
+                if "vcode_omit_token" in cfg:
+                    _VCODE_OMIT_TOKEN = bool(cfg["vcode_omit_token"])
+                if "vcode_force_login_fail" in cfg:
+                    _VCODE_FORCE_LOGIN_FAIL = bool(cfg["vcode_force_login_fail"])
             self._json(200, {"ok": True})
             return
 
@@ -231,6 +301,58 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/echo/json":
             self._json(200, json.loads(text or "null"))
             return
+        if path == "/createVCode":
+            # 返回新 uuid；默认把 4 位验证码写入矩阵 Redis（可配置跳过，用于 key 不存在）
+            if _CREATE_VCODE_STATUS >= 400:
+                self._json(_CREATE_VCODE_STATUS, {"code": 1, "msg": "create failed"})
+                return
+            uid = str(uuid4())
+            # 固定 4 位数字验证码；原值只进 Redis 与签发秘密文件，不进日志
+            code = f"{(int(uid.replace('-', '')[:8], 16) % 9000) + 1000:04d}"
+            _append_issued_secret(uid)
+            _append_issued_secret(code)
+            _redis_write_code(uid, code)
+            self._json(200, {"code": 0, "data": {"uuid": uid}})
+            return
+        if path == "/vcode/login":
+            # form：校验验证码与 userKey；成功返回 token 与 userId
+            if _VCODE_FORCE_LOGIN_FAIL:
+                self._json(401, {"code": 1, "msg": "forced fail"})
+                return
+            form = {k: v[0] for k, v in parse_qs(text).items()}
+            username = form.get("username") or ""
+            password = form.get("password")
+            code = form.get("code") or ""
+            user_key = form.get("userKey") or ""
+            if password != DF_ADMIN_PASSWORD or not user_key or not code:
+                self._json(401, {"code": 1, "msg": "bad credentials"})
+                return
+            expected = None
+            if _REDIS_PORT > 0 and not _SKIP_REDIS_WRITE:
+                import redis
+
+                client = redis.Redis(
+                    host=_REDIS_HOST,
+                    port=_REDIS_PORT,
+                    password=_REDIS_PASSWORD,
+                    db=0,
+                    socket_timeout=2.0,
+                    socket_connect_timeout=2.0,
+                    decode_responses=True,
+                )
+                try:
+                    expected = client.get(f"{_REDIS_KEY_PREFIX}{user_key}")
+                finally:
+                    client.close()
+            if expected is None or code != expected:
+                self._json(401, {"code": 1, "msg": "bad code"})
+                return
+            if _VCODE_OMIT_TOKEN:
+                self._json(200, {"code": 0, "data": {"userId": "10001"}})
+                return
+            token = _next_token(username or "dfadmin")
+            self._json(200, {"code": 0, "data": {"token": token, "userId": "10001"}})
+            return
         if path == "/plugin/login":
             # 假插件可选真实 HTTP；矩阵默认走插件内部 record，此端点作备用
             self._json(200, {"issued": PLUGIN_TOKEN})
@@ -248,6 +370,7 @@ class Handler(BaseHTTPRequestHandler):
                     "requests": list(_RECEIVED),
                     "issued_count": len(_ISSUED),
                     "session_count": len(_SESSIONS),
+                    "redis_write_count": _REDIS_WRITE_COUNT,
                 }
             self._json(200, payload)
             return
@@ -321,6 +444,7 @@ class Handler(BaseHTTPRequestHandler):
                         "csrf": self.headers.get("X-CSRF-Token"),
                         "authz": self.headers.get("Authorization"),
                         "x_uid": self.headers.get("X-UID") or self.headers.get("X-User-Id"),
+                        "x_user_id": self.headers.get("X-USER-ID") or self.headers.get("X-User-Id"),
                         "x_source": self.headers.get("X-SOURCE") or self.headers.get("X-Source"),
                     }
                 },
@@ -343,10 +467,29 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="本地 Engine target（3.3a+3.3b）")
+    parser = argparse.ArgumentParser(description="本地 Engine target（3.3a+3.3b+3.3c）")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18099)
+    parser.add_argument("--redis-host", default="127.0.0.1")
+    parser.add_argument("--redis-port", type=int, default=0)
+    parser.add_argument("--redis-password", default="")
+    parser.add_argument("--redis-key-prefix", default=VCODE_KEY_PREFIX)
+    parser.add_argument("--issued-secrets", default="")
+    parser.add_argument("--skip-redis-write", action="store_true")
     args = parser.parse_args()
+    global _REDIS_HOST, _REDIS_PORT, _REDIS_PASSWORD, _REDIS_KEY_PREFIX
+    global _ISSUED_SECRETS_PATH, _SKIP_REDIS_WRITE
+    _REDIS_HOST = args.redis_host
+    _REDIS_PORT = int(args.redis_port)
+    _REDIS_PASSWORD = args.redis_password or None
+    _REDIS_KEY_PREFIX = args.redis_key_prefix
+    _ISSUED_SECRETS_PATH = args.issued_secrets or None
+    _SKIP_REDIS_WRITE = bool(args.skip_redis_write)
+    # 绑定仅允许本机回环；矩阵 Redis 亦须 127.0.0.1。
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        raise SystemExit("target 只允许绑定 127.0.0.1")
+    if _REDIS_HOST not in ("127.0.0.1", "localhost", "::1", ""):
+        raise SystemExit("矩阵 Redis 只允许 127.0.0.1")
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"TARGET_READY http://{args.host}:{args.port}", flush=True)
     server.serve_forever()

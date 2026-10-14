@@ -1,0 +1,31 @@
+# 白名单未列 vcode_redis；插件已安装也不注册 → 使用它的身份 422
+login_plugins:
+  - fake_login
+connections:
+  redis_main:
+    driver: redis
+    host: 127.0.0.1
+    port: __MATRIX_REDIS_PORT__
+    database: 0
+    password: "${secret:TESTPLAT_REDIS_MAIN_PASSWORD}"
+identities:
+  df_admin:
+    login:
+      strategy: vcode_redis
+      host: local
+      params:
+        redis_connection: redis_main
+        redis_key_prefix: "gsb:vcode:prefix:"
+        create_vcode.path: /createVCode
+        login.path: /vcode/login
+        login.body_type: form
+        field.username: admin_user
+        field.password: "${secret:TESTPLAT_DF_ADMIN_PASSWORD}"
+        extract.token: $.data.token
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  admin:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_ADMIN_TOKEN}"
+default_identity: admin

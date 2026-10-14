@@ -1,0 +1,42 @@
+# 连接秘密缺失：引用 redis_main 的身份不可用；静态 admin / fake_login 仍可用
+login_plugins:
+  - vcode_redis
+  - fake_login
+connections:
+  redis_main:
+    driver: redis
+    host: 127.0.0.1
+    port: __MATRIX_REDIS_PORT__
+    database: 0
+    password: "${secret:TESTPLAT_MISSING_REDIS_PASSWORD}"
+identities:
+  df_admin:
+    login:
+      strategy: vcode_redis
+      host: local
+      params:
+        redis_connection: redis_main
+        redis_key_prefix: "gsb:vcode:prefix:"
+        create_vcode.path: /createVCode
+        login.path: /vcode/login
+        login.body_type: form
+        field.username: admin_user
+        field.password: "${secret:TESTPLAT_DF_ADMIN_PASSWORD}"
+        extract.token: $.data.token
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  admin:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_ADMIN_TOKEN}"
+  plugged:
+    login:
+      strategy: fake_login
+      host: local
+      params:
+        behavior: values
+        api_key: "${secret:TESTPLAT_PLUGIN_KEY}"
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+default_identity: admin

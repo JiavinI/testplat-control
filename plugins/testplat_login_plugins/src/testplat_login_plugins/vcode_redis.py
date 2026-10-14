@@ -567,7 +567,12 @@ class VcodeRedisStrategy:
         factory = self._redis_client_factory
         if factory is None:
             import redis.asyncio as redis_async
+            from redis.asyncio.retry import Retry
+            from redis.backoff import NoBackoff
 
+            # 默认重试会把「连接拒绝」拖成数秒，短 timeout_seconds 下被整体误判为 timeout。
+            # 重试次数为 0：不可达应快速变为 ConnectionError → transport。
+            kwargs["retry"] = Retry(NoBackoff(), 0)
             factory = redis_async.Redis
         return factory(**kwargs)
 

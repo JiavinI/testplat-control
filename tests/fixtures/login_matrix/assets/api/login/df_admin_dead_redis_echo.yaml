@@ -1,0 +1,9 @@
+id: api.login.df_admin_dead_redis_echo
+name: df_admin Redis 不可达
+host: local
+method: GET
+url: /echo/token
+auth: df_admin_dead_redis
+request: {}
+success:
+  status_code: 200
