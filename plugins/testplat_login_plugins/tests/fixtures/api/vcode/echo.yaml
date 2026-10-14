@@ -1,0 +1,8 @@
+id: api.vcode.echo
+name: vcode echo
+host: daifa_admin
+method: GET
+url: /echo/token
+auth: df_admin
+success:
+  status_code: 200

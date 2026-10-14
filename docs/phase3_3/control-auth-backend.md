@@ -35,6 +35,14 @@ login_plugins: [vcode_redis]                # 可选；entry point ∩ 白名单
 
 档位：`generic`（单步 + 单条 body_json/response_header 且 as=token + inject 只引用 token + 无 session/probe）/ `configured` / `plugin`。
 
+### 连接秘密与身份阻断（Phase 3.3c §5）
+
+- 某个 `connections` 条目的 `${secret:}` 不可用时：**该连接不进入** `AuthTable.connections`，并记入“不可用连接名”集合；**整次加载不再 422**。
+- login 身份的 `params` 中任一**字符串值**（非 `SecretStr`）等于某个不可用连接名 → 该身份变为 `UnavailableAuth`，`public_reason` 只含连接名（形如 `连接 redis_main 不可用`）；同项目其它身份（静态 header、`generic_flow`、未引用该连接的插件身份）照常。
+- 未被任何身份引用的不可用连接：不影响执行，只写警告日志（只含连接名与变量名，不含字段值）。
+- **引用了不存在的连接名**（拼写错误、未在 `connections` 中声明）：Control **不**检查（不理解插件参数语义）；由插件在 `login()` 找不到连接时抛出自定义异常，公开面归为 `strategy_error`。
+- 422 detail、日志与公开记录均不含连接字段值与秘密。
+
 ### Agent 1 交付说明（§13，写入配置文档）
 
 1. **多步插件应自行拆分超时**：`LoginContext.timeout_seconds` 是每个请求的超时，插件 `login()` 整体另有一份总限时；多步插件不要依赖 Engine 再给一层总预算（A2）。

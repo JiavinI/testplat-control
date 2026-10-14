@@ -1,0 +1,44 @@
+{
+  "viewports": [
+    {
+      "label": "desktop-1440x900",
+      "dom": [
+        {
+          "screenshot": "desktop-1440x900-vcode-redis-success.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-vcode-redis-unreachable.png",
+          "dom_secret_hits": 0
+        }
+      ],
+      "scenes": [
+        "vcode-success",
+        "vcode-unreachable"
+      ],
+      "project_id": "e2830337-45e5-42d8-9c72-e9aae60dfe10",
+      "dynamic_secret_targets": 56
+    },
+    {
+      "label": "mobile-390x844",
+      "dom": [
+        {
+          "screenshot": "mobile-390x844-vcode-redis-success.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-vcode-redis-unreachable.png",
+          "dom_secret_hits": 0
+        }
+      ],
+      "scenes": [
+        "vcode-success",
+        "vcode-unreachable"
+      ],
+      "project_id": "7458c3e4-6f1e-4fca-8ce2-9bcbe3785d5c",
+      "dynamic_secret_targets": 56
+    }
+  ],
+  "error": null,
+  "dynamic_secret_targets": 56
+}

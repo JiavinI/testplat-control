@@ -1,0 +1,82 @@
+# Phase 3.3c：设计稿 §3 等价配置（login.path 用本地 /vcode/login；host 用矩阵 local）
+# __MATRIX_REDIS_PORT__ 由 run_real_engine_matrix.sh 替换为临时 Redis 端口
+login_plugins:
+  - vcode_redis
+  - fake_login
+connections:
+  redis_main:
+    driver: redis
+    host: 127.0.0.1
+    port: __MATRIX_REDIS_PORT__
+    database: 0
+    password: "${secret:TESTPLAT_REDIS_MAIN_PASSWORD}"
+  redis_dead:
+    driver: redis
+    host: 127.0.0.1
+    # 未监听的高端口；避免 :1 在部分系统上连接挂起被归类成 timeout
+    port: __MATRIX_DEAD_REDIS_PORT__
+    database: 0
+    password: "${secret:TESTPLAT_REDIS_MAIN_PASSWORD}"
+identities:
+  df_admin:
+    login:
+      strategy: vcode_redis
+      host: local
+      params:
+        redis_connection: redis_main
+        redis_key_prefix: "gsb:vcode:prefix:"
+        create_vcode.path: /createVCode
+        create_vcode.method: POST
+        create_vcode.body_type: json
+        uuid_path: $.data.uuid
+        login.path: /vcode/login
+        login.method: POST
+        login.body_type: form
+        field.username: admin_user
+        field.password: "${secret:TESTPLAT_DF_ADMIN_PASSWORD}"
+        field.source: daifa
+        field.userType: "1"
+        code_field: code
+        user_key_field: userKey
+        extract.token: $.data.token
+        extract.user_id: $.data.userId
+      validity: { ttl_seconds: 72000 }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+          X-USER-ID: "${login:user_id}"
+  df_admin_dead_redis:
+    login:
+      strategy: vcode_redis
+      host: local
+      params:
+        redis_connection: redis_dead
+        redis_key_prefix: "gsb:vcode:prefix:"
+        create_vcode.path: /createVCode
+        login.path: /vcode/login
+        login.body_type: form
+        field.username: admin_user
+        field.password: "${secret:TESTPLAT_DF_ADMIN_PASSWORD}"
+        field.source: daifa
+        field.userType: "1"
+        extract.token: $.data.token
+        extract.user_id: $.data.userId
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+          X-USER-ID: "${login:user_id}"
+  admin:
+    headers:
+      Authorization: "Bearer ${secret:TESTPLAT_ADMIN_TOKEN}"
+  plugged:
+    login:
+      strategy: fake_login
+      host: local
+      params:
+        behavior: values
+        api_key: "${secret:TESTPLAT_PLUGIN_KEY}"
+        redis: redis_main
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+default_identity: admin

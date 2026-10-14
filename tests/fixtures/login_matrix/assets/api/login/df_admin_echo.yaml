@@ -1,0 +1,9 @@
+id: api.login.df_admin_echo
+name: df_admin 验证码登录回显
+host: local
+method: GET
+url: /echo/token
+auth: df_admin
+request: {}
+success:
+  status_code: 200

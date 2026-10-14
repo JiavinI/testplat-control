@@ -13,10 +13,15 @@
 - 秘密值只在本模块内短暂以 ``str`` 存在，立即包进 ``SecretStr``；任何异常消息、
   ``public_reason``、``log_reason``、日志都只含身份名 / header 名 / 变量名 / 策略名，
   绝不含值或模板原文。
-- 日志只记身份名、变量名、kind、tier、策略名与异常类型名；不用 ``logger.exception`` /
+- 日志只记身份名、变量名、连接名、kind、tier、策略名与异常类型名；不用 ``logger.exception`` /
   ``exc_info``。
-- ``AuthTable.connections`` 始终传入映射（无连接时传空映射，绝不省略，U3）。
+- ``AuthTable.connections`` 始终传入映射（无连接时传空映射，绝不省略，U3）；
+  秘密不可用的连接不进入该映射（Phase 3.3c §5）。
+- 连接秘密不可用 → 只把 ``params`` 中以**字符串值**引用该连接名的 login 身份降为
+  ``UnavailableAuth``（原因只含连接名）；未引用的身份与未引用的不可用连接均不影响加载。
 - 顶层 ``login_plugins`` 白名单随身份表一并返回，供 Engine 启动注册（E1）。
+- 引用了**不存在**的连接名（拼写错误）不在本模块检查；由插件 ``login()`` 报
+  ``strategy_error``（Control 不理解插件参数语义）。
 """
 
 from __future__ import annotations
@@ -678,8 +683,9 @@ def _build_login_identity(
     body: Mapping[str, Any],
     environ: Mapping[str, str],
     login_plugins: Sequence[str],
+    unavailable_connections: frozenset[str] = frozenset(),
 ) -> AuthMaterial:
-    """构造 LoginAuth；秘密不可用 → UnavailableAuth。"""
+    """构造 LoginAuth；秘密不可用或 params 引用不可用连接 → UnavailableAuth。"""
     unknown = sorted(str(k) for k in set(body) - _LOGIN_KEYS)
     if unknown:
         raise _schema_error(env, f"身份 {identity} 的 login 含未知字段: {', '.join(unknown)}")
@@ -781,6 +787,19 @@ def _build_login_identity(
     )
     all_reasons.extend(params_reasons)
 
+    # Phase 3.3c §5：params 中字符串值（非 SecretStr）等于不可用连接名 → 身份不可用。
+    # Control 不理解插件参数语义，只做字面相等；SecretStr 值不参与匹配。
+    if params_rendered and unavailable_connections:
+        hit = sorted(
+            {
+                value
+                for value in params_rendered.values()
+                if isinstance(value, str) and value in unavailable_connections
+            }
+        )
+        if hit:
+            all_reasons.extend(f"连接 {name} 不可用" for name in hit)
+
     validity = _parse_validity(env, identity, body.get("validity"))
 
     # Q1/Q2 身份级：至少一个 inject 值引用 ${login:}，或 session: cookie。
@@ -880,22 +899,19 @@ def _parse_static_headers(env: str, identity: str, headers: object) -> dict[str,
 
 def _parse_connections(
     env: str, raw: object, environ: Mapping[str, str]
-) -> tuple[dict[str, dict[str, object]], list[str]]:
+) -> tuple[dict[str, dict[str, object]], frozenset[str]]:
     """解析 connections；含 ${secret:} 的字段渲染为 SecretStr。
 
-    连接级秘密不可用时不让整表失败，而是记入 reasons 并在日志中提示；
-    按设计 connections 密码缺失应使依赖它的插件身份不可用——本批将连接秘密问题
-    升为 schema/不可用：任一连接字段秘密不可用 → 整次加载转为对该连接的记录，
-    并返回 reasons 供调用方决定。这里采取：连接秘密不可用 → InvalidEnvironmentError
-    过于严格；改为返回 partial 并让 AuthTable 带上已渲染连接，秘密问题写入 reasons，
-    由 load 将其视为配置层错误（连接是共享资源，缺失应 422）。
+    某个连接的秘密不可用时：该连接**不**进入返回的映射，连接名记入不可用集合，
+    并写一条只含连接名与变量名的警告日志（绝不含字段值）。整次加载不因此失败；
+    由 :func:`load_auth` 把引用了不可用连接名的 login 身份降为 ``UnavailableAuth``。
     """
     if raw is None:
-        return {}, []
+        return {}, frozenset()
     if not isinstance(raw, dict):
         raise _schema_error(env, "connections 必须是对象")
     out: dict[str, dict[str, object]] = {}
-    all_reasons: list[str] = []
+    unavailable: set[str] = set()
     for name, fields in raw.items():
         if not isinstance(name, str) or not name:
             raise _schema_error(env, "connections 含非法连接名")
@@ -921,7 +937,14 @@ def _parse_connections(
                 raise _schema_error(env, f"connections.{name}.{key} 必须是标量")
         values, reasons = _collect_secret_problems(secret_names, environ)
         if reasons:
-            all_reasons.extend(reasons)
+            # 原因只含变量名；连接字段值与秘密绝不进日志。
+            unavailable.add(name)
+            logger.warning(
+                "鉴权连接不可用 env=%s connection=%s reasons=%s",
+                env,
+                name,
+                "; ".join(reasons),
+            )
             continue
         for key, item in templates.items():
             if isinstance(item, _MixedTemplate):
@@ -929,7 +952,7 @@ def _parse_connections(
             else:
                 rendered[key] = item
         out[name] = rendered
-    return out, all_reasons
+    return out, frozenset(unavailable)
 
 
 def _parse_login_plugins(env: str, raw: object) -> tuple[str, ...]:
@@ -982,8 +1005,8 @@ def load_auth(
         ``AuthLoadResult``；配置文件不存在时返回 ``None``（Q2，不是空表）。
 
     Raises:
-        InvalidEnvironmentError: YAML 非法、schema 错误、``default_identity`` 不存在（Q7）、
-            连接秘密不可用。
+        InvalidEnvironmentError: YAML 非法、schema 错误、``default_identity`` 不存在（Q7）。
+            连接秘密不可用不再整次 422；只阻断 params 引用该连接的 login 身份。
     """
     source: Mapping[str, str] = os.environ if environ is None else environ
     path = auth_config_path(config_root, env)
@@ -1013,14 +1036,10 @@ def load_auth(
         raise _schema_error(env, "缺少 identities")
 
     login_plugins = _parse_login_plugins(env, loaded.get("login_plugins"))
-    connections, conn_reasons = _parse_connections(env, loaded.get("connections"), source)
-    if conn_reasons:
-        # 连接是共享依赖：秘密不可用视为配置/环境错误（422），避免插件拿到半残连接。
-        detail = "; ".join(dict.fromkeys(conn_reasons))
-        raise InvalidEnvironmentError(
-            public_message=f"鉴权配置无效 ({env}): 连接秘密不可用",
-            log_reason=f"connections 秘密不可用: {detail}",
-        )
+    # 不可用连接不进入 AuthTable.connections；引用它们的 login 身份在下方降级。
+    connections, unavailable_connections = _parse_connections(
+        env, loaded.get("connections"), source
+    )
 
     identities_raw = loaded["identities"]
     if not isinstance(identities_raw, dict):
@@ -1050,7 +1069,12 @@ def load_auth(
             if not isinstance(login_body, dict):
                 raise _schema_error(env, f"身份 {identity} 的 login 必须是对象")
             materials[identity] = _build_login_identity(
-                env, identity, login_body, source, login_plugins
+                env,
+                identity,
+                login_body,
+                source,
+                login_plugins,
+                unavailable_connections,
             )
 
     default_identity = loaded.get("default_identity")

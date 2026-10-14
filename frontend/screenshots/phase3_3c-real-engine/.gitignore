@@ -1,0 +1,7 @@
+# 矩阵运行产物：日志与调试库不入库；截图与报告 JSON 入库
+*.log
+*.leakdbg
+backend.log
+target.log
+frontend.log
+redis.log
