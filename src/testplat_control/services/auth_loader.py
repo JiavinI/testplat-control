@@ -22,6 +22,8 @@
 - 顶层 ``login_plugins`` 白名单随身份表一并返回，供 Engine 启动注册（E1）。
 - 引用了**不存在**的连接名（拼写错误）不在本模块检查；由插件 ``login()`` 报
   ``strategy_error``（Control 不理解插件参数语义）。
+- Phase 3.3d：``cache_scope`` 由调用方传入并交给 ``AuthTable``（Control **不做**缓存）；
+  login 可选 ``reauth_on_401``（默认 True）；缓存键 / 指纹 / token 不进日志与公开面。
 """
 
 from __future__ import annotations
@@ -76,7 +78,17 @@ _EXPIRES_UNITS = frozenset({"seconds", "epoch_ms", "epoch_s"})
 _ROOT_KEYS = frozenset({"identities", "default_identity", "connections", "login_plugins"})
 _IDENTITY_KEYS = frozenset({"headers", "login"})
 _LOGIN_KEYS = frozenset(
-    {"strategy", "host", "steps", "validity", "session", "probe", "inject", "params"}
+    {
+        "strategy",
+        "host",
+        "steps",
+        "validity",
+        "session",
+        "probe",
+        "inject",
+        "params",
+        "reauth_on_401",  # 3.3d：401 重登重发开关（默认 True）
+    }
 )
 
 
@@ -802,6 +814,12 @@ def _build_login_identity(
 
     validity = _parse_validity(env, identity, body.get("validity"))
 
+    # 3.3d：reauth_on_401 默认 True；非布尔 → 422（消息不含原值）。
+    reauth_raw = body.get("reauth_on_401", True)
+    if not isinstance(reauth_raw, bool):
+        raise _schema_error(env, f"身份 {identity} 的 reauth_on_401 必须是布尔值")
+    reauth_on_401 = reauth_raw
+
     # Q1/Q2 身份级：至少一个 inject 值引用 ${login:}，或 session: cookie。
     if inject_headers is not None and not all_reasons:
         plain_refs = _login_refs_in_templates(inject_headers)
@@ -856,6 +874,7 @@ def _build_login_identity(
             session_cookie=session_cookie,
             probe=probe,
             inject_headers=inject_headers,
+            reauth_on_401=reauth_on_401,
         )
     except (TypeError, ValueError) as exc:
         logger.error(
@@ -979,12 +998,13 @@ def load_auth_table(
     env: str,
     *,
     environ: Mapping[str, str] | None = None,
+    cache_scope: str | None = None,
 ) -> AuthTable | None:
     """加载项目环境的身份表（兼容 3.3a 调用方，丢弃白名单）。
 
     需要插件白名单时请用 :func:`load_auth`。
     """
-    result = load_auth(config_root, env, environ=environ)
+    result = load_auth(config_root, env, environ=environ, cache_scope=cache_scope)
     return None if result is None else result.table
 
 
@@ -993,6 +1013,7 @@ def load_auth(
     env: str,
     *,
     environ: Mapping[str, str] | None = None,
+    cache_scope: str | None = None,
 ) -> AuthLoadResult | None:
     """加载项目环境的身份表与 ``login_plugins`` 白名单。
 
@@ -1000,6 +1021,9 @@ def load_auth(
         config_root: 项目配置根目录。
         env: 环境名（调用方已由 ``load_project_environment`` 校验非空）。
         environ: 秘密来源；缺省为 ``os.environ``（测试注入假值）。
+        cache_scope: 跨执行缓存作用域（3.3d）；由 ``execution_service`` 传
+            ``f"{project.id}:{project.env}"``；``None`` → 不跨执行缓存。
+            Control 只传作用域，**不做**任何缓存实现。
 
     Returns:
         ``AuthLoadResult``；配置文件不存在时返回 ``None``（Q2，不是空表）。
@@ -1088,10 +1112,12 @@ def load_auth(
 
     try:
         # U3：始终传 connections 映射（可空），不省略字段。
+        # 3.3d：cache_scope 原样交给 Engine；None 表示本表不跨执行缓存。
         table = AuthTable(
             identities=materials,
             default_identity=default_identity,
             connections=connections,
+            cache_scope=cache_scope,
         )
     except (TypeError, ValueError) as exc:
         logger.error("构造身份表失败 env=%s exc_type=%s", env, type(exc).__name__)

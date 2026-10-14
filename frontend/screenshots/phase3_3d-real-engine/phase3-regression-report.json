@@ -1,0 +1,47 @@
+{
+  "evidence": [
+    {
+      "step": "create_project",
+      "id": "c8d43bb2-8f2a-45bb-aa14-fabe9eb465f4"
+    },
+    {
+      "step": "success",
+      "ok": true
+    },
+    {
+      "step": "assertion_failed",
+      "ok": true
+    },
+    {
+      "step": "preflight_422",
+      "ok": true
+    },
+    {
+      "step": "legacy_422",
+      "ok": true
+    },
+    {
+      "step": "transport_502_serial_locate",
+      "record_id": "21ba6159-e00a-469b-a6f1-0e37288bb49d",
+      "ok": true
+    },
+    {
+      "step": "timeout_504_serial_locate",
+      "record_id": "947923f5-ebf0-4262-af3a-941380b530e2",
+      "ok": true
+    },
+    {
+      "step": "history_detail",
+      "ok": true
+    }
+  ],
+  "unexpectedConsole": [],
+  "unexpectedFailed": [],
+  "pageErrors": [],
+  "failedRequests": [
+    "422 POST http://127.0.0.1:55173/api/projects/c8d43bb2-8f2a-45bb-aa14-fabe9eb465f4/cases/case.demo.undeclared_alias/run",
+    "422 POST http://127.0.0.1:55173/api/projects/c8d43bb2-8f2a-45bb-aa14-fabe9eb465f4/cases/case.demo.legacy_v1/run",
+    "502 POST http://127.0.0.1:55173/api/projects/c8d43bb2-8f2a-45bb-aa14-fabe9eb465f4/cases/case.demo.transport/run",
+    "504 POST http://127.0.0.1:55173/api/projects/c8d43bb2-8f2a-45bb-aa14-fabe9eb465f4/cases/case.demo.timeout/run"
+  ]
+}

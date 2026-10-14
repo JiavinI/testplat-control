@@ -53,6 +53,20 @@ export function AuthSummary({ auth, mode, testId = 'auth-summary' }: AuthSummary
             login_ref：{auth.login_ref}
           </Tag>
         ) : null}
+        {auth.session_source === 'cache' ? (
+          <Tag data-testid={`${testId}-session-cache`} className="tp-auth-session-cache">
+            复用登录（未重新登录）
+          </Tag>
+        ) : null}
+        {auth.reauthenticated ? (
+          <Tag
+            color="orange"
+            data-testid={`${testId}-reauthenticated`}
+            className="tp-auth-reauthenticated"
+          >
+            鉴权失效，已重新登录并重发
+          </Tag>
+        ) : null}
       </Space>
       {/* 原生 details：零依赖、键盘可达，默认收起，展开只列名字 */}
       <details className="tp-auth-details">
@@ -103,6 +117,18 @@ export function AuthSummary({ auth, mode, testId = 'auth-summary' }: AuthSummary
             ) : (
               '—'
             )}
+          </dd>
+          <dt>session_source</dt>
+          <dd data-testid={`${testId}-session-source-detail`}>
+            {auth.session_source ? (
+              <Typography.Text code>{auth.session_source}</Typography.Text>
+            ) : (
+              '—'
+            )}
+          </dd>
+          <dt>reauthenticated</dt>
+          <dd data-testid={`${testId}-reauthenticated-detail`}>
+            {auth.reauthenticated ? 'true' : 'false'}
           </dd>
         </dl>
       </details>

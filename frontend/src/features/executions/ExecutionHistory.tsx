@@ -18,6 +18,7 @@ import { AuthSummary } from './AuthSummary'
 import { JsonBlock } from './JsonBlock'
 import { LoginFailedBanner } from './LoginFailedBanner'
 import { LoginProcessPanel } from './LoginProcessPanel'
+import { isCacheReuseWithoutLogin } from './loginDisplay'
 import {
   apiResultHasLoginFailed,
   caseHasLoginFailed,
@@ -538,6 +539,14 @@ function ApiDetailBody({ detail }: { detail: ExecutionRecordDetail }) {
             highlightRef={detail.auth?.login_ref ?? null}
           />
         </div>
+      ) : isCacheReuseWithoutLogin(detail.auth) ? (
+        <Typography.Text
+          type="secondary"
+          data-testid="login-cache-reuse-note"
+          style={{ display: 'block', marginBottom: 16 }}
+        >
+          复用登录（未重新登录），本次无登录过程可查看
+        </Typography.Text>
       ) : null}
 
       {parseError ? (

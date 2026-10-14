@@ -158,12 +158,13 @@ class ExecutionRecordListResponse(BaseModel):
 
 
 class ExecutionAuth(BaseModel):
-    """一次 API / 步骤实际使用的身份（Phase 3.3b，Engine 0.4 公开 ``auth`` 七键，U3/H5）。
+    """一次 API / 步骤实际使用的身份（Phase 3.3d，Engine 0.5 公开 ``auth`` 九键）。
 
     只含身份名、kind、tier 与 header/Cookie **名**，永不含秘密值；匿名执行时整个字段为 null。
-    ``extra="forbid"``：Engine 的公开 auth 恰好七键，多出的键说明契约漂移，宁可解析失败。
+    ``extra="forbid"``：Engine 的公开 auth 恰好九键，多出的键说明契约漂移，宁可解析失败。
     静态 header 身份：``kind=static_headers``、``tier=null``、
-    ``cookie_names=[]``、``login_ref=null``。
+    ``cookie_names=[]``、``login_ref=null``、``session_source=null``、``reauthenticated=false``。
+    旧记录（七键）缺 ``session_source`` / ``reauthenticated`` 时按 ``null`` / ``false`` 兼容。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -182,6 +183,14 @@ class ExecutionAuth(BaseModel):
     )
     login_ref: int | None = Field(
         None, description="指向结果顶层 logins 的下标；静态 header 或未登录为 null"
+    )
+    session_source: str | None = Field(
+        None,
+        description=("会话来源：login / execution / cache；静态 header 为 null；旧记录缺省 null"),
+    )
+    reauthenticated: bool = Field(
+        False,
+        description="本步是否触发了 401 重登重发；静态 header 恒为 false；旧记录缺省 false",
     )
 
 
@@ -231,7 +240,8 @@ class ExecutionRecordDetailResponse(BaseModel):
     request: Any | None = Field(None, description="结果中的请求详情")
     response: Any | None = Field(None, description="结果中的响应详情")
     auth: ExecutionAuth | None = Field(
-        None, description="单 API 结果中的身份信息（Phase 3.3a）；匿名、Case 记录或旧记录为 null"
+        None,
+        description="单 API 身份（Phase 3.3d 九键）；匿名/Case/旧记录为 null",
     )
 
     @classmethod

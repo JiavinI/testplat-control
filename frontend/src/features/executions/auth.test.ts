@@ -37,6 +37,8 @@ describe('parseExecutionAuth（冻结示例）', () => {
       overridden_headers: ['authorization'],
       cookie_names: [],
       login_ref: null,
+      session_source: null,
+      reauthenticated: false,
     })
   })
 
@@ -64,7 +66,7 @@ describe('parseExecutionAuth（冻结示例）', () => {
     expect(legacy.auth).toBeNull()
   })
 
-  it('只保留七个公开键，多余键（即使含值）被丢弃', () => {
+  it('只保留九个公开键，多余键（即使含值）被丢弃', () => {
     const parsed = parseExecutionAuth(
       {
         identity: 'admin',
@@ -86,6 +88,8 @@ describe('parseExecutionAuth（冻结示例）', () => {
       overridden_headers: [],
       cookie_names: [],
       login_ref: null,
+      session_source: null,
+      reauthenticated: false,
     })
     expect(JSON.stringify(parsed)).not.toContain(FAKE_SECRETS[0])
   })
@@ -112,7 +116,7 @@ describe('身份展示判定', () => {
   it('单 API：null 即匿名', () => {
     expect(apiAuthDisplayMode(null)).toBe('anonymous')
     expect(
-      apiAuthDisplayMode({ identity: 'admin', kind: 'static_headers', tier: null, header_names: [], overridden_headers: [], cookie_names: [], login_ref: null }),
+      apiAuthDisplayMode({ identity: 'admin', kind: 'static_headers', tier: null, header_names: [], overridden_headers: [], cookie_names: [], login_ref: null, session_source: null, reauthenticated: false }),
     ).toBe('identity')
   })
 
@@ -167,3 +171,72 @@ describe('身份展示判定', () => {
     expect(stepAuthDisplayMode(step)).toBe('anonymous')
   })
 })
+
+
+describe('Phase 3.3d session_source / reauthenticated', () => {
+  it('旧七键记录：缺两键 → null / false', () => {
+    const parsed = parseExecutionAuth(
+      {
+        identity: 'admin',
+        kind: 'static_headers',
+        tier: null,
+        header_names: ['Authorization'],
+        overridden_headers: [],
+        cookie_names: [],
+        login_ref: null,
+      },
+      'legacy',
+    )
+    expect(parsed?.session_source).toBeNull()
+    expect(parsed?.reauthenticated).toBe(false)
+  })
+
+  it('cache 命中：session_source=cache 且 login_ref=null', () => {
+    const parsed = parseExecutionAuth(
+      {
+        identity: 'buyer',
+        kind: 'login',
+        tier: 'generic',
+        header_names: ['X-TOKEN'],
+        overridden_headers: [],
+        cookie_names: [],
+        login_ref: null,
+        session_source: 'cache',
+        reauthenticated: false,
+      },
+      'cache',
+    )
+    expect(parsed).toEqual({
+      identity: 'buyer',
+      kind: 'login',
+      tier: 'generic',
+      header_names: ['X-TOKEN'],
+      overridden_headers: [],
+      cookie_names: [],
+      login_ref: null,
+      session_source: 'cache',
+      reauthenticated: false,
+    })
+  })
+
+  it('401 重登重发：reauthenticated=true', () => {
+    const parsed = parseExecutionAuth(
+      {
+        identity: 'buyer',
+        kind: 'login',
+        tier: 'generic',
+        header_names: ['X-TOKEN'],
+        overridden_headers: [],
+        cookie_names: [],
+        login_ref: 0,
+        session_source: 'login',
+        reauthenticated: true,
+      },
+      'reauth',
+    )
+    expect(parsed?.reauthenticated).toBe(true)
+    expect(parsed?.session_source).toBe('login')
+    expect(parsed?.login_ref).toBe(0)
+  })
+})
+

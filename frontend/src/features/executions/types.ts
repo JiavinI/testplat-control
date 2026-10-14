@@ -12,9 +12,10 @@ export type CaseStepStatus = 'success' | 'failed' | 'skipped'
 export type CaseSystemErrorKind = 'timeout' | 'transport' | 'internal'
 
 /**
- * Phase 3.3b 公开身份（七键）：只有名字与档位，没有秘密值。
+ * Phase 3.3d 公开身份（九键）：只有名字与档位，没有秘密值。
  * null 的含义由上下文决定：单 API / 历史详情里是匿名执行；
  * Case 步骤里也可能是“没有发出请求”（见 auth.ts）。
+ * 旧记录缺 session_source / reauthenticated 时解析侧按 null / false 兼容。
  */
 export interface ExecutionAuth {
   identity: string
@@ -26,8 +27,12 @@ export interface ExecutionAuth {
   overridden_headers: string[]
   /** 携带的 Cookie 名（不含值）；静态 header 恒为 [] */
   cookie_names: string[]
-  /** 指向结果顶层 logins 下标；静态 header 或未登录为 null */
+  /** 指向结果顶层 logins 下标；静态 header 或未登录 / 缓存命中为 null */
   login_ref: number | null
+  /** login / execution / cache；静态 header 或旧记录为 null */
+  session_source: string | null
+  /** 本步是否触发了 401 重登重发；旧记录缺省 false */
+  reauthenticated: boolean
 }
 
 /** 登录失败 reason 枚举（与 Engine LOGIN_FAILURE_REASONS 对齐） */

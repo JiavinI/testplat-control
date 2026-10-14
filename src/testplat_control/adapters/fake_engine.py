@@ -2,7 +2,7 @@
 
 仅通过 DI / dependency_overrides 注入；默认 provider 不会选择本实现。
 
-Fake 与真实 Engine 共用**同一份公开 DTO**：Case 结果直接构造 Engine 0.4 的
+Fake 与真实 Engine 共用**同一份公开 DTO**：Case 结果直接构造 Engine 0.5 的
 ``CaseExecutionOutcome`` / ``StepOutcome``（它们在构造期强制步骤顺序、计数、
 fail-fast 与脱敏不变量），而不是 Control 自己拼 dict。因此 Fake 的输出形状不可能
 与真实 Engine 漂移；``tests/test_case_contract.py`` 用同一套断言校验两者。
@@ -10,7 +10,7 @@ fail-fast 与脱敏不变量），而不是 Control 自己拼 dict。因此 Fake
 鉴权（Phase 3.3b）：Fake 不解析资产 YAML，因此用“请求里的 ``default_identity``，
 或构造参数 ``auth_identity`` 指定的身份”模拟资产声明。被选中身份为 ``UnavailableAuth`` /
 不存在 → 与真实 Engine 一样抛 preflight ``InvalidEnvironmentError``；为
-``StaticHeaderAuth`` / ``LoginAuth`` → 结果与每个非 skipped 步骤带公开七键 ``auth``，
+``StaticHeaderAuth`` / ``LoginAuth`` → 结果与每个非 skipped 步骤带公开九键 ``auth``，
 请求快照里凭证头值为 ``***``。``login_failed`` 模式供前端门禁。
 Fake **从不**调用 ``SecretStr.reveal()``：它不需要秘密值就能产生同形结果。
 """
@@ -43,7 +43,7 @@ def _public_auth_static(
     header_names: Sequence[str],
     overridden: Sequence[str] = (),
 ) -> JsonObject:
-    """静态 header 身份的公开七键 auth（tier/cookie_names/login_ref 固定）。"""
+    """静态 header 身份的公开九键 auth（3.3d：session_source/reauthenticated 固定）。"""
     return {
         "identity": name,
         "kind": "static_headers",
@@ -52,6 +52,8 @@ def _public_auth_static(
         "overridden_headers": list(overridden),
         "cookie_names": [],
         "login_ref": None,
+        "session_source": None,
+        "reauthenticated": False,
     }
 
 
@@ -62,8 +64,10 @@ def _public_auth_login(
     overridden: Sequence[str] = (),
     login_ref: int = 0,
     cookie_names: Sequence[str] | None = None,
+    session_source: str | None = "login",
+    reauthenticated: bool = False,
 ) -> JsonObject:
-    """login 身份的公开七键 auth。"""
+    """login 身份的公开九键 auth（3.3d）。"""
     cookies = (
         list(cookie_names)
         if cookie_names is not None
@@ -77,6 +81,8 @@ def _public_auth_login(
         "overridden_headers": list(overridden),
         "cookie_names": cookies,
         "login_ref": login_ref,
+        "session_source": session_source,
+        "reauthenticated": reauthenticated,
     }
 
 
@@ -405,7 +411,7 @@ class FakeEngineAdapter:
         )
 
     def _resolve_auth(self, table: AuthTable | None) -> tuple[JsonObject | None, list[JsonObject]]:
-        """模拟 Engine 预检的身份解析，返回公开 auth（七键）与 logins。"""
+        """模拟 Engine 预检的身份解析，返回公开 auth（九键）与 logins。"""
         name = self.auth_identity
         if name is None and table is not None:
             name = table.default_identity

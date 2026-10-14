@@ -4,8 +4,10 @@ Phase 3.3a 回显端点保留；Phase 3.3b 新增登录相关端点（对齐 Eng
 JSON/表单/query 登录、CSRF 预取 + Cookie 登录 + probe、短 TTL、回显 token/Cookie、
 401、raw/form/query/json 回显、慢/挂端点。
 Phase 3.3c：POST /createVCode、POST /vcode/login；验证码写入矩阵 Redis；签发秘密追加到临时文件。
+Phase 3.3d：按用户名的登录计数、吊销已签发 token、always_401、登录失败开关；
+业务端点对失效 / always_401 返回 401。
 
-本服务自身绝不打印凭证原值：/__inspect 只暴露摘要与路径。
+本服务自身绝不打印凭证原值：/__inspect 只暴露摘要、计数与路径。
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ SECRET = "srv-secret-token-matrix-9f31"
 CREDENTIAL_HEADERS = ("authorization", "x-api-key", "x-tenant-token")
 # 3.3b 登录假秘密（与矩阵环境变量渲染结果一致；同时是泄密搜索目标）
 BUYER_PASSWORD = "tp-fake-buyer-pass-71c2"
+BUYER_PASSWORD_ALT = "tp-fake-buyer-pass-ALT99"
 SELLER_PASSWORD = "tp-fake-seller-pass-93ab"
 REDIS_PASSWORD = "tp-fake-redis-pass-5e0d"
 PLUGIN_KEY = "tp-fake-plugin-key-11aa"
@@ -55,6 +58,11 @@ _VCODE_OMIT_TOKEN = False
 _VCODE_FORCE_LOGIN_FAIL = False
 _ISSUED_SECRETS_PATH: str | None = None
 _REDIS_WRITE_COUNT = 0
+# 3.3d：登录计数（按登录用户名，与矩阵身份 1:1）、吊销集合、401/登录失败开关
+_LOGIN_COUNTS: dict[str, int] = {}
+_REVOKED: set[str] = set()
+_ALWAYS_401 = False
+_FORCE_LOGIN_FAIL = False
 
 
 def _digest(value: str) -> str:
@@ -96,6 +104,32 @@ def _append_issued_secret(value: str) -> None:
         return
     with _STATE_LOCK:
         _append_issued_secret_unlocked(value)
+
+
+def _bump_login_count(user: str) -> None:
+    """登录成功后按用户名 +1（调用方已持锁或不需与签发同事务时由 _login_ok 路径调用）。"""
+    with _STATE_LOCK:
+        _LOGIN_COUNTS[user] = _LOGIN_COUNTS.get(user, 0) + 1
+
+
+def _extract_bearer_or_xtoken(headers) -> str | None:  # noqa: ANN001
+    xt = headers.get("X-TOKEN") or headers.get("X-Token")
+    if xt:
+        return xt
+    authz = headers.get("Authorization") or ""
+    if authz.lower().startswith("bearer "):
+        return authz[7:].strip()
+    return None
+
+
+def _business_unauthorized(headers) -> bool:  # noqa: ANN001
+    """业务端点：always_401 或 token 已被吊销 → 401。"""
+    if _ALWAYS_401:
+        return True
+    token = _extract_bearer_or_xtoken(headers)
+    if token and token in _REVOKED:
+        return True
+    return False
 
 
 def _redis_write_code(uuid_value: str, code: str) -> None:
@@ -144,7 +178,7 @@ def _next_session() -> str:
 
 
 class Handler(BaseHTTPRequestHandler):
-    """本地 demo 目标：3.3a 回显 + 3.3b 登录端点 + 3.3c 验证码。"""
+    """本地 demo 目标：3.3a 回显 + 3.3b 登录 + 3.3c 验证码 + 3.3d 吊销/计数。"""
 
     def _read_body(self) -> bytes:
         length = int(self.headers.get("Content-Length") or 0)
@@ -196,10 +230,14 @@ class Handler(BaseHTTPRequestHandler):
         csrf: bool = False,
         expires_in: int | None = None,
     ) -> None:
-        if password not in (BUYER_PASSWORD, SELLER_PASSWORD):
+        if _FORCE_LOGIN_FAIL:
+            self._json(200, {"code": 1, "msg": "forced login fail"})
+            return
+        if password not in (BUYER_PASSWORD, BUYER_PASSWORD_ALT, SELLER_PASSWORD):
             self._json(200, {"code": 1, "msg": "bad password"})
             return
         token = _next_token(user)
+        _bump_login_count(user)
         data: dict[str, object] = {
             "token": token,
             # hash 不得镜像 token 原值：登录快照按键脱敏只覆盖 token 键，镜像字段会进 SQLite。
@@ -225,6 +263,8 @@ class Handler(BaseHTTPRequestHandler):
                 _ISSUED.clear()
                 _SESSIONS.clear()
                 _REDIS_WRITE_COUNT = 0
+                _LOGIN_COUNTS.clear()
+                # 吊销集合保留：已写入 issued-secrets 的旧 token 仍可被业务拒绝与泄密搜索覆盖
             self._json(200, {"reset": True})
             return
         if path == "/__inspect/config":
@@ -236,6 +276,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             global _EXPIRES_IN, _SESSION_MAX_AGE, _SKIP_REDIS_WRITE
             global _CREATE_VCODE_STATUS, _VCODE_OMIT_TOKEN, _VCODE_FORCE_LOGIN_FAIL
+            global _ALWAYS_401, _FORCE_LOGIN_FAIL
             with _STATE_LOCK:
                 if "expires_in" in cfg:
                     _EXPIRES_IN = int(cfg["expires_in"])
@@ -250,6 +291,27 @@ class Handler(BaseHTTPRequestHandler):
                     _VCODE_OMIT_TOKEN = bool(cfg["vcode_omit_token"])
                 if "vcode_force_login_fail" in cfg:
                     _VCODE_FORCE_LOGIN_FAIL = bool(cfg["vcode_force_login_fail"])
+                # 3.3d：吊销当前已签发 token；always_401；强制登录失败
+                if cfg.get("revoke_current_token") is True:
+                    # 内存已签发 + issued-secrets 文件（reset 清空 _ISSUED；缓存可能仍持旧 token）
+                    for tok in list(_ISSUED):
+                        if tok.startswith("tok-") or tok.startswith("sess-"):
+                            _REVOKED.add(tok)
+                    if _ISSUED_SECRETS_PATH:
+                        try:
+                            with open(_ISSUED_SECRETS_PATH, encoding="utf-8") as fh:
+                                for line in fh:
+                                    item = line.strip()
+                                    if item.startswith("tok-") or item.startswith("sess-"):
+                                        _REVOKED.add(item)
+                        except OSError:
+                            pass
+                if "always_401" in cfg:
+                    _ALWAYS_401 = bool(cfg["always_401"])
+                if "force_login_fail" in cfg:
+                    _FORCE_LOGIN_FAIL = bool(cfg["force_login_fail"])
+                if "clear_revoked" in cfg and cfg["clear_revoked"]:
+                    _REVOKED.clear()
             self._json(200, {"ok": True})
             return
 
@@ -258,7 +320,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/demo/resources":
             self._json(201, {"id": "res-42", "access_token": SECRET})
             return
-        if path == "/login/json":
+        if path in ("/login/json", "/login/json-alt"):
             data = json.loads(text or "{}")
             self._login_ok(str(data.get("username", "?")), data.get("password"))
             return
@@ -278,6 +340,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"code": 2, "msg": "locked", "trace": FAIL_DETAIL})
             return
         if path == "/csrf/login":
+            if _FORCE_LOGIN_FAIL:
+                self._redirect("/login")
+                return
             form = {k: v[0] for k, v in parse_qs(text).items()}
             csrf = form.get("_csrf")
             password = form.get("password") or form.get("LoginForm[password]")
@@ -286,19 +351,30 @@ class Handler(BaseHTTPRequestHandler):
                 self._redirect("/login")
                 return
             session = _next_session()
+            user = form.get("username") or form.get("LoginForm[username]") or "seller001"
+            _bump_login_count(user)
             cookie_hdr = f"SESSION={session}; Path=/"
             if _SESSION_MAX_AGE is not None:
                 cookie_hdr += f"; Max-Age={_SESSION_MAX_AGE}"
             self._redirect("/home", [("Set-Cookie", cookie_hdr)])
             return
         if path == "/echo/raw":
+            if _business_unauthorized(self.headers):
+                self._json(401, {"msg": "unauthorized"})
+                return
             self._json(200, {"raw": text, "content_type": self.headers.get("Content-Type")})
             return
         if path == "/echo/form":
+            if _business_unauthorized(self.headers):
+                self._json(401, {"msg": "unauthorized"})
+                return
             form = {k: v[0] for k, v in parse_qs(text).items()}
             self._json(200, {"form": form, "content_type": self.headers.get("Content-Type")})
             return
         if path == "/echo/json":
+            if _business_unauthorized(self.headers):
+                self._json(401, {"msg": "unauthorized"})
+                return
             self._json(200, json.loads(text or "null"))
             return
         if path == "/createVCode":
@@ -316,7 +392,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/vcode/login":
             # form：校验验证码与 userKey；成功返回 token 与 userId
-            if _VCODE_FORCE_LOGIN_FAIL:
+            if _VCODE_FORCE_LOGIN_FAIL or _FORCE_LOGIN_FAIL:
                 self._json(401, {"code": 1, "msg": "forced fail"})
                 return
             form = {k: v[0] for k, v in parse_qs(text).items()}
@@ -351,6 +427,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"code": 0, "data": {"userId": "10001"}})
                 return
             token = _next_token(username or "dfadmin")
+            _bump_login_count(username or "dfadmin")
             self._json(200, {"code": 0, "data": {"token": token, "userId": "10001"}})
             return
         if path == "/plugin/login":
@@ -366,11 +443,17 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/__inspect":
             with _RECEIVED_LOCK:
+                reqs = list(_RECEIVED)
+            with _STATE_LOCK:
                 payload = {
-                    "requests": list(_RECEIVED),
+                    "requests": reqs,
                     "issued_count": len(_ISSUED),
                     "session_count": len(_SESSIONS),
                     "redis_write_count": _REDIS_WRITE_COUNT,
+                    "login_counts": dict(_LOGIN_COUNTS),
+                    "revoked_count": len(_REVOKED),
+                    "always_401": _ALWAYS_401,
+                    "force_login_fail": _FORCE_LOGIN_FAIL,
                 }
             self._json(200, payload)
             return
@@ -435,6 +518,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._text(200, '<form id="loginFrom"></form>')
             return
         if path == "/echo/token":
+            if _business_unauthorized(self.headers):
+                self._json(401, {"msg": "unauthorized"})
+                return
             self._json(
                 200,
                 {
@@ -467,7 +553,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="本地 Engine target（3.3a+3.3b+3.3c）")
+    parser = argparse.ArgumentParser(description="本地 Engine target（3.3a+3.3b+3.3c+3.3d）")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18099)
     parser.add_argument("--redis-host", default="127.0.0.1")

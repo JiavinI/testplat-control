@@ -89,6 +89,7 @@ BACKEND = os.environ.get("MATRIX_BACKEND_URL", "http://127.0.0.1:8000")
 TARGET = os.environ["MATRIX_TARGET_URL"]
 ASSETS_ROOT = os.environ["MATRIX_LOGIN_ASSETS_ROOT"]
 OUT_DIR = Path(os.environ["MATRIX_VCODE_OUT_DIR"])
+ISSUED_PATH = Path(os.environ.get("MATRIX_ISSUED_SECRETS_PATH", ""))
 REDIS_HOST = os.environ.get("MATRIX_REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ["MATRIX_REDIS_PORT"])
 REDIS_PASS = os.environ["MATRIX_REDIS_PASSWORD"]
@@ -97,6 +98,20 @@ ROOTS = {
     "vcode-conn-missing": os.environ["MATRIX_ROOT_VCODE_CONN_MISSING"],
     "vcode-no-whitelist": os.environ["MATRIX_ROOT_VCODE_NO_WHITELIST"],
 }
+
+
+def _load_issued() -> list[str]:
+    if not ISSUED_PATH.is_file():
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for line in ISSUED_PATH.read_text("utf-8").splitlines():
+        item = line.strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
 
 
 def leaks(text: str) -> int:
@@ -277,16 +292,18 @@ def main() -> int:
         m.configure_target(create_vcode_status=200)
         blob = "\n".join(samples)
         assert leaks(blob) == 0
-        # redis_get 记录允许出现 key_prefix；密码 / token 形态不得出现
+        # redis_get 记录允许出现 key_prefix；密码 / 每个动态 token 精确断言不出现
         assert REDIS_PASSWORD not in blob
         assert DF_ADMIN_PASSWORD not in blob
-        assert "tok-" not in blob or "***" in blob
+        for tok in (v for v in _load_issued() if v.startswith("tok-")):
+            assert tok not in blob, "动态 token 出现在公开面"
         return {"ok": True}
 
     m.check("L23", "§6-23", "验证码/uuid/密码/token/Redis 密码不出现在公开面", l23)
 
     def l24() -> dict[str, Any]:
         m.configure_target(skip_redis_write=False, create_vcode_status=200, vcode_omit_token=False)
+        before = set(_load_issued())
         m.reset_target()
         resp = m.run_api("vcode", "api.login.df_admin_echo")
         body = resp.json()
@@ -296,9 +313,16 @@ def main() -> int:
             echo = ((body.get("response") or {}).get("body") or {}).get("echo")
         assert echo and (echo.get("x_token") == "***" or "***" in str(echo.get("x_token")))
         assert leaks(resp.text) == 0
-        # uuid 作为命名值应被按值替换（长度通常 ≥ 8）
-        assert "a1b2c3d4-e5f6" not in resp.text  # 不依赖固定 uuid；仅确保形态不裸奔过严
-        return {"ok": True, "echo_x_token": echo.get("x_token")}
+        # 用本次签发的 uuid（issued-secrets 新增项）精确断言不出现在公开面
+        after = _load_issued()
+        new_vals = [v for v in after if v not in before]
+        uuids = [v for v in new_vals if len(v) == 36 and v.count("-") == 4]
+        assert uuids, "本次执行应签发 uuid"
+        for uid in uuids:
+            assert uid not in resp.text, "签发 uuid 出现在公开面"
+        for tok in (v for v in new_vals if v.startswith("tok-")):
+            assert tok not in resp.text
+        return {"ok": True, "echo_x_token": echo.get("x_token"), "issued_uuid_checked": len(uuids)}
 
     m.check("L24", "§6-24", "业务回显 token → ***", l24)
 

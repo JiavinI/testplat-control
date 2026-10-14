@@ -1,9 +1,10 @@
 /**
- * Phase 3.3b 公开身份（auth）字段的解析与展示判定。
+ * Phase 3.3d 公开身份（auth）字段的解析与展示判定。
  *
- * 契约来源：docs/phase3_3/openapi-phase3_3.json（Control Agent 2，七键 ExecutionAuth）。
- * 后端公开 auth 只有名字类字段，永远不含凭证值；前端只读取七键，其它键一律丢弃。
- * 旧三键响应（无 kind）按静态 header 缺省补齐，避免历史记录整页崩。
+ * 契约来源：docs/phase3_3/openapi-phase3_3.json（九键 ExecutionAuth）。
+ * 后端公开 auth 只有名字类字段，永远不含凭证值；前端只读取九键，其它键一律丢弃。
+ * 旧三键响应（无 kind）按静态 header 缺省补齐；旧七键缺 session_source / reauthenticated
+ * 时按 null / false 兼容，避免历史记录整页崩。
  */
 import { ApiParseError } from '@/shared/api/errors'
 import type { CaseStepResult, ExecutionAuth } from './types'
@@ -32,7 +33,8 @@ function parseLoginRef(value: unknown, label: string): number | null {
 
 /**
  * 解析公开 auth：缺失或 null → null（匿名或“未发请求”，由调用方按上下文区分）。
- * 只挑出七个公开键；畸形时抛 ApiParseError，错误里只回显名字类结构。
+ * 只挑出九个公开键；畸形时抛 ApiParseError，错误里只回显名字类结构。
+ * 缺 session_source / reauthenticated（旧记录）→ null / false。
  */
 export function parseExecutionAuth(value: unknown, label: string): ExecutionAuth | null {
   if (value === undefined || value === null) {
@@ -61,6 +63,20 @@ export function parseExecutionAuth(value: unknown, label: string): ExecutionAuth
     }
     tier = obj.tier
   }
+  let session_source: string | null = null
+  if ('session_source' in obj && obj.session_source !== undefined && obj.session_source !== null) {
+    if (typeof obj.session_source !== 'string') {
+      throw new ApiParseError(`${label}.session_source 非法`, typeof obj.session_source)
+    }
+    session_source = obj.session_source
+  }
+  let reauthenticated = false
+  if ('reauthenticated' in obj && obj.reauthenticated !== undefined && obj.reauthenticated !== null) {
+    if (typeof obj.reauthenticated !== 'boolean') {
+      throw new ApiParseError(`${label}.reauthenticated 非法`, typeof obj.reauthenticated)
+    }
+    reauthenticated = obj.reauthenticated
+  }
   return {
     identity: obj.identity,
     kind,
@@ -75,6 +91,8 @@ export function parseExecutionAuth(value: unknown, label: string): ExecutionAuth
       'login_ref' in obj ? obj.login_ref : null,
       `${label}.login_ref`,
     ),
+    session_source,
+    reauthenticated,
   }
 }
 

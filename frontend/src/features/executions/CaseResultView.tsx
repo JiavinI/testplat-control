@@ -6,6 +6,7 @@ import { findFirstFailedStepIndex } from './caseParse'
 import { JsonBlock } from './JsonBlock'
 import { LoginFailedBanner } from './LoginFailedBanner'
 import { LoginProcessPanel } from './LoginProcessPanel'
+import { isCacheReuseWithoutLogin } from './loginDisplay'
 import {
   caseHasLoginFailed,
   isLoginFailedStep,
@@ -211,6 +212,14 @@ export function CaseResultView({ result, recordId, locateNote }: CaseResultViewP
             highlightRef={firstLoginFailed?.auth?.login_ref ?? null}
           />
         </div>
+      ) : result.steps.some((step) => isCacheReuseWithoutLogin(step.auth)) ? (
+        <Typography.Text
+          type="secondary"
+          data-testid="login-cache-reuse-note"
+          style={{ display: 'block', marginBottom: 16 }}
+        >
+          复用登录（未重新登录），本次无登录过程可查看
+        </Typography.Text>
       ) : null}
 
       <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>

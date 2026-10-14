@@ -1,0 +1,9 @@
+id: api.login.buyer_ttl32_echo
+name: ttl32 buyer 回显
+host: local
+method: GET
+url: /echo/token
+auth: buyer_ttl32
+request: {}
+success:
+  status_code: 200

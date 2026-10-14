@@ -1,5 +1,5 @@
---- docs/phase3/openapi-phase3.json
-+++ docs/phase3_3/openapi-phase3_3.json
+--- docs/phase3/openapi-phase3.json	2026-10-14 12:03:15
++++ docs/phase3_3/openapi-phase3_3.json	2026-10-14 12:16:35
 @@ -238,7 +238,7 @@
          "type": "object"
        },
@@ -9,11 +9,10 @@
          "properties": {
            "case_id": {
              "description": "Case ID",
-@@ -261,6 +261,15 @@
-               }
+@@ -262,6 +262,15 @@
              ],
              "description": "仅 execution 系统错误记录非 null"
-+          },
+           },
 +          "logins": {
 +            "description": "本次执行的登录记录（已脱敏）；无登录时为 []（A8）",
 +            "items": {
@@ -22,9 +21,10 @@
 +            },
 +            "title": "Logins",
 +            "type": "array"
-           },
++          },
            "status": {
              "description": "success 当且仅当全部步骤 success",
+             "enum": [
 @@ -413,7 +422,7 @@
        },
        "CaseStepRequest": {
@@ -34,23 +34,24 @@
          "properties": {
            "body": {
              "anyOf": [
-@@ -424,6 +433,12 @@
-             ],
+@@ -425,6 +434,12 @@
              "description": "已脱敏的请求体（自由 JSON）",
              "title": "Body"
-+          },
+           },
 +          "body_type": {
 +            "default": "json",
 +            "description": "请求体类型 json/form/query/raw；未声明资产时仍为 json（A8）",
 +            "title": "Body Type",
 +            "type": "string"
-           },
++          },
            "headers": {
              "additionalProperties": true,
-@@ -436,6 +451,19 @@
+             "description": "已脱敏的请求头",
+@@ -435,6 +450,19 @@
+             "description": "HTTP 方法",
              "title": "Method",
              "type": "string"
-           },
++          },
 +          "query": {
 +            "anyOf": [
 +              {
@@ -63,10 +64,9 @@
 +            ],
 +            "description": "query 类型请求的参数对象（已脱敏）；其它类型为 null/缺省",
 +            "title": "Query"
-+          },
+           },
            "url": {
              "description": "完整请求 URL",
-             "title": "Url",
 @@ -484,6 +512,17 @@
        "CaseStepResult": {
          "description": "单个声明步骤的结果；顺序与 Case 资产 steps 声明顺序一一对应。",
@@ -80,7 +80,7 @@
 +                "type": "null"
 +              }
 +            ],
-+            "description": "步骤实际使用的身份（Phase 3.3b 七键）；匿名、skipped、login_failed 步骤的 request/response 为 null 时仍可带 login_ref（A6）"
++            "description": "步骤实际使用的身份（Phase 3.3d 九键）；匿名、skipped、login_failed 步骤的 request/response 为 null 时仍可带 login_ref（A6）"
 +          },
            "duration_seconds": {
              "description": "步骤耗时（秒）；skipped 恒为 0",
@@ -105,13 +105,13 @@
              "title": "Skip Reason"
            },
            "status": {
-@@ -656,6 +698,79 @@
+@@ -656,6 +698,97 @@
          "title": "CaseSystemError",
          "type": "object"
        },
 +      "ExecutionAuth": {
 +        "additionalProperties": false,
-+        "description": "一次 API / 步骤实际使用的身份（Phase 3.3b，Engine 0.4 公开 ``auth`` 七键，U3/H5）。\n\n只含身份名、kind、tier 与 header/Cookie **名**，永不含秘密值；匿名执行时整个字段为 null。\n``extra=\"forbid\"``：Engine 的公开 auth 恰好七键，多出的键说明契约漂移，宁可解析失败。\n静态 header 身份：``kind=static_headers``、``tier=null``、\n``cookie_names=[]``、``login_ref=null``。",
++        "description": "一次 API / 步骤实际使用的身份（Phase 3.3d，Engine 0.5 公开 ``auth`` 九键）。\n\n只含身份名、kind、tier 与 header/Cookie **名**，永不含秘密值；匿名执行时整个字段为 null。\n``extra=\"forbid\"``：Engine 的公开 auth 恰好九键，多出的键说明契约漂移，宁可解析失败。\n静态 header 身份：``kind=static_headers``、``tier=null``、\n``cookie_names=[]``、``login_ref=null``、``session_source=null``、``reauthenticated=false``。\n旧记录（七键）缺 ``session_source`` / ``reauthenticated`` 时按 ``null`` / ``false`` 兼容。",
 +        "properties": {
 +          "cookie_names": {
 +            "description": "本次携带的 Cookie 名（不含值）；静态 header 恒为 []",
@@ -159,6 +159,24 @@
 +            "title": "Overridden Headers",
 +            "type": "array"
 +          },
++          "reauthenticated": {
++            "default": false,
++            "description": "本步是否触发了 401 重登重发；静态 header 恒为 false；旧记录缺省 false",
++            "title": "Reauthenticated",
++            "type": "boolean"
++          },
++          "session_source": {
++            "anyOf": [
++              {
++                "type": "string"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "description": "会话来源：login / execution / cache；静态 header 为 null；旧记录缺省 null",
++            "title": "Session Source"
++          },
 +          "tier": {
 +            "anyOf": [
 +              {
@@ -185,11 +203,10 @@
        "ExecutionDisplay": {
          "description": "详情页使用的格式化时间与耗时。",
          "properties": {
-@@ -707,6 +822,17 @@
-             "description": "资产类型",
+@@ -708,6 +841,17 @@
              "title": "Asset Type",
              "type": "string"
-+          },
+           },
 +          "auth": {
 +            "anyOf": [
 +              {
@@ -199,24 +216,25 @@
 +                "type": "null"
 +              }
 +            ],
-+            "description": "单 API 结果中的身份信息（Phase 3.3a）；匿名、Case 记录或旧记录为 null"
-           },
++            "description": "单 API 身份（Phase 3.3d 九键）；匿名/Case/旧记录为 null"
++          },
            "display": {
              "$ref": "#/components/schemas/ExecutionDisplay",
-@@ -829,6 +955,12 @@
+             "description": "格式化后的时间与耗时"
+@@ -828,6 +972,12 @@
+             "description": "记录ID",
              "title": "Id",
              "type": "string"
-           },
++          },
 +          "login_failed": {
 +            "default": false,
 +            "description": "结果中是否含 login_failed（单 API 顶层 error，或 Case 任一步骤 error）",
 +            "title": "Login Failed",
 +            "type": "boolean"
-+          },
+           },
            "start_time": {
              "description": "开始时间",
-             "format": "date-time",
-@@ -1094,6 +1226,17 @@
+@@ -1094,6 +1244,17 @@
        "RunResponse": {
          "description": "单次 API 执行结果。",
          "properties": {
@@ -229,7 +247,7 @@
 +                "type": "null"
 +              }
 +            ],
-+            "description": "本次请求使用的身份（Phase 3.3a）；匿名为 null，与 result.auth 相同"
++            "description": "本次请求使用的身份（Phase 3.3d 九键）；匿名为 null，与 result.auth 相同"
 +          },
            "duration": {
              "anyOf": [

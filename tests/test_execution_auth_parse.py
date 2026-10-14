@@ -27,6 +27,8 @@ def test_parse_seven_key_auth() -> None:
     assert isinstance(auth, ExecutionAuth)
     assert auth.kind == "static_headers"
     assert auth.tier is None
+    assert auth.session_source is None
+    assert auth.reauthenticated is False
 
 
 def test_parse_failure_logs_warning_with_record_id_only(

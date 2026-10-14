@@ -34,10 +34,17 @@ def test_fake_injection_via_dependency_overrides_without_monkeypatch() -> None:
         app.dependency_overrides.pop(get_engine_port, None)
 
 
-def test_ensure_engine_compatible_succeeds_for_installed_0_4() -> None:
-    """已安装 0.4.x Interface（含登录鉴权 DTO）时启动诊断通过。"""
+def test_ensure_engine_compatible_succeeds_for_installed_0_5() -> None:
+    """已安装 0.5.x Interface（含 cache_scope / 九键 auth）时启动诊断通过。"""
     version = ensure_engine_compatible()
-    assert version.startswith("0.4")
+    assert version.startswith("0.5")
+
+
+def test_ensure_engine_compatible_rejects_0_4(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 3.3d 起 0.4.x 不再兼容：缺少跨执行缓存与九键 auth。"""
+    monkeypatch.setattr("testplat_control.engine_bootstrap.version", lambda _dist: "0.4.0")
+    with pytest.raises(EngineBootstrapError, match="版本不兼容"):
+        ensure_engine_compatible()
 
 
 def test_ensure_engine_compatible_rejects_0_3(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -102,7 +109,7 @@ def test_ensure_engine_compatible_fail_fast_on_missing_package(
 def test_ensure_engine_compatible_fail_fast_on_bad_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """版本不在 0.4.x 时 fail-fast。"""
+    """版本不在 0.5.x 时 fail-fast。"""
     monkeypatch.setattr(
         "testplat_control.engine_bootstrap.version",
         lambda _dist: "9.0.0",

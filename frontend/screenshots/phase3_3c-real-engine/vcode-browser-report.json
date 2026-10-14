@@ -16,8 +16,8 @@
         "vcode-success",
         "vcode-unreachable"
       ],
-      "project_id": "e2830337-45e5-42d8-9c72-e9aae60dfe10",
-      "dynamic_secret_targets": 56
+      "project_id": "8993b784-727c-4da1-9be0-576e4be520b1",
+      "dynamic_secret_targets": 76
     },
     {
       "label": "mobile-390x844",
@@ -35,10 +35,10 @@
         "vcode-success",
         "vcode-unreachable"
       ],
-      "project_id": "7458c3e4-6f1e-4fca-8ce2-9bcbe3785d5c",
-      "dynamic_secret_targets": 56
+      "project_id": "305765c5-038c-4b7b-abc9-55b9affaba7b",
+      "dynamic_secret_targets": 76
     }
   ],
   "error": null,
-  "dynamic_secret_targets": 56
+  "dynamic_secret_targets": 76
 }

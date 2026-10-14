@@ -50,6 +50,8 @@ ADMIN_AUTH = {
     "overridden_headers": [],
     "cookie_names": [],
     "login_ref": None,
+    "session_source": None,
+    "reauthenticated": False,
 }
 
 
@@ -175,6 +177,8 @@ def test_case_step_auth_flows_to_response_and_typed_history(
         "overridden_headers": [],
         "cookie_names": [],
         "login_ref": None,
+        "session_source": None,
+        "reauthenticated": False,
     }
     steps = response.json()["result"]["steps"]
     assert [step["auth"] for step in steps] == [partner, partner]

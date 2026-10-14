@@ -45,6 +45,8 @@ describe('login_failed 醒目展示', () => {
             overridden_headers: [],
             cookie_names: [],
             login_ref: 0,
+            session_source: 'login',
+            reauthenticated: false,
           },
         },
         {

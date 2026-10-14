@@ -9,7 +9,7 @@
   校验、步骤执行与 fail-fast 全部发生在 ``EnginePort.execute(request)`` 之内。
   本模块不解析 Case YAML，只把 Engine 返回的 outcome / 异常原样落库和映射为 HTTP。
 - Control 只负责：项目与环境（``load_project_environment``）、身份表
-  （``load_auth``，Phase 3.3b）、调用与计时、
+  （``load_auth``，Phase 3.3d 含 cache_scope）、调用与计时、
   ``ExecutionRecord`` 持久化、HTTP 状态码映射。
 
 记录生命周期（单次写入）
@@ -191,9 +191,15 @@ def _load_auth(project: Project) -> AuthLoadResult | None:
 
     日志沿用 ``_log_engine_error`` 的安全字段；``public_message`` 由 auth_loader 保证
     只含身份名 / header 名 / 变量名 / 策略名。
+    Phase 3.3d：传入 ``cache_scope=f"{project.id}:{project.env}"``，由 Engine 持有缓存；
+    Control 不做缓存实现，也不把 scope 写入日志。
     """
     try:
-        return load_auth(project.config_root, project.env)
+        return load_auth(
+            project.config_root,
+            project.env,
+            cache_scope=f"{project.id}:{project.env}",
+        )
     except EngineError as exc:
         _log_engine_error(
             project=project,
