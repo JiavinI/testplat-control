@@ -113,7 +113,7 @@ class CaseStepResult(BaseModel):
     auth: ExecutionAuth | None = Field(
         None,
         description=(
-            "步骤实际使用的身份（Phase 3.3b 七键）；"
+            "步骤实际使用的身份（Phase 3.3d 九键）；"
             "匿名、skipped、login_failed 步骤的 request/response 为 null 时仍可带 login_ref（A6）"
         ),
     )

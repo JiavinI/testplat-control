@@ -25,8 +25,8 @@ from packaging.version import InvalidVersion, Version
 
 logger = logging.getLogger(__name__)
 
-# Phase 3.3b 兼容范围：与 pyproject 中 testplat-engine 约束一致。
-ENGINE_VERSION_SPEC = SpecifierSet(">=0.4.0,<0.5")
+# Phase 3.3d 兼容范围：与 pyproject 中 testplat-engine 约束一致。
+ENGINE_VERSION_SPEC = SpecifierSet(">=0.5.0,<0.6")
 ENGINE_DISTRIBUTION = "testplat-engine"
 LOGIN_STRATEGY_GROUP = "testplat_engine.login_strategies"
 _REQUIRED_EXPORTS = (
@@ -197,7 +197,7 @@ def ensure_engine_compatible(login_plugins: Sequence[str] = ()) -> str:
     if parsed not in ENGINE_VERSION_SPEC:
         raise EngineBootstrapError(
             f"testplat-engine 版本不兼容: 当前 {check_version}，"
-            f"需要满足 {ENGINE_VERSION_SPEC}（Phase 3.3b 锁定 0.4.x）。"
+            f"需要满足 {ENGINE_VERSION_SPEC}（Phase 3.3d 锁定 0.5.x）。"
         )
 
     missing = [name for name in _REQUIRED_EXPORTS if not hasattr(eng, name)]

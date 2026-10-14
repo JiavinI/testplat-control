@@ -79,7 +79,7 @@ class RunResponse(BaseModel):
     # H3（单 API 同理）：result 是自由 JSON，auth 在其中原样保留；这里再显式声明一份
     # 有类型的副本，让 OpenAPI 与前端有稳定契约。
     auth: ExecutionAuth | None = Field(
-        None, description="本次请求使用的身份（Phase 3.3a）；匿名为 null，与 result.auth 相同"
+        None, description="本次请求使用的身份（Phase 3.3d 九键）；匿名为 null，与 result.auth 相同"
     )
 
 

@@ -174,6 +174,8 @@ def test_single_api_sends_credential_and_redacts_echo(
         "overridden_headers": [],
         "cookie_names": [],
         "login_ref": None,
+        "session_source": None,
+        "reauthenticated": False,
     }
     assert body["auth"] == expected and detail.json()["auth"] == expected
     # 非敏感键下的回显被按值替换。

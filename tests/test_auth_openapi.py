@@ -78,7 +78,7 @@ def test_only_auth_additions_vs_phase3(current: dict[str, Any]) -> None:
 
 
 def test_execution_auth_shape(current: dict[str, Any]) -> None:
-    """U3/H5：公开 auth 恰好七键。"""
+    """U3/H5：公开 auth 恰好九键（3.3d 新增 session_source / reauthenticated）。"""
     auth = current["components"]["schemas"]["ExecutionAuth"]
     expected = {
         "identity",
@@ -88,6 +88,8 @@ def test_execution_auth_shape(current: dict[str, Any]) -> None:
         "overridden_headers",
         "cookie_names",
         "login_ref",
+        "session_source",
+        "reauthenticated",
     }
     assert set(auth["properties"]) == expected
     assert set(auth["required"]) == {
@@ -101,6 +103,11 @@ def test_execution_auth_shape(current: dict[str, Any]) -> None:
     for key in ("header_names", "overridden_headers", "cookie_names"):
         assert auth["properties"][key]["type"] == "array"
         assert auth["properties"][key]["items"] == {"type": "string"}
+    # 新两键：缺省兼容旧记录，不进 required
+    assert "session_source" not in auth["required"]
+    assert "reauthenticated" not in auth["required"]
+    assert auth["properties"]["reauthenticated"]["type"] == "boolean"
+    assert auth["properties"]["reauthenticated"]["default"] is False
 
 
 def test_case_result_has_logins(current: dict[str, Any]) -> None:

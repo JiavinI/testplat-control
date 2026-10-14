@@ -126,7 +126,7 @@ describe('Case 步骤身份展示', () => {
         step({
           step_id: 'admin',
           name: '管理员步骤',
-          auth: { identity: 'admin', kind: 'static_headers', tier: null, header_names: ['Authorization'], overridden_headers: [], cookie_names: [], login_ref: null },
+          auth: { identity: 'admin', kind: 'static_headers', tier: null, header_names: ['Authorization'], overridden_headers: [], cookie_names: [], login_ref: null, session_source: null, reauthenticated: false },
         }),
         step({
           step_id: 'slow',
@@ -173,3 +173,84 @@ describe('身份相关 422', () => {
     expectNoSecrets(container)
   })
 })
+
+
+describe('Phase 3.3d 缓存与重登展示', () => {
+  it('session_source=cache：显示「复用登录（未重新登录）」且无登录过程面板', () => {
+    const result = parseRunResponse({
+      record_id: 'r-cache',
+      status: 'success',
+      duration: 0.1,
+      result: { request: { method: 'GET', url: 'http://x' }, response: { status_code: 200 } },
+      auth: {
+        identity: 'buyer',
+        kind: 'login',
+        tier: 'generic',
+        header_names: ['X-TOKEN'],
+        overridden_headers: [],
+        cookie_names: [],
+        login_ref: null,
+        session_source: 'cache',
+        reauthenticated: false,
+      },
+    })
+    const { container } = wrap(<ExecutionResultCard result={result} />)
+    expect(screen.getByTestId('auth-summary-session-cache')).toHaveTextContent(
+      '复用登录（未重新登录）',
+    )
+    expect(screen.getByTestId('login-cache-reuse-note')).toHaveTextContent(
+      '本次无登录过程可查看',
+    )
+    expect(screen.queryByTestId('login-process-panel')).not.toBeInTheDocument()
+    expectNoSecrets(container)
+  })
+
+  it('reauthenticated=true：显示「鉴权失效，已重新登录并重发」', () => {
+    const result = parseRunResponse({
+      record_id: 'r-reauth',
+      status: 'success',
+      duration: 0.2,
+      result: {
+        request: { method: 'GET', url: 'http://x' },
+        response: { status_code: 200 },
+        logins: [
+          {
+            identity: 'buyer',
+            strategy: 'generic_flow',
+            tier: 'generic',
+            status: 'success',
+            duration_seconds: 0.05,
+            steps: [],
+            probe: null,
+            error: null,
+          },
+        ],
+      },
+      auth: {
+        identity: 'buyer',
+        kind: 'login',
+        tier: 'generic',
+        header_names: ['X-TOKEN'],
+        overridden_headers: [],
+        cookie_names: [],
+        login_ref: 0,
+        session_source: 'login',
+        reauthenticated: true,
+      },
+    })
+    wrap(<ExecutionResultCard result={result} />)
+    expect(screen.getByTestId('auth-summary-reauthenticated')).toHaveTextContent(
+      '鉴权失效，已重新登录并重发',
+    )
+  })
+
+  it('旧七键记录：不显示缓存/重登标签', () => {
+    // 契约示例仍为七键；解析后 session_source=null、reauthenticated=false
+    wrap(
+      <ExecutionResultCard result={parseRunResponse(loadContractExample('api-run-with-auth.json'))} />,
+    )
+    expect(screen.queryByTestId('auth-summary-session-cache')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('auth-summary-reauthenticated')).not.toBeInTheDocument()
+  })
+})
+

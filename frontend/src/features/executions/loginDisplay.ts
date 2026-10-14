@@ -150,3 +150,18 @@ export function extractLoginsFromResult(result: unknown): LoginRecord[] {
   }
   return parseLoginRecords((result as Record<string, unknown>).logins, 'result.logins')
 }
+
+/**
+ * 缓存命中且本次无登录记录：不展示「登录过程」面板，改为一行说明（设计稿 §5-5）。
+ * login_ref 为 null 且 session_source=cache 时成立。
+ */
+export function isCacheReuseWithoutLogin(
+  auth: { session_source: string | null; login_ref: number | null } | null | undefined,
+): boolean {
+  return (
+    !!auth &&
+    auth.session_source === 'cache' &&
+    (auth.login_ref === null || auth.login_ref === undefined)
+  )
+}
+

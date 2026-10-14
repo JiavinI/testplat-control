@@ -14,9 +14,9 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "packaging>=24.0",
-    # Phase 3.3b：登录鉴权需要 Engine 0.4.x（LoginAuth / logins / 七键 auth）。
+    # Phase 3.3d：跨执行登录缓存与 401 重登重发需要 Engine 0.5.x（九键 auth / cache_scope）。
     # 具体 commit 由 uv sources 锁定；见文件下方 [tool.uv.sources] 说明。
-    "testplat-engine>=0.4.0,<0.5",
+    "testplat-engine>=0.5.0,<0.6",
 ]
 
 [project.optional-dependencies]
@@ -36,8 +36,9 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 远程精确锁定：Engine main 合并 commit f1a0c875（tag v0.4.0 / PR #14）。锁定精确 rev，不是分支名，也不是 path editable。
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "f1a0c875a8f596e145b8da51fd9ca4bfb809a88a" }
+# 临时 file:// 锁定 Agent 1 已审查 commit 9fef3a82（Engine 0.5.0）。
+# 合并前必须改为远程精确锁定（同 3.3b 流程）；不得 path editable。
+testplat-engine = { git = "file:///Users/jiavin/Developer/products/testplat1/testplat-engine", rev = "9fef3a82e8269b2b30e536b31b9347cc7683e092" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

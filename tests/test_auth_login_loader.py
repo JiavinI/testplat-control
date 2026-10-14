@@ -528,3 +528,51 @@ def test_other_placeholder_in_login_rejected(tmp_path: Path) -> None:
     write_auth(tmp_path, {"identities": {"buyer": cfg}})
     with pytest.raises(InvalidEnvironmentError, match="只允许"):
         load_auth(tmp_path, "test", environ=LOGIN_ENV)
+
+
+def test_cache_scope_passed_to_auth_table(tmp_path: Path) -> None:
+    """3.3d：load_auth(..., cache_scope=...) 写入 AuthTable.cache_scope。"""
+    write_auth(tmp_path, {"identities": {"buyer": _generic_buyer()}})
+    result = load_auth(tmp_path, "test", environ=LOGIN_ENV, cache_scope="proj-1:test")
+    assert result is not None
+    assert result.table.cache_scope == "proj-1:test"
+    # 缺省 None → 不跨执行缓存（向后兼容）
+    result2 = load_auth(tmp_path, "test", environ=LOGIN_ENV)
+    assert result2 is not None
+    assert result2.table.cache_scope is None
+    # load_auth_table 同样转发
+    table = load_auth_table(tmp_path, "test", environ=LOGIN_ENV, cache_scope="abc:staging")
+    assert table is not None
+    assert table.cache_scope == "abc:staging"
+
+
+def test_reauth_on_401_default_true_and_explicit(tmp_path: Path) -> None:
+    """3.3d：reauth_on_401 默认 True；可显式 false。"""
+    write_auth(tmp_path, {"identities": {"buyer": _generic_buyer()}})
+    result = load_auth(tmp_path, "test", environ=LOGIN_ENV)
+    assert result is not None
+    material = result.table.identities["buyer"]
+    assert isinstance(material, LoginAuth)
+    assert material.reauth_on_401 is True
+
+    cfg = _generic_buyer()
+    cfg["login"]["reauth_on_401"] = False
+    write_auth(tmp_path, {"identities": {"buyer": cfg}})
+    result2 = load_auth(tmp_path, "test", environ=LOGIN_ENV)
+    assert result2 is not None
+    material2 = result2.table.identities["buyer"]
+    assert isinstance(material2, LoginAuth)
+    assert material2.reauth_on_401 is False
+
+
+def test_reauth_on_401_non_bool_422_without_value(tmp_path: Path) -> None:
+    """非布尔 → 422；公开消息不含原值。"""
+    cfg = _generic_buyer()
+    cfg["login"]["reauth_on_401"] = "yes"
+    write_auth(tmp_path, {"identities": {"buyer": cfg}})
+    with pytest.raises(InvalidEnvironmentError) as excinfo:
+        load_auth(tmp_path, "test", environ=LOGIN_ENV)
+    msg = excinfo.value.public_message
+    assert "reauth_on_401" in msg
+    assert "布尔" in msg
+    assert "yes" not in msg

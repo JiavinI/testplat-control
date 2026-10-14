@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   bodyTypeLabel,
   caseHasLoginFailed,
+  isCacheReuseWithoutLogin,
   loginReasonLabel,
   loginTierLabel,
   parseLoginRecords,
@@ -95,3 +96,26 @@ describe('loginDisplay 映射', () => {
     expect(caseHasLoginFailed(result)).toBe(true)
   })
 })
+
+
+describe('isCacheReuseWithoutLogin', () => {
+  it('cache + login_ref null → true', () => {
+    expect(
+      isCacheReuseWithoutLogin({
+        session_source: 'cache',
+        login_ref: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('非 cache 或有 login_ref → false', () => {
+    expect(
+      isCacheReuseWithoutLogin({ session_source: 'login', login_ref: null }),
+    ).toBe(false)
+    expect(
+      isCacheReuseWithoutLogin({ session_source: 'cache', login_ref: 0 }),
+    ).toBe(false)
+    expect(isCacheReuseWithoutLogin(null)).toBe(false)
+  })
+})
+
