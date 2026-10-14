@@ -1,0 +1,44 @@
+{
+  "viewports": [
+    {
+      "label": "desktop-1440x900",
+      "dom": [
+        {
+          "screenshot": "desktop-1440x900-cache-reuse.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "desktop-1440x900-reauth-resend.png",
+          "dom_secret_hits": 0
+        }
+      ],
+      "scenes": [
+        "cache-reuse",
+        "reauth-resend"
+      ],
+      "project_id": "2b23ef14-c28b-4277-a686-b9b3c7d43c7d",
+      "dynamic_secret_targets": 86
+    },
+    {
+      "label": "mobile-390x844",
+      "dom": [
+        {
+          "screenshot": "mobile-390x844-cache-reuse.png",
+          "dom_secret_hits": 0
+        },
+        {
+          "screenshot": "mobile-390x844-reauth-resend.png",
+          "dom_secret_hits": 0
+        }
+      ],
+      "scenes": [
+        "cache-reuse",
+        "reauth-resend"
+      ],
+      "project_id": "32511e1a-caeb-472f-9b66-71b8eb05cf19",
+      "dynamic_secret_targets": 86
+    }
+  ],
+  "error": null,
+  "dynamic_secret_targets": 86
+}

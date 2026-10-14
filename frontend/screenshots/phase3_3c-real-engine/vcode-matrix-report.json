@@ -19,7 +19,8 @@
       "item": "§6-24",
       "desc": "业务回显 token → ***",
       "pass": true,
-      "echo_x_token": "***"
+      "echo_x_token": "***",
+      "issued_uuid_checked": 1
     },
     {
       "id": "L25a",
@@ -92,9 +93,9 @@
     }
   ],
   "projects": {
-    "vcode": "2159e167-1645-433a-9c50-4b3ecee99bd9",
-    "vcode-conn-missing": "6a54ed19-3cfc-4016-8bf9-8f15371666de",
-    "vcode-no-whitelist": "6f225fe4-07c6-455c-82a4-cfe391ed0e54"
+    "vcode": "8d256094-06b7-4f5d-b278-d696de055200",
+    "vcode-conn-missing": "da0389f4-47a9-46a6-b237-494ca9c412cc",
+    "vcode-no-whitelist": "2f80b770-feac-42c7-9299-3b402fa1dcd6"
   },
   "passed": 12,
   "total": 12,

@@ -40,7 +40,6 @@ identities:
         user_key_field: userKey
         extract.token: $.data.token
         extract.user_id: $.data.userId
-      validity: { ttl_seconds: 72000 }
       inject:
         headers:
           X-TOKEN: "${login:token}"

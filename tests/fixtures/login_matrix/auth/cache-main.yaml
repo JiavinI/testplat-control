@@ -1,0 +1,141 @@
+# Phase 3.3d 跨执行缓存 / 401 重登矩阵主配置。
+# 各身份使用互异 username，便于 /__inspect.login_counts 精确对账。
+login_plugins:
+  - fake_login
+identities:
+  buyer_cached:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: cached_user
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+            - { source: body_json, path: $.data.userId, as: user_id, optional: true }
+      validity:
+        ttl_seconds: 3600
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+          X-USER-ID: "${login:user_id}"
+  buyer_ttl32:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: ttl32_user
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      validity:
+        ttl_seconds: 32
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  buyer_expires32:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: expires32_user
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      validity:
+        expires_from: { source: body_json, path: $.data.expiresIn, unit: seconds }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  buyer_no_ttl:
+    login:
+      host: local
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: nottl_user
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+  seller:
+    login:
+      host: local
+      steps:
+        - name: bootstrap
+          method: GET
+          path: /csrf/login
+          extract:
+            - { source: html_meta, name: csrf-token, as: csrf }
+        - name: submit
+          method: POST
+          path: /csrf/login
+          headers: { Referer: "${login_host}/csrf/login" }
+          body:
+            type: form
+            fields:
+              _csrf: "${login:csrf}"
+              username: seller001
+              password: "${secret:TESTPLAT_SELLER_PASSWORD}"
+          success: { status_code: 302, reject_location_contains: /login }
+      session: cookie
+      probe:
+        method: GET
+        path: /csrf/protected
+        success: { status_code: 200, body_not_contains: '<form id="loginFrom"' }
+      inject:
+        headers:
+          X-CSRF-Token: "${login:csrf}"
+  buyer_no_reauth:
+    login:
+      host: local
+      reauth_on_401: false
+      steps:
+        - name: login
+          method: POST
+          path: /login/json
+          body:
+            type: json
+            fields:
+              username: noreauth_user
+              password: "${secret:TESTPLAT_BUYER_PASSWORD}"
+          success: { path: $.code, value: 0 }
+          extract:
+            - { source: body_json, path: $.data.token, as: token }
+      validity:
+        ttl_seconds: 3600
+      inject:
+        headers:
+          X-TOKEN: "${login:token}"
+default_identity: buyer_cached
+connections:
+  redis_main:
+    host: 10.0.0.5
+    port: 6379
+    db: 2
+    password: "${secret:TESTPLAT_REDIS_MAIN_PASSWORD}"

@@ -57,8 +57,8 @@ def _load_dynamic_secrets(path: Path | None) -> tuple[str, ...]:
 def count_bytes(data: bytes, secrets: tuple[str, ...]) -> int:
     """长秘密（≥8）按子串计数。
 
-    短验证码（<8）只匹配 JSON/文本里的引号包裹形式，避免 SQLite 二进制里的
-    整数行号、端口、时间戳造成误报；若验证码以字符串字段落盘，仍能命中。
+    短验证码（<8）匹配引号包裹形式，以及 ``=值`` / ``:值`` 形态（如 ``code=1234``），
+    避免 SQLite 二进制里的整数行号、端口、时间戳造成误报。
     """
     import re
 
@@ -71,8 +71,13 @@ def count_bytes(data: bytes, secrets: tuple[str, ...]) -> int:
             continue
         if decoded is None:
             decoded = data.decode("utf-8", errors="replace")
-        pattern = "['\"]" + re.escape(secret) + "['\"]"
-        total += len(re.findall(pattern, decoded))
+        esc = re.escape(secret)
+        patterns = (
+            "['\"]" + esc + "['\"]",
+            r"[=:]\s*" + esc + r"(?![0-9A-Za-z])",
+        )
+        for pattern in patterns:
+            total += len(re.findall(pattern, decoded))
     return total
 
 
@@ -141,7 +146,14 @@ def main() -> int:
     secrets = STATIC_SECRETS + dynamic
     # 阳性对照：确认搜索本身能命中（临时文件写入后立即删除，不留在任何证据目录）
     with tempfile.NamedTemporaryFile("wb", delete=False) as tmp:
-        lines = [s if len(s.encode("utf-8")) >= 8 else f'"{s}"' for s in secrets]
+        lines: list[str] = []
+        for s in secrets:
+            if len(s.encode("utf-8")) >= 8:
+                lines.append(s)
+            else:
+                lines.append(f'"{s}"')
+                lines.append(f"code={s}")
+                lines.append(f"code: {s}")
         tmp.write("\n".join(lines).encode("utf-8"))
     control_hits = count_file(Path(tmp.name), secrets)
     Path(tmp.name).unlink()

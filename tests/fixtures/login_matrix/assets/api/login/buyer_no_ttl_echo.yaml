@@ -1,0 +1,9 @@
+id: api.login.buyer_no_ttl_echo
+name: 无 ttl buyer 回显
+host: local
+method: GET
+url: /echo/token
+auth: buyer_no_ttl
+request: {}
+success:
+  status_code: 200

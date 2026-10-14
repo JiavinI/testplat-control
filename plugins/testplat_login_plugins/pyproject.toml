@@ -8,7 +8,7 @@ authors = [
     { name = "testplat team" }
 ]
 dependencies = [
-    "testplat-engine>=0.4.0,<0.5",
+    "testplat-engine>=0.5.0,<0.6",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,9 @@
+id: api.login.buyer_expires32_echo
+name: expires32 buyer 回显
+host: local
+method: GET
+url: /echo/token
+auth: buyer_expires32
+request: {}
+success:
+  status_code: 200

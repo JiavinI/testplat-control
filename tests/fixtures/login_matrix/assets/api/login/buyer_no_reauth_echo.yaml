@@ -1,0 +1,9 @@
+id: api.login.buyer_no_reauth_echo
+name: 关闭 401 重登的 buyer 回显
+host: local
+method: GET
+url: /echo/token
+auth: buyer_no_reauth
+request: {}
+success:
+  status_code: 200

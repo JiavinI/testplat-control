@@ -1,0 +1,9 @@
+id: api.login.buyer_cached_echo
+name: 缓存 buyer 回显
+host: local
+method: GET
+url: /echo/token
+auth: buyer_cached
+request: {}
+success:
+  status_code: 200

@@ -1,0 +1,13 @@
+id: api.login.buyer_cached_post
+name: 缓存 buyer POST 回显
+host: local
+method: POST
+url: /echo/json
+auth: buyer_cached
+request:
+  type: json
+  body:
+    action: cache-reauth
+    note: phase3-3d
+success:
+  status_code: 200
