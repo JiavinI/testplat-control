@@ -36,9 +36,8 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 临时 file:// 锁定 Agent 1 已审查 commit 9fef3a82（Engine 0.5.0）。
-# 合并前必须改为远程精确锁定（同 3.3b 流程）；不得 path editable。
-testplat-engine = { git = "file:///Users/jiavin/Developer/products/testplat1/testplat-engine", rev = "9fef3a82e8269b2b30e536b31b9347cc7683e092" }
+# 远程精确锁定：Engine main 合并 commit 5231fb47（tag v0.5.0 / PR #15）。锁定精确 rev，不是分支名，也不是 path editable。
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "5231fb470dbb7a23b0d44489c49e2b8e88da7d36" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
