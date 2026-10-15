@@ -1,5 +1,6 @@
-"""Phase 3.3a 真实 Engine 鉴权矩阵（Phase 4.0：两段式路由 + 必填 env）（HTTP 层，设计稿 §6 全部 10 条 + B2 + Q2）。
+"""Phase 3.3a 真实 Engine 鉴权矩阵（Phase 4.0：两段式路由 + 必填 env）。
 
+HTTP 层，设计稿 §6 全部 10 条 + B2 + Q2。
 由 ``scripts/run_real_engine_matrix.sh`` 调用：本地 target、真实 Engine 的 Control 已启动，
 各 config root 已写在临时目录。本脚本：
 - 经 Control HTTP API 执行单 API 与 Case（两身份交替混跑），
