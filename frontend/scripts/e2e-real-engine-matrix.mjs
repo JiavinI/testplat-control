@@ -34,7 +34,7 @@ function isAllowedFailedRequest(entry) {
   const [, status, method, url] = m
   if (
     method === 'POST' &&
-    /\/api\/projects\/[^/?]+\/cases\/[^/?]+\/run$/.test(url) &&
+    (/\/api\/projects\/[^/?]+\/cases\/[^/?]+\/run$/.test(url) || /\/api\/repos\/[^/?]+\/projects\/[^/?]+\/cases\/[^/?]+\/run$/.test(url)) &&
     ['422', '500', '502', '504'].includes(status)
   ) {
     return true
@@ -87,19 +87,16 @@ async function selectAsset(page, filterText, assetId, panelTestId) {
   await page.getByTestId(panelTestId).waitFor({ timeout: 10000 })
 }
 
-async function createProject(page, name) {
-  const resp = await page.request.post(`${BASE}/api/projects`, {
-    data: {
-      name,
-      env: 'test',
-      assets_root: ASSETS_ROOT,
-      config_root: CONFIG_ROOT,
-    },
-  })
+async function resolveProject(page) {
+  // Phase 4.0：项目由服务端同步；返回 { repo, project, id }
+  const repo = process.env.E2E_REPO || 'matrix'
+  const project = process.env.E2E_PROJECT || 'phase3'
+  const resp = await page.request.get(`${BASE}/api/repos/${repo}/projects/${project}`)
   if (!resp.ok()) {
-    throw new Error(`创建项目失败 HTTP ${resp.status()}: ${await resp.text()}`)
+    throw new Error(`读取项目失败 HTTP ${resp.status()}: ${await resp.text()}`)
   }
-  return resp.json()
+  const body = await resp.json()
+  return { repo, project, id: body.id || `${repo}/${project}` }
 }
 
 async function runMatrix(page) {
@@ -118,11 +115,10 @@ async function runMatrix(page) {
     }
   })
 
-  const projectName = `real-engine-matrix-${Date.now()}`
-  const project = await createProject(page, projectName)
-  evidence.push({ step: 'create_project', id: project.id })
+  const project = await resolveProject(page)
+  evidence.push({ step: 'resolve_project', id: project.id, repo: project.repo, project: project.project })
 
-  await page.goto(`${BASE}/projects/${project.id}`, { waitUntil: 'networkidle' })
+  await page.goto(`${BASE}/projects/${project.repo}/${project.project}`, { waitUntil: 'networkidle' })
   await page.getByTestId('project-workspace').waitFor({ timeout: 15000 })
 
   // --- success：真实 Engine ---
@@ -173,7 +169,7 @@ async function runMatrix(page) {
   await selectAsset(page, 'transport', 'case.demo.transport', 'case-execution-panel')
   // 先清掉该 Case 的失败记录干扰：本项目是新建的，应为空。
   const beforeList = await page.request.get(
-    `${BASE}/api/projects/${project.id}/execution-records?asset_type=case&asset_id=case.demo.transport&status=failed`,
+    `${BASE}/api/repos/${project.repo}/projects/${project.project}/execution-records?asset_type=case&asset_id=case.demo.transport&status=failed`,
   )
   const beforeItems = await beforeList.json()
   if (beforeItems.length !== 0) {
@@ -183,14 +179,14 @@ async function runMatrix(page) {
   await page.getByTestId('case-system-error-located').waitFor({ timeout: 45000 })
   await shot(page, 'real-case-system-error-transport.png')
   const afterList = await page.request.get(
-    `${BASE}/api/projects/${project.id}/execution-records?asset_type=case&asset_id=case.demo.transport&status=failed&order_by=-start_time&limit=5`,
+    `${BASE}/api/repos/${project.repo}/projects/${project.project}/execution-records?asset_type=case&asset_id=case.demo.transport&status=failed&order_by=-start_time&limit=5`,
   )
   const afterItems = await afterList.json()
   if (afterItems.length !== 1) {
     throw new Error(`串行 transport 后失败记录应恰好 1 条，实际 ${afterItems.length}`)
   }
   const detail = await page.request.get(
-    `${BASE}/api/projects/${project.id}/case-execution-records/${afterItems[0].id}`,
+    `${BASE}/api/repos/${project.repo}/projects/${project.project}/case-execution-records/${afterItems[0].id}`,
   )
   const detailBody = await detail.json()
   if (detailBody.result?.error?.kind !== 'transport') {
@@ -208,7 +204,7 @@ async function runMatrix(page) {
   await page.getByTestId('case-system-error-located').waitFor({ timeout: 45000 })
   await shot(page, 'real-case-system-error-timeout.png')
   const timeoutList = await page.request.get(
-    `${BASE}/api/projects/${project.id}/execution-records?asset_type=case&asset_id=case.demo.timeout&status=failed&order_by=-start_time&limit=5`,
+    `${BASE}/api/repos/${project.repo}/projects/${project.project}/execution-records?asset_type=case&asset_id=case.demo.timeout&status=failed&order_by=-start_time&limit=5`,
   )
   const timeoutItems = await timeoutList.json()
   if (timeoutItems.length !== 1) {
@@ -216,7 +212,7 @@ async function runMatrix(page) {
   }
   const timeoutDetail = await (
     await page.request.get(
-      `${BASE}/api/projects/${project.id}/case-execution-records/${timeoutItems[0].id}`,
+      `${BASE}/api/repos/${project.repo}/projects/${project.project}/case-execution-records/${timeoutItems[0].id}`,
     )
   ).json()
   if (timeoutDetail.result?.error?.kind !== 'timeout') {

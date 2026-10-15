@@ -47,7 +47,9 @@ SEARCH_TARGETS = (
 
 BACKEND = os.environ.get("MATRIX_BACKEND_URL", "http://127.0.0.1:8000")
 TARGET = os.environ["MATRIX_TARGET_URL"]
-ASSETS_ROOT = os.environ["MATRIX_LOGIN_ASSETS_ROOT"]
+ASSETS_ROOT = os.environ.get("MATRIX_LOGIN_ASSETS_ROOT", "")
+REPO = os.environ.get("MATRIX_REPO", "matrix")
+ENV = os.environ.get("MATRIX_ENV", "test")
 OUT_DIR = Path(os.environ["MATRIX_LOGIN_OUT_DIR"])
 ROOTS = {
     "login": os.environ["MATRIX_ROOT_LOGIN"],
@@ -74,28 +76,25 @@ class Matrix:
 
     def project(self, root: str) -> str:
         if root not in self.projects:
-            resp = self.client.post(
-                f"{BACKEND}/projects",
-                json={
-                    "name": f"login-matrix-{root}-{os.getpid()}",
-                    "env": "test",
-                    "assets_root": ASSETS_ROOT,
-                    "config_root": ROOTS[root],
-                },
-            )
+            resp = self.client.get(f"{BACKEND}/repos/{REPO}/projects/{root}")
             resp.raise_for_status()
-            self.projects[root] = resp.json()["id"]
+            self.projects[root] = root
         return self.projects[root]
 
+    def _base(self, root: str) -> str:
+        return f"{BACKEND}/repos/{REPO}/projects/{self.project(root)}"
+
     def run_api(self, root: str, asset: str, params: dict | None = None) -> httpx.Response:
-        pid = self.project(root)
         return self.client.post(
-            f"{BACKEND}/projects/{pid}/assets/{asset}/run", json={"params": params or {}}
+            f"{self._base(root)}/assets/{asset}/run",
+            json={"params": params or {}, "env": ENV},
         )
 
     def run_case(self, root: str, case: str) -> httpx.Response:
-        pid = self.project(root)
-        return self.client.post(f"{BACKEND}/projects/{pid}/cases/{case}/run", json={})
+        return self.client.post(
+            f"{self._base(root)}/cases/{case}/run",
+            json={"env": ENV},
+        )
 
     def reset_target(self) -> None:
         self.client.post(f"{TARGET}/__inspect/reset").raise_for_status()
@@ -456,6 +455,7 @@ def main() -> int:
         ("P4", "api.login.df_picker_echo"),
         ("P5", "api.login.cat_api_echo"),
     ):
+
         def legacy(a: str = asset) -> dict[str, Any]:
             m.reset_target()
             r = m.run_api("legacy", a)

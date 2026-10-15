@@ -1,0 +1,110 @@
+{
+  "rows": [
+    {
+      "id": "L22",
+      "item": "§6-22",
+      "desc": "vcode_redis 成功：三步 logins + inject 生效",
+      "pass": true,
+      "login_steps_seen": true,
+      "identity": "df_admin"
+    },
+    {
+      "id": "L23",
+      "item": "§6-23",
+      "desc": "验证码/uuid/密码/token/Redis 密码不出现在公开面",
+      "pass": true
+    },
+    {
+      "id": "L24",
+      "item": "§6-24",
+      "desc": "业务回显 token → ***",
+      "pass": true,
+      "echo_x_token": "***",
+      "issued_uuid_checked": 1
+    },
+    {
+      "id": "L25a",
+      "item": "§6-25",
+      "desc": "Redis 不可达 → transport",
+      "pass": true,
+      "reason": "transport"
+    },
+    {
+      "id": "L25b",
+      "item": "§6-25",
+      "desc": "Redis 超时 / 预算耗尽 → timeout",
+      "pass": true,
+      "reason": "timeout"
+    },
+    {
+      "id": "L25c",
+      "item": "§6-25",
+      "desc": "key 不存在 → strategy_error(VcodeCodeMissing)",
+      "pass": true,
+      "reason": "strategy_error"
+    },
+    {
+      "id": "L25d",
+      "item": "§6-25",
+      "desc": "createVCode 非 2xx → strategy_error(VcodeCreateFailed)",
+      "pass": true,
+      "reason": "strategy_error"
+    },
+    {
+      "id": "L25e",
+      "item": "§6-25",
+      "desc": "登录非 2xx → strategy_error(VcodeLoginFailed)",
+      "pass": true,
+      "reason": "strategy_error"
+    },
+    {
+      "id": "L25f",
+      "item": "§6-25",
+      "desc": "缺 token → strategy_error(VcodeTokenMissing)",
+      "pass": true,
+      "reason": "strategy_error"
+    },
+    {
+      "id": "L26",
+      "item": "§6-26",
+      "desc": "只读：commandstats 无插件写命令（目标 SET 对账）",
+      "pass": true,
+      "get_calls": 2,
+      "set_calls": 1,
+      "target_writes": 1
+    },
+    {
+      "id": "L27",
+      "item": "§6-27",
+      "desc": "连接秘密缺失只阻断引用身份；其它身份正常",
+      "pass": true,
+      "blocked": 422,
+      "others": "success"
+    },
+    {
+      "id": "L28",
+      "item": "§6-28",
+      "desc": "白名单未列 vcode_redis → 不注册且 422 无出站",
+      "pass": true,
+      "discovered": [
+        "fake_login",
+        "vcode_redis"
+      ]
+    }
+  ],
+  "projects": {
+    "vcode": "vcode",
+    "vcode-conn-missing": "vcode-conn-missing",
+    "vcode-no-whitelist": "vcode-no-whitelist"
+  },
+  "passed": 12,
+  "total": 12,
+  "section": "phase3_3c_vcode_§6.22-28",
+  "commandstats": {
+    "get_calls": 2,
+    "set_calls": 1,
+    "target_redis_write_count": 1,
+    "other_writes": {},
+    "note": "CONFIG RESETSTAT 于矩阵段开始；SET 仅来自目标服务写验证码连接，与 /__inspect.redis_write_count 对账；插件只读 GET。"
+  }
+}

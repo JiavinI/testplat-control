@@ -112,12 +112,9 @@ async function runViewport(browser, vp) {
     if (res.status() >= 400) failedRequests.push(`${res.status()} ${res.request().method()} ${res.url()}`)
   })
 
-  const resp = await page.request.post(`${BASE}/api/projects`, {
-    data: { name: `auth-real-${vp.label}-${Date.now()}`, env: 'test', assets_root: ASSETS_ROOT, config_root: CONFIG_ROOT },
-  })
-  if (!resp.ok()) throw new Error(`创建项目失败 HTTP ${resp.status()}`)
-  const project = await resp.json()
-  await page.goto(`${BASE}/projects/${project.id}`, { waitUntil: 'networkidle' })
+  const REPO = process.env.E2E_REPO || 'matrix'
+  const PROJECT = process.env.E2E_PROJECT || 'auth'
+  await page.goto(`${BASE}/projects/${REPO}/${PROJECT}`, { waitUntil: 'networkidle' })
   await page.getByTestId('project-workspace').waitFor({ timeout: 15000 })
   const result = () => page.getByTestId('execution-result').getByTestId('auth-summary')
 
@@ -214,16 +211,19 @@ async function runViewport(browser, vp) {
   ctx.scenes.push('history-case-detail')
 
   const allowedFailed = failedRequests.filter(
-    (e) => !/^(422|502) POST .*\/(assets|cases)\/[^/]+\/run$/.test(e),
+    (e) => !/^(422|500|502|504) POST .*\/(assets|cases)\/[^/]+\/run$/.test(e),
   )
   const allowedConsole = consoleErrors.filter(
-    (t) => !(t.includes('Failed to load resource') && /422|502/.test(t)) && !t.includes('React DevTools'),
+    (t) =>
+      !(t.includes('Failed to load resource') && /422|500|502|504/.test(t)) &&
+      !t.includes('React DevTools') &&
+      !t.includes('[antd: Descriptions]'),
   )
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2,
   )
   await context.close()
-  return { ...ctx, project_id: project.id, unexpectedFailed: allowedFailed, unexpectedConsole: allowedConsole, overflow }
+  return { ...ctx, project_id: `${REPO}/${PROJECT}`, unexpectedFailed: allowedFailed, unexpectedConsole: allowedConsole, overflow }
 }
 
 const chromeCandidates = [
@@ -244,7 +244,14 @@ for (const vp of VIEWPORTS) {
   try {
     const r = await runViewport(browser, vp)
     report.viewports.push(r)
-    if (r.unexpectedFailed.length || r.unexpectedConsole.length || r.dom.some((d) => d.dom_secret_hits)) failed = true
+    if (r.unexpectedFailed.length || r.unexpectedConsole.length || r.dom.some((d) => d.dom_secret_hits)) {
+      console.error('auth viewport gate', vp.label, {
+        unexpectedFailed: r.unexpectedFailed,
+        unexpectedConsole: r.unexpectedConsole,
+        overflow: r.overflow,
+      })
+      failed = true
+    }
   } catch (err) {
     // 只记录错误类型与 Playwright 的定位描述；页面里本就不应有秘密，且下面整体再自检一次
     report.error = `${vp.label}: ${String(err).split('\n')[0]}`

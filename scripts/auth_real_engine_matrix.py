@@ -1,4 +1,4 @@
-"""Phase 3.3a 真实 Engine 鉴权矩阵（HTTP 层，设计稿 §6 全部 10 条 + B2 + Q2）。
+"""Phase 3.3a 真实 Engine 鉴权矩阵（Phase 4.0：两段式路由 + 必填 env）（HTTP 层，设计稿 §6 全部 10 条 + B2 + Q2）。
 
 由 ``scripts/run_real_engine_matrix.sh`` 调用：本地 target、真实 Engine 的 Control 已启动，
 各 config root 已写在临时目录。本脚本：
@@ -31,7 +31,9 @@ SEARCH_TARGETS = (FAKE_SECRET, FAKE_PARTNER, FAKE_AWS)
 
 BACKEND = os.environ.get("MATRIX_BACKEND_URL", "http://127.0.0.1:8000")
 TARGET = os.environ["MATRIX_TARGET_URL"]
-ASSETS_ROOT = os.environ["MATRIX_ASSETS_ROOT"]
+ASSETS_ROOT = os.environ.get("MATRIX_ASSETS_ROOT", "")  # 兼容旧 shell；运行改读同步快照
+REPO = os.environ.get("MATRIX_REPO", "matrix")
+ENV = os.environ.get("MATRIX_ENV", "test")
 OUT_DIR = Path(os.environ["MATRIX_OUT_DIR"])
 ROOTS = {
     name: os.environ[f"MATRIX_ROOT_{name.upper().replace('-', '_')}"]
@@ -73,35 +75,31 @@ class Matrix:
         self.projects: dict[str, str] = {}
         self.real_422: dict[str, Any] = {}
 
-    # ---- 基础 ----
+    # ---- 基础（Phase 4.0：两段式路由 + 必填 env；项目由服务端同步建立）----
     def project(self, root: str) -> str:
         if root not in self.projects:
-            resp = self.client.post(
-                f"{BACKEND}/projects",
-                json={
-                    "name": f"auth-matrix-{root}-{os.getpid()}",
-                    "env": "test",
-                    "assets_root": ASSETS_ROOT,
-                    "config_root": ROOTS[root],
-                },
-            )
+            resp = self.client.get(f"{BACKEND}/repos/{REPO}/projects/{root}")
             resp.raise_for_status()
-            self.projects[root] = resp.json()["id"]
+            self.projects[root] = root
         return self.projects[root]
 
+    def _base(self, root: str) -> str:
+        return f"{BACKEND}/repos/{REPO}/projects/{self.project(root)}"
+
     def run_api(self, root: str, asset: str, params: dict | None = None) -> httpx.Response:
-        pid = self.project(root)
         return self.client.post(
-            f"{BACKEND}/projects/{pid}/assets/{asset}/run", json={"params": params or {}}
+            f"{self._base(root)}/assets/{asset}/run",
+            json={"params": params or {}, "env": ENV},
         )
 
     def run_case(self, root: str, case: str) -> httpx.Response:
-        pid = self.project(root)
-        return self.client.post(f"{BACKEND}/projects/{pid}/cases/{case}/run", json={})
+        return self.client.post(
+            f"{self._base(root)}/cases/{case}/run",
+            json={"env": ENV},
+        )
 
     def record_count(self, root: str) -> int:
-        pid = self.project(root)
-        resp = self.client.get(f"{BACKEND}/projects/{pid}/execution-records?limit=200")
+        resp = self.client.get(f"{self._base(root)}/execution-records?limit=200")
         resp.raise_for_status()
         return len(resp.json())
 
@@ -272,7 +270,7 @@ def main() -> int:
         leak = leaks(resp.text)
         assert leak == 0, f"失败结果中秘密命中 {leak}"
         rec = m.client.get(
-            f"{BACKEND}/projects/{m.project('auth')}/execution-records/{body['record_id']}"
+            f"{BACKEND}/repos/{REPO}/projects/{m.project('auth')}/execution-records/{body['record_id']}"
         )
         assert leaks(rec.text) == 0, "历史详情泄密"
         assert "***" in resp.text

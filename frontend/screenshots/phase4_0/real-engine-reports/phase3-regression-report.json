@@ -1,0 +1,49 @@
+{
+  "evidence": [
+    {
+      "step": "resolve_project",
+      "id": "matrix/phase3",
+      "repo": "matrix",
+      "project": "phase3"
+    },
+    {
+      "step": "success",
+      "ok": true
+    },
+    {
+      "step": "assertion_failed",
+      "ok": true
+    },
+    {
+      "step": "preflight_422",
+      "ok": true
+    },
+    {
+      "step": "legacy_422",
+      "ok": true
+    },
+    {
+      "step": "transport_502_serial_locate",
+      "record_id": "aa2139d6-f472-44a1-ab4d-d1a369c8b48d",
+      "ok": true
+    },
+    {
+      "step": "timeout_504_serial_locate",
+      "record_id": "8166665b-eb43-4dad-9836-1459f2c33fb2",
+      "ok": true
+    },
+    {
+      "step": "history_detail",
+      "ok": true
+    }
+  ],
+  "unexpectedConsole": [],
+  "unexpectedFailed": [],
+  "pageErrors": [],
+  "failedRequests": [
+    "422 POST http://127.0.0.1:5333/api/repos/matrix/projects/phase3/cases/case.demo.undeclared_alias/run",
+    "422 POST http://127.0.0.1:5333/api/repos/matrix/projects/phase3/cases/case.demo.legacy_v1/run",
+    "502 POST http://127.0.0.1:5333/api/repos/matrix/projects/phase3/cases/case.demo.transport/run",
+    "504 POST http://127.0.0.1:5333/api/repos/matrix/projects/phase3/cases/case.demo.timeout/run"
+  ]
+}

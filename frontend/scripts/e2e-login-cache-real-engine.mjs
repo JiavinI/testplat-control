@@ -97,17 +97,20 @@ async function targetReset(page) {
   if (!resp.ok()) throw new Error(`target reset HTTP ${resp.status()}`)
 }
 
-async function runAsset(page, projectId, assetId) {
-  const resp = await page.request.post(`${BASE}/api/projects/${projectId}/assets/${assetId}/run`, {
-    data: { params: {} },
-    timeout: 120000,
-  })
+async function runAsset(page, repo, project, assetId) {
+  const resp = await page.request.post(
+    `${BASE}/api/repos/${repo}/projects/${project}/assets/${assetId}/run`,
+    {
+      data: { params: {}, env: process.env.E2E_ENV || 'test' },
+      timeout: 120000,
+    },
+  )
   if (!resp.ok()) throw new Error(`run ${assetId} HTTP ${resp.status()}`)
   return resp.json()
 }
 
-async function openLatestApiDetail(page, projectId) {
-  await page.goto(`${BASE}/projects/${projectId}`, { waitUntil: 'networkidle' })
+async function openLatestApiDetail(page, repo, project) {
+  await page.goto(`${BASE}/projects/${repo}/${project}`, { waitUntil: 'networkidle' })
   await page.getByTestId('project-workspace').waitFor({ timeout: 20000 })
   const history = page.getByTestId('execution-history')
   await history.waitFor({ timeout: 20000 })
@@ -129,25 +132,17 @@ async function runViewport(browser, vp, dynamicSecrets) {
   const page = await context.newPage()
   const ctx = { label: vp.label, dom: [], scenes: [] }
 
-  const resp = await page.request.post(`${BASE}/api/projects`, {
-    data: {
-      name: `cache-real-${vp.label}-${Date.now()}`,
-      env: 'test',
-      assets_root: ASSETS_ROOT,
-      config_root: CONFIG_ROOT,
-    },
-  })
-  if (!resp.ok()) throw new Error(`创建项目失败 HTTP ${resp.status()}`)
-  const project = await resp.json()
+  const REPO = process.env.E2E_REPO || 'matrix'
+  const PROJECT = process.env.E2E_PROJECT || 'cache'
 
   // 1) 暖缓存
   await targetConfig(page, { always_401: false, force_login_fail: false, clear_revoked: true })
   await targetReset(page)
-  await runAsset(page, project.id, 'api.login.buyer_cached_echo')
+  await runAsset(page, REPO, PROJECT, 'api.login.buyer_cached_echo')
 
   // 2) 缓存命中
-  await runAsset(page, project.id, 'api.login.buyer_cached_echo')
-  await openLatestApiDetail(page, project.id)
+  await runAsset(page, REPO, PROJECT, 'api.login.buyer_cached_echo')
+  await openLatestApiDetail(page, REPO, PROJECT)
   await page.getByText('复用登录（未重新登录）').first().waitFor({ timeout: 15000 })
   await shot(page, ctx, 'cache-reuse', dynamicSecrets)
   ctx.scenes.push('cache-reuse')
@@ -155,14 +150,14 @@ async function runViewport(browser, vp, dynamicSecrets) {
   // 3) 吊销 → 401 重登
   await targetConfig(page, { revoke_current_token: true })
   await targetReset(page)
-  await runAsset(page, project.id, 'api.login.buyer_cached_echo')
-  await openLatestApiDetail(page, project.id)
+  await runAsset(page, REPO, PROJECT, 'api.login.buyer_cached_echo')
+  await openLatestApiDetail(page, REPO, PROJECT)
   await page.getByText('鉴权失效，已重新登录并重发').first().waitFor({ timeout: 15000 })
   await shot(page, ctx, 'reauth-resend', dynamicSecrets)
   ctx.scenes.push('reauth-resend')
 
   await context.close()
-  return { ...ctx, project_id: project.id, dynamic_secret_targets: dynamicSecrets.length }
+  return { ...ctx, project_id: `${REPO}/${PROJECT}`, dynamic_secret_targets: dynamicSecrets.length }
 }
 
 const chromeCandidates = [

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 启动本地 target + 矩阵 Redis + 真实 Engine Control + 前端，跑真实 Engine 矩阵；不访问公网。
+# Phase 4.0：经 build_matrix_repos.py 建 file:// 资产仓，TESTPLAT_REPOS_FILE 启动同步；禁止 shell=True 调 git。
 #
 # Phase 3.3b 扩展（在 3.3a 四段之上）：
 #   0. 以本地 path 安装假登录插件 + testplat-login-plugins[redis]
@@ -189,6 +190,17 @@ export MATRIX_CACHE_OUT_DIR="$CACHE_OUT_DIR"
 export MATRIX_ISSUED_SECRETS_PATH="$ISSUED_SECRETS"
 export MATRIX_BACKEND_LOG="$CACHE_OUT_DIR/backend.log"
 
+# Phase 4.0：把各 config root 装进临时 git 仓库，供服务端同步（两段式路由）
+echo "[0c/8] build matrix git asset repo"
+MATRIX_BUILD_JSON="$(uv run python scripts/build_matrix_repos.py   --work "$WORK"   --root "$ROOT"   --target-port "$TARGET_PORT"   --redis-port "$REDIS_PORT"   --dead-redis-port "$DEAD_REDIS_PORT")"
+export MATRIX_BUILD_JSON
+export TESTPLAT_REPOS_FILE="$(printf '%s' "$MATRIX_BUILD_JSON" | uv run python -c 'import json,sys; print(json.load(sys.stdin)["repos_file"])')"
+export MATRIX_REPO="$(printf '%s' "$MATRIX_BUILD_JSON" | uv run python -c 'import json,sys; print(json.load(sys.stdin)["repo_key"])')"
+export MATRIX_ASSETS_GIT="$(printf '%s' "$MATRIX_BUILD_JSON" | uv run python -c 'import json,sys; print(json.load(sys.stdin)["repo_path"])')"
+export MATRIX_ENV=test
+echo "repos_file=$TESTPLAT_REPOS_FILE repo=$MATRIX_REPO"
+
+
 DB_PATH="$WORK/control.db"
 cat >"$WORK/log.json" <<'JSON'
 {
@@ -244,6 +256,7 @@ env \
   -u TESTPLAT_MISSING_TOKEN \
   -u TESTPLAT_MISSING_REDIS_PASSWORD \
   MATRIX_SQLITE_PATH="$DB_PATH" \
+  TESTPLAT_REPOS_FILE="$TESTPLAT_REPOS_FILE" \
   TESTPLAT_ADMIN_TOKEN="tp-fake-secret-9f31c2a7" \
   TESTPLAT_PARTNER_KEY="tp-fake-partner-4c8e11d0" \
   TESTPLAT_EMPTY_TOKEN="" \
@@ -316,6 +329,8 @@ echo "[3/8] auth browser screenshots (3.3a real Engine)"
   E2E_OUT_DIR="$AUTH_OUT_DIR" \
   E2E_AUTH_ASSETS_ROOT="$AUTH_ASSETS_ROOT" \
   E2E_AUTH_CONFIG_ROOT="$MATRIX_ROOT_AUTH" \
+  E2E_REPO="$MATRIX_REPO" \
+  E2E_PROJECT=auth \
   pnpm exec node scripts/e2e-auth-real-engine.mjs
 ) || STATUS=1
 
@@ -326,6 +341,8 @@ echo "[4/8] login browser screenshots (3.3b real Engine)"
   E2E_OUT_DIR="$LOGIN_OUT_DIR" \
   E2E_LOGIN_ASSETS_ROOT="$LOGIN_ASSETS_ROOT" \
   E2E_LOGIN_CONFIG_ROOT="$MATRIX_ROOT_LOGIN" \
+  E2E_REPO="$MATRIX_REPO" \
+  E2E_PROJECT=login \
   pnpm exec node scripts/e2e-login-real-engine.mjs
 ) || STATUS=1
 
@@ -337,6 +354,8 @@ echo "[4b/8] vcode browser screenshots (3.3c real Engine)"
   E2E_LOGIN_ASSETS_ROOT="$LOGIN_ASSETS_ROOT" \
   E2E_LOGIN_CONFIG_ROOT="$MATRIX_ROOT_VCODE" \
   E2E_ISSUED_SECRETS_PATH="$ISSUED_SECRETS" \
+  E2E_REPO="$MATRIX_REPO" \
+  E2E_PROJECT=vcode \
   pnpm exec node scripts/e2e-login-vcode-real-engine.mjs
 ) || STATUS=1
 
@@ -349,6 +368,8 @@ echo "[4c/8] login-cache browser screenshots (3.3d real Engine)"
   E2E_LOGIN_CONFIG_ROOT="$MATRIX_ROOT_CACHE" \
   E2E_ISSUED_SECRETS_PATH="$ISSUED_SECRETS" \
   E2E_TARGET_URL="http://127.0.0.1:$TARGET_PORT" \
+  E2E_REPO="$MATRIX_REPO" \
+  E2E_PROJECT=cache \
   pnpm exec node scripts/e2e-login-cache-real-engine.mjs
 ) || STATUS=1
 
@@ -358,6 +379,8 @@ echo "[5/8] Phase 3 regression (no auth config)"
   E2E_BASE_URL="http://127.0.0.1:$FRONTEND_PORT" \
   E2E_OUT_DIR="$OUT_DIR" \
   E2E_CONFIG_ROOT="$E2E_CONFIG_ROOT" \
+  E2E_REPO="$MATRIX_REPO" \
+  E2E_PROJECT=phase3 \
   pnpm exec node scripts/e2e-real-engine-matrix.mjs
 ) || STATUS=1
 cp "$OUT_DIR/real-engine-matrix-report.json" "$LOGIN_OUT_DIR/phase3-regression-report.json" 2>/dev/null || true
@@ -431,6 +454,16 @@ if cache.is_file():
     print(f"L45 cache-matrix {data.get('passed')}/{data.get('total')}")
 sys.exit(0 if ok else 1)
 PY
+
+echo "[7b/8] archive phase4 matrix reports"
+PHASE4_ARCH="$ROOT/frontend/screenshots/phase4_0/real-engine-reports"
+mkdir -p "$PHASE4_ARCH"
+cp -f "$AUTH_OUT_DIR/auth-matrix-report.json" "$PHASE4_ARCH/" 2>/dev/null || true
+cp -f "$LOGIN_OUT_DIR/login-matrix-report.json" "$PHASE4_ARCH/" 2>/dev/null || true
+cp -f "$VCODE_OUT_DIR/vcode-matrix-report.json" "$PHASE4_ARCH/" 2>/dev/null || true
+cp -f "$CACHE_OUT_DIR/login-cache-matrix-report.json" "$PHASE4_ARCH/" 2>/dev/null || true
+cp -f "$CACHE_OUT_DIR/leak-search-evidence.json" "$PHASE4_ARCH/" 2>/dev/null || true
+cp -f "$CACHE_OUT_DIR/phase3-regression-report.json" "$PHASE4_ARCH/" 2>/dev/null || true
 
 echo "[8/8] restore old screenshot dirs if rewritten"
 restore_old_screenshots

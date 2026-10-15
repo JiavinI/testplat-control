@@ -117,17 +117,9 @@ async function runViewport(browser, vp, dynamicSecrets) {
   const page = await context.newPage()
   const ctx = { label: vp.label, dom: [], scenes: [] }
 
-  const resp = await page.request.post(`${BASE}/api/projects`, {
-    data: {
-      name: `vcode-real-${vp.label}-${Date.now()}`,
-      env: 'test',
-      assets_root: ASSETS_ROOT,
-      config_root: CONFIG_ROOT,
-    },
-  })
-  if (!resp.ok()) throw new Error(`创建项目失败 HTTP ${resp.status()}`)
-  const project = await resp.json()
-  await page.goto(`${BASE}/projects/${project.id}`, { waitUntil: 'networkidle' })
+  const REPO = process.env.E2E_REPO || 'matrix'
+  const PROJECT = process.env.E2E_PROJECT || 'vcode'
+  await page.goto(`${BASE}/projects/${REPO}/${PROJECT}`, { waitUntil: 'networkidle' })
   await page.getByTestId('project-workspace').waitFor({ timeout: 15000 })
 
   // 1) vcode_redis 登录成功
@@ -150,7 +142,7 @@ async function runViewport(browser, vp, dynamicSecrets) {
   ctx.scenes.push('vcode-unreachable')
 
   await context.close()
-  return { ...ctx, project_id: project.id, dynamic_secret_targets: dynamicSecrets.length }
+  return { ...ctx, project_id: `${REPO}/${PROJECT}`, dynamic_secret_targets: dynamicSecrets.length }
 }
 
 const chromeCandidates = [
