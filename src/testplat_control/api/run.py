@@ -8,22 +8,28 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session
 
 from testplat_control.api.schemas import ExecutionAuth, parse_execution_auth
-from testplat_control.database.models import ExecutionRecord, Project
+from testplat_control.database.models import ExecutionRecord
 from testplat_control.database.session import get_db
 from testplat_control.deps import get_engine_port
 from testplat_control.parsers.yaml_parser import YamlParser
 from testplat_control.ports.engine import EnginePort
 from testplat_control.services.asset_service import AssetNode, AssetService
 from testplat_control.services.execution_service import run_single_api
+from testplat_control.services.project_access import (
+    ensure_snapshot_dirs,
+    get_project,
+    get_repos_config,
+    require_env,
+)
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/projects", tags=["run"])
+router = APIRouter(prefix="/repos/{repo}/projects/{project}", tags=["run"])
 
 ParamType = Literal["string", "number", "boolean"]
 RunStatus = Literal["success", "failed"]
@@ -66,6 +72,7 @@ class ParamsResponse(BaseModel):
 class RunRequest(BaseModel):
     """单次 API 执行请求。"""
 
+    env: str = Field(..., min_length=1, description="运行环境（须在项目 envs 内）")
     params: dict[str, Any] = Field(default_factory=dict, description="执行参数")
 
 
@@ -81,6 +88,7 @@ class RunResponse(BaseModel):
     auth: ExecutionAuth | None = Field(
         None, description="本次请求使用的身份（Phase 3.3d 九键）；匿名为 null，与 result.auth 相同"
     )
+    commit_sha: str | None = Field(None, description="本次执行固定使用的 commit SHA")
 
 
 def build_param_infos(inputs: Any) -> list[ParamInfo]:
@@ -253,44 +261,24 @@ def _validate_run_params(form: list[ParamInfo], params: dict[str, Any]) -> None:
         raise HTTPException(status_code=422, detail="; ".join(errors))
 
 
-def _get_project(db: Session, project_id: str) -> Project:
-    """读取项目，不存在时返回 404。"""
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
-
-
-def _asset_file(project: Project, asset: AssetNode) -> Path:
-    """定位资产文件，并限制在 assets_root 内。"""
-    root = Path(project.assets_root).resolve()
+def _asset_file(assets_root: Path, asset: AssetNode) -> Path:
+    """定位资产文件，并限制在 assets_root 内（resolve + 前缀校验）。"""
+    root = assets_root.resolve()
     file_path = (root / asset.path).resolve()
     if not file_path.is_relative_to(root):
         raise HTTPException(status_code=404, detail="Asset not found")
     return file_path
 
 
-def _load_param_form(project: Project, asset_id: str) -> list[ParamInfo]:
-    """用 AssetService 定位资产，再用 YamlParser 提取 inputs。
-
-    Args:
-        project: 已存在的项目。
-        asset_id: 资产 ID，例如 ``api.user.create``。
-
-    Returns:
-        该 API 的参数表单。
-
-    Raises:
-        HTTPException: 资产不存在返回 404；不是可执行的 API YAML 或 inputs
-            无法识别时返回 422；读取失败返回 500。
-    """
-    asset = AssetService(Path(project.assets_root)).get_asset(asset_id)
+def _load_param_form(assets_root: Path, asset_id: str) -> list[ParamInfo]:
+    """用 AssetService 定位资产，再用 YamlParser 提取 inputs。"""
+    asset = AssetService(assets_root).get_asset(asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     if asset.type != "file":
         raise HTTPException(status_code=422, detail="Asset is not a file")
 
-    file_path = _asset_file(project, asset)
+    file_path = _asset_file(assets_root, asset)
     if file_path.suffix.lower() not in {".yaml", ".yml"}:
         raise HTTPException(status_code=422, detail="Asset is not a YAML file")
 
@@ -341,70 +329,51 @@ def _run_response(record: ExecutionRecord) -> RunResponse:
         auth=parse_execution_auth(
             result if isinstance(result, dict) else None, record_id=record.id
         ),
+        commit_sha=getattr(record, "commit_sha", None),
     )
 
 
-@router.get("/{project_id}/assets/{asset_id}/params", response_model=ParamsResponse)
+@router.get("/assets/{asset_id}/params", response_model=ParamsResponse)
 async def get_asset_params(
-    project_id: str,
+    repo: str,
+    project: str,
     asset_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> ParamsResponse:
-    """从 API YAML 的 inputs 提取参数表单。
-
-    Args:
-        project_id: 项目 ID。
-        asset_id: 资产 ID，例如 ``api.user.create``。
-        db: 数据库会话。
-
-    Returns:
-        参数名、类型、是否必填和说明。
-
-    Raises:
-        HTTPException: 项目或资产不存在返回 404；资产不是 API YAML 或
-            inputs 无法识别时返回 422。
-    """
-    project = _get_project(db, project_id)
-    params = _load_param_form(project, asset_id)
+    """从 API YAML 的 inputs 提取参数表单（当前 SHA 快照）。"""
+    row = get_project(db, repo, project)
+    _, assets_root, _ = ensure_snapshot_dirs(get_repos_config(request), row)
+    params = _load_param_form(assets_root, asset_id)
     return ParamsResponse(asset_id=asset_id, params=params)
 
 
-@router.post("/{project_id}/assets/{asset_id}/run", response_model=RunResponse)
+@router.post("/assets/{asset_id}/run", response_model=RunResponse)
 async def run_asset(
-    project_id: str,
+    repo: str,
+    project: str,
     asset_id: str,
     body: RunRequest,
+    request: Request,
     db: Session = Depends(get_db),
     engine: EnginePort = Depends(get_engine_port),
 ) -> RunResponse:
-    """执行单个 API，并保存执行记录。
-
-    EnginePort 由依赖注入提供（默认 PackageEngineAdapter；测试注入 Fake）。
-    业务断言失败仍返回 HTTP 200 且 ``status=failed``。系统错误按 kind/stage
-    映射为 404/422/502/503/504/500；``preflight`` 不写记录，``execution`` 写 failed。
-
-    Args:
-        project_id: 项目 ID。
-        asset_id: 资产 ID。
-        body: 执行参数，形状为 ``{"params": {...}}``。
-        db: 数据库会话。
-        engine: 注入的 EnginePort。
-
-    Returns:
-        记录 ID、状态、耗时和执行结果。
-
-    Raises:
-        HTTPException: 项目/资产 404；参数 422；系统错误按错误表映射。
-    """
-    project = _get_project(db, project_id)
-    form = _load_param_form(project, asset_id)
+    """执行单个 API，并保存执行记录。请求体必填 ``env``。"""
+    row = get_project(db, repo, project)
+    env = require_env(row, body.env)
+    commit_sha, assets_root, config_root = ensure_snapshot_dirs(get_repos_config(request), row)
+    form = _load_param_form(assets_root, asset_id)
     _validate_run_params(form, body.params)
 
     record = await run_single_api(
         db=db,
-        project=project,
+        project=row,
         asset_id=asset_id,
         params=body.params,
         engine=engine,
+        env=env,
+        commit_sha=commit_sha,
+        assets_root=assets_root,
+        config_root=config_root,
     )
     return _run_response(record)

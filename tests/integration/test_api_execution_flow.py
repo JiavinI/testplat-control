@@ -19,6 +19,7 @@ from httpx import ASGITransport, AsyncClient
 from testplat_control.adapters.fake_engine import FakeEngineAdapter
 from testplat_control.deps import get_engine_port
 from testplat_control.main import app
+from tests.case_support import create_project, project_api_base
 
 client = TestClient(app)
 
@@ -66,13 +67,13 @@ def _find_asset(node: dict, asset_id: str) -> dict | None:
 
 def _run(project_id: str, asset_id: str, params: dict | None = None):
     return client.post(
-        f"/projects/{project_id}/assets/{asset_id}/run",
-        json={"params": params or {}},
+        f"{project_api_base(project_id)}/assets/{asset_id}/run",
+        json={"env": "test", "params": params or {}},
     )
 
 
 def _list(project_id: str, **params: str):
-    return client.get(f"/projects/{project_id}/execution-records", params=params)
+    return client.get(f"{project_api_base(project_id)}/execution-records", params=params)
 
 
 @pytest.fixture
@@ -85,34 +86,29 @@ def engine() -> FakeEngineAdapter:
 
 
 @pytest.fixture
-def project_id(engine: FakeEngineAdapter) -> str:
-    """创建指向仓库内 fixtures 资产树的项目。"""
+def project_id(engine: FakeEngineAdapter, tmp_path: Path) -> str:
+    """把 fixtures 资产树同步进本地 git 仓并返回 project_id。"""
+    import shutil
+
     assert ASSETS_ROOT.is_dir()
-    assert (ASSETS_ROOT / "api" / "user" / "login.yaml").is_file()
     assert (CONFIG_ROOT / "envs" / "test.yaml").is_file()
-    response = client.post(
-        "/projects",
-        json={
-            "name": f"integration-{uuid4().hex[:8]}",
-            "env": "test",
-            "assets_root": str(ASSETS_ROOT),
-            "config_root": str(CONFIG_ROOT),
-        },
-    )
-    assert response.status_code == 200
-    return response.json()["id"]
+    assets = tmp_path / "assets"
+    config = tmp_path / "config"
+    shutil.copytree(ASSETS_ROOT, assets)
+    shutil.copytree(CONFIG_ROOT, config)
+    return create_project(client, assets, config, name=f"integration-{uuid4().hex[:8]}")
 
 
 def test_full_api_execution_flow(project_id: str) -> None:
     """建项目、看资产树、取参数表单、执行，再查列表和详情。"""
-    tree = client.get(f"/projects/{project_id}/assets")
+    tree = client.get(f"{project_api_base(project_id)}/assets")
     assert tree.status_code == 200
     login = _find_asset(tree.json(), LOGIN)
     assert login is not None
     assert login["type"] == "file"
     assert login["path"] == "api/user/login.yaml"
 
-    form = client.get(f"/projects/{project_id}/assets/{LOGIN}/params")
+    form = client.get(f"{project_api_base(project_id)}/assets/{LOGIN}/params")
     assert form.status_code == 200
     assert form.json()["asset_id"] == LOGIN
     by_name = {item["name"]: item for item in form.json()["params"]}
@@ -135,7 +131,7 @@ def test_full_api_execution_flow(project_id: str) -> None:
     assert_execution_record(matched, "success")
     assert matched["asset_id"] == LOGIN
 
-    detail = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    detail = client.get(f"{project_api_base(project_id)}/execution-records/{record_id}")
     assert detail.status_code == 200
     saved = detail.json()
     assert_execution_record(saved, "success")
@@ -219,7 +215,7 @@ def test_execution_failure_handling(project_id: str) -> None:
     assert body["result"]["error"]["message"] == "assertion failed"
     assert body["result"]["response"] is None
 
-    detail = client.get(f"/projects/{project_id}/execution-records/{body['record_id']}")
+    detail = client.get(f"{project_api_base(project_id)}/execution-records/{body['record_id']}")
     assert detail.status_code == 200
     saved = detail.json()
     assert_execution_record(saved, "failed")
@@ -244,8 +240,8 @@ def test_concurrent_executions(project_id: str, engine: FakeEngineAdapter) -> No
             responses = await asyncio.gather(
                 *[
                     http.post(
-                        f"/projects/{project_id}/assets/{HEALTH}/run",
-                        json={"params": {}},
+                        f"{project_api_base(project_id)}/assets/{HEALTH}/run",
+                        json={"env": "test", "params": {}},
                     )
                     for _ in range(5)
                 ]

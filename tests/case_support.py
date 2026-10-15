@@ -236,17 +236,64 @@ def write_env(config_root: Path, base_url: str, *, env: str = "test") -> None:
 
 
 def create_project(client: TestClient, assets_root: Path, config_root: Path, **extra: Any) -> str:
-    """创建指向临时目录的项目并返回 project_id。"""
-    payload = {
-        "name": f"case-{uuid4().hex[:10]}",
-        "env": "test",
-        "assets_root": str(assets_root),
-        "config_root": str(config_root),
-        **extra,
-    }
-    response = client.post("/projects", json=payload)
-    assert response.status_code == 200, response.text
-    return response.json()["id"]
+    """把已写好的 assets/config 打成 git 资产仓并同步，返回 ``{repo}/{project}``。"""
+    import os
+    import shutil
+    import subprocess
+
+    from tests.repo_support import attach_repos_config, sync_repo
+
+    repo_key = str(extra.get("repo", f"r{uuid4().hex[:8]}"))
+    project_key = str(extra.get("project", "demo"))
+    name = str(extra.get("name", f"case-{uuid4().hex[:10]}"))
+    staging = assets_root.parent / f"git-{uuid4().hex[:8]}"
+    proj = staging / "projects" / project_key
+    proj.mkdir(parents=True)
+    for child in assets_root.iterdir():
+        dest = proj / child.name
+        if child.is_dir():
+            shutil.copytree(child, dest)
+        else:
+            shutil.copy2(child, dest)
+    shutil.copytree(config_root, proj / "config")
+    (staging / "testplat.yaml").write_text(
+        "\n".join(
+            [
+                'schema_version: "1"',
+                "projects:",
+                f"  {project_key}:",
+                f"    name: {name}",
+                f"    assets: projects/{project_key}",
+                f"    config: projects/{project_key}/config",
+                "    default_env: test",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    for args in (
+        ["git", "init", "-b", "main"],
+        ["git", "config", "user.email", "test@example.com"],
+        ["git", "config", "user.name", "Test"],
+        ["git", "add", "-A"],
+        ["git", "commit", "-m", "init"],
+    ):
+        subprocess.run(args, cwd=str(staging), env=env, capture_output=True, timeout=30, check=True)
+    data_dir = assets_root.parent / f"data-{uuid4().hex[:8]}"
+    data_dir.mkdir()
+    attach_repos_config(data_dir=data_dir, url=staging.resolve().as_uri(), repo_key=repo_key)
+    sync_repo(client, repo_key)
+    return f"{repo_key}/{project_key}"
+
+
+def project_api_base(project_id: str) -> str:
+    """``main/demo`` → ``/repos/main/projects/demo``。"""
+    if "/" not in project_id:
+        raise ValueError(f"invalid project_id (expect repo/project): {project_id!r}")
+    repo, project = project_id.split("/", 1)
+    return f"/repos/{repo}/projects/{project}"
 
 
 def assert_case_result_invariants(

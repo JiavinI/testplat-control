@@ -1,4 +1,4 @@
-"""Pydantic 请求/响应模型"""
+"""Pydantic 请求/响应模型（Phase 4.0）。"""
 
 import json
 import logging
@@ -10,54 +10,62 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 logger = logging.getLogger(__name__)
 
 
-class ProjectCreate(BaseModel):
-    """创建项目的请求模型"""
-
-    name: str = Field(..., min_length=1, description="项目名称")
-    env: str = Field(default="test", description="环境")
-    assets_root: str = Field(..., min_length=1, description="资产目录")
-    config_root: str = Field(..., min_length=1, description="配置目录")
-
-
-class ProjectUpdate(BaseModel):
-    """更新项目的请求模型"""
-
-    name: str | None = Field(None, min_length=1, description="项目名称")
-    env: str | None = Field(None, description="环境")
-    assets_root: str | None = Field(None, min_length=1, description="资产目录")
-    config_root: str | None = Field(None, min_length=1, description="配置目录")
-
-
 class ProjectResponse(BaseModel):
-    """项目响应模型"""
+    """项目响应（只读；来自 Git 清单）。"""
 
-    id: str = Field(..., description="项目ID")
-    name: str = Field(..., description="项目名称")
-    env: str = Field(..., description="环境")
-    assets_root: str = Field(..., description="资产目录")
-    config_root: str = Field(..., description="配置目录")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
+    id: str = Field(..., description="项目 ID，形如 {repo}/{project}")
+    repo: str = Field(..., description="仓库键")
+    project: str = Field(..., description="项目键（清单内）")
+    name: str = Field(..., description="显示名称")
+    envs: list[str] = Field(default_factory=list, description="可选环境列表")
+    default_env: str | None = Field(None, description="默认环境")
+    archived: bool = Field(False, description="清单中已消失时为 true")
+    commit_sha: str | None = Field(None, description="当前同步的 commit SHA")
+    created_at: datetime = Field(..., description="首次同步时间")
+    updated_at: datetime = Field(..., description="最近同步更新时间")
 
-    class Config:
-        from_attributes = True
+    @classmethod
+    def from_model(cls, project: Any) -> "ProjectResponse":
+        return cls(
+            id=project.id,
+            repo=project.repo,
+            project=project.project_key,
+            name=project.name,
+            envs=list(project.envs or []),
+            default_env=project.default_env,
+            archived=bool(project.archived),
+            commit_sha=project.commit_sha,
+            created_at=project.created_at,
+            updated_at=project.updated_at,
+        )
+
+
+class RepoResponse(BaseModel):
+    """仓库状态（不含 URL）。"""
+
+    key: str = Field(..., description="仓库键")
+    branch: str = Field(..., description="跟踪分支")
+    current_sha: str | None = Field(None, description="当前 commit SHA")
+    last_sync_at: datetime | None = Field(None, description="最近同步时间")
+    last_sync_result: str | None = Field(
+        None, description="最近同步结果：ok|network|auth|invalid_manifest|timeout"
+    )
+
+
+class SyncResponse(BaseModel):
+    """同步结果（失败时只含类别，不含 git 原文）。"""
+
+    repo: str = Field(..., description="仓库键")
+    ok: bool = Field(..., description="是否成功")
+    category: str = Field(..., description="ok|network|auth|invalid_manifest|timeout")
+    commit_sha: str | None = Field(None, description="成功时为新 SHA；失败时为保留的旧 SHA")
 
 
 _TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def parse_result_json(raw: str | None) -> dict[str, Any] | None:
-    """把执行记录里的 result_json 解析成字典。
-
-    空字符串和 JSON ``null`` 视为没有结果。解析失败时不抛错，返回带
-    ``parse_error`` 的字典。非对象 JSON 会包进 ``value``，保证结果始终是字典。
-
-    Args:
-        raw: 数据库中的 result_json。
-
-    Returns:
-        解析后的字典；没有结果时返回 None。
-    """
+    """把执行记录里的 result_json 解析成字典。"""
     if raw is None or raw == "":
         return None
     try:
@@ -79,7 +87,7 @@ def format_time(value: datetime | None) -> str | None:
 
 
 def format_duration(seconds: float | None) -> str | None:
-    """把秒数格式化成可读耗时，例如 ``250ms``、``1.50s``、``1m 30.50s``。"""
+    """把秒数格式化成可读耗时。"""
     if seconds is None:
         return None
     if seconds < 1:
@@ -91,12 +99,7 @@ def format_duration(seconds: float | None) -> str | None:
 
 
 def derive_login_failed(result_json: str | None) -> bool:
-    """从 result_json 判断列表项是否应标记 login_failed。
-
-    - 单 API：顶层 ``error.kind == "login_failed"``
-    - Case：任一步骤 ``error.kind == "login_failed"``
-    缺失或畸形时返回 False，绝不抛错（列表映射不得因单条坏数据失败）。
-    """
+    """从 result_json 判断列表项是否应标记 login_failed。"""
     try:
         result = parse_result_json(result_json)
         if not isinstance(result, dict):
@@ -114,7 +117,6 @@ def derive_login_failed(result_json: str | None) -> bool:
                     return True
         return False
     except Exception:
-        # 列表映射硬约束：任何意外都当 false，不向上抛
         return False
 
 
@@ -128,19 +130,15 @@ class ExecutionRecordListResponse(BaseModel):
     duration: float | None = Field(None, description="执行时长（秒）")
     login_failed: bool = Field(
         False,
-        description="结果中是否含 login_failed（单 API 顶层 error，或 Case 任一步骤 error）",
+        description="结果中是否含 login_failed",
     )
+    env: str | None = Field(None, description="运行时选择的环境")
+    commit_sha: str | None = Field(None, description="执行所用 commit SHA")
+    repo: str | None = Field(None, description="仓库键")
+    operator: str | None = Field(None, description="操作人；4.0 恒为 null")
 
     @classmethod
     def from_model(cls, record: Any) -> "ExecutionRecordListResponse":
-        """从 ExecutionRecord 构造列表项。
-
-        Args:
-            record: 数据库执行记录。
-
-        Returns:
-            列表响应。``login_failed`` 由 result_json 推导，畸形时为 false。
-        """
         duration = None if record.duration is None else float(record.duration)
         return cls(
             id=record.id,
@@ -149,23 +147,19 @@ class ExecutionRecordListResponse(BaseModel):
             start_time=record.start_time,
             duration=duration,
             login_failed=derive_login_failed(getattr(record, "result_json", None)),
+            env=getattr(record, "env", None),
+            commit_sha=getattr(record, "commit_sha", None),
+            repo=getattr(record, "repo", None),
+            operator=getattr(record, "operator", None),
         )
 
     @classmethod
     def from_orm(cls, record: Any) -> "ExecutionRecordListResponse":
-        """``from_model`` 的别名，兼容旧的 from_orm 调用。"""
         return cls.from_model(record)
 
 
 class ExecutionAuth(BaseModel):
-    """一次 API / 步骤实际使用的身份（Phase 3.3d，Engine 0.5 公开 ``auth`` 九键）。
-
-    只含身份名、kind、tier 与 header/Cookie **名**，永不含秘密值；匿名执行时整个字段为 null。
-    ``extra="forbid"``：Engine 的公开 auth 恰好九键，多出的键说明契约漂移，宁可解析失败。
-    静态 header 身份：``kind=static_headers``、``tier=null``、
-    ``cookie_names=[]``、``login_ref=null``、``session_source=null``、``reauthenticated=false``。
-    旧记录（七键）缺 ``session_source`` / ``reauthenticated`` 时按 ``null`` / ``false`` 兼容。
-    """
+    """一次 API / 步骤实际使用的身份（Phase 3.3d）。"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -175,32 +169,23 @@ class ExecutionAuth(BaseModel):
         None, description="登录档位 generic/configured/plugin；静态 header 为 null"
     )
     header_names: list[str] = Field(..., description="注入的凭证 header 名（不含值）")
-    overridden_headers: list[str] = Field(
-        ..., description="被凭证覆盖的资产 header 名（资产里的原始写法）"
-    )
-    cookie_names: list[str] = Field(
-        ..., description="本次携带的 Cookie 名（不含值）；静态 header 恒为 []"
-    )
-    login_ref: int | None = Field(
-        None, description="指向结果顶层 logins 的下标；静态 header 或未登录为 null"
-    )
+    overridden_headers: list[str] = Field(..., description="被凭证覆盖的资产 header 名")
+    cookie_names: list[str] = Field(..., description="本次携带的 Cookie 名（不含值）")
+    login_ref: int | None = Field(None, description="指向结果顶层 logins 的下标")
     session_source: str | None = Field(
         None,
-        description=("会话来源：login / execution / cache；静态 header 为 null；旧记录缺省 null"),
+        description="会话来源：login / execution / cache",
     )
     reauthenticated: bool = Field(
         False,
-        description="本步是否触发了 401 重登重发；静态 header 恒为 false；旧记录缺省 false",
+        description="本步是否触发了 401 重登重发",
     )
 
 
 def parse_execution_auth(
     result: dict[str, Any] | None, *, record_id: str | None = None
 ) -> ExecutionAuth | None:
-    """从结果字典中取出公开 ``auth``；缺失（旧记录）返回 None。
-
-    形状不符时记 warning（只含记录 id，H5），返回 None，不让详情 500。
-    """
+    """从结果字典中取出公开 ``auth``；缺失返回 None。"""
     if not isinstance(result, dict):
         return None
     raw = result.get("auth")
@@ -225,7 +210,7 @@ class ExecutionDisplay(BaseModel):
 
 
 class ExecutionRecordDetailResponse(BaseModel):
-    """执行记录详情。``result`` 是解析后的结果，而不是原始 JSON 字符串。"""
+    """执行记录详情。"""
 
     id: str = Field(..., description="记录ID")
     project_id: str = Field(..., description="项目ID")
@@ -241,19 +226,15 @@ class ExecutionRecordDetailResponse(BaseModel):
     response: Any | None = Field(None, description="结果中的响应详情")
     auth: ExecutionAuth | None = Field(
         None,
-        description="单 API 身份（Phase 3.3d 九键）；匿名/Case/旧记录为 null",
+        description="单 API 身份；匿名/Case/旧记录为 null",
     )
+    env: str | None = Field(None, description="运行时选择的环境")
+    commit_sha: str | None = Field(None, description="执行所用 commit SHA")
+    repo: str | None = Field(None, description="仓库键")
+    operator: str | None = Field(None, description="操作人；4.0 恒为 null")
 
     @classmethod
     def from_model(cls, record: Any) -> "ExecutionRecordDetailResponse":
-        """从 ExecutionRecord 构造详情，并安全解析 result_json。
-
-        Args:
-            record: 数据库执行记录。
-
-        Returns:
-            详情响应。result_json 无法解析时，``result`` 含 ``parse_error``。
-        """
         result = parse_result_json(record.result_json)
         duration = None if record.duration is None else float(record.duration)
         return cls(
@@ -274,9 +255,12 @@ class ExecutionRecordDetailResponse(BaseModel):
             request=None if result is None else result.get("request"),
             response=None if result is None else result.get("response"),
             auth=parse_execution_auth(result, record_id=getattr(record, "id", None)),
+            env=getattr(record, "env", None),
+            commit_sha=getattr(record, "commit_sha", None),
+            repo=getattr(record, "repo", None),
+            operator=getattr(record, "operator", None),
         )
 
     @classmethod
     def from_orm(cls, record: Any) -> "ExecutionRecordDetailResponse":
-        """``from_model`` 的别名，兼容旧的 from_orm 调用。"""
         return cls.from_model(record)

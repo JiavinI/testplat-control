@@ -163,10 +163,10 @@ class CaseResult(BaseModel):
 class CaseRunRequest(BaseModel):
     """运行 Case 的请求体。
 
-    ``params`` 以顶层键覆盖 Case 资产里的默认参数（浅层覆盖，由 Engine 完成）。
-    不接受 ``fail_fast`` / ``timeout_seconds``：fail-fast 固定开启；超时由 Control 设定。
+    ``env`` 必填且须在项目 ``envs`` 内。``params`` 覆盖 Case 默认参数。
     """
 
+    env: str = Field(..., min_length=1, description="运行环境（须在项目 envs 内）")
     params: dict[str, Any] = Field(
         default_factory=dict,
         description="覆盖 Case 默认参数的顶层键值（自由 JSON；不得放秘密）",
@@ -184,6 +184,7 @@ class CaseRunResponse(BaseModel):
     status: CaseStatus = Field(..., description="Case 状态")
     duration: float | None = Field(None, description="Control 侧测得的执行时长（秒）")
     result: CaseResult = Field(..., description="完整 Case / 步骤结果")
+    commit_sha: str | None = Field(None, description="本次执行固定使用的 commit SHA")
 
 
 class CaseAssetDetailResponse(BaseModel):
@@ -215,6 +216,10 @@ class CaseExecutionRecordDetailResponse(BaseModel):
     result: CaseResult | None = Field(
         None, description="Case 结果；存档缺失或无法按 schema 解析时为 null"
     )
+    env: str | None = Field(None, description="运行环境")
+    commit_sha: str | None = Field(None, description="执行所用 commit SHA")
+    repo: str | None = Field(None, description="仓库键")
+    operator: str | None = Field(None, description="操作人；4.0 恒为 null")
 
     @classmethod
     def from_model(
@@ -237,4 +242,8 @@ class CaseExecutionRecordDetailResponse(BaseModel):
                 duration=format_duration(duration),
             ),
             result=result,
+            env=getattr(record, "env", None),
+            commit_sha=getattr(record, "commit_sha", None),
+            repo=getattr(record, "repo", None),
+            operator=getattr(record, "operator", None),
         )

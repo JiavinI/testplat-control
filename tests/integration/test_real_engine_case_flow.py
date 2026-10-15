@@ -25,6 +25,7 @@ from testplat_control.services import execution_service
 from tests.case_support import (
     assert_case_result_invariants,
     create_project,
+    project_api_base,
     write_assets,
     write_env,
 )
@@ -105,18 +106,23 @@ def real(tmp_path: Path, local_server: ThreadingHTTPServer) -> Iterator[dict[str
         yield {
             "client": client,
             "project_id": create_project(client, assets, config),
+            "assets": assets,
+            "config": config,
             "requests": local_server.requests,  # type: ignore[attr-defined]
         }
 
 
 def _run(real: dict[str, Any], case_id: str, params: dict[str, Any] | None = None):
     return real["client"].post(
-        f"/projects/{real['project_id']}/cases/{case_id}/run", json={"params": params or {}}
+        f"{project_api_base(real['project_id'])}/cases/{case_id}/run",
+        json={"env": "test", "params": params or {}},
     )
 
 
 def _records(real: dict[str, Any], **query: Any) -> list[dict[str, Any]]:
-    response = real["client"].get(f"/projects/{real['project_id']}/execution-records", params=query)
+    response = real["client"].get(
+        f"{project_api_base(real['project_id'])}/execution-records", params=query
+    )
     assert response.status_code == 200
     return response.json()
 
@@ -171,7 +177,7 @@ def test_real_case_success_passes_alias_between_steps(real: dict[str, Any]) -> N
     assert json.loads(saved.result_json)["steps"][0]["response"]["body"]["id"] == "res-42"
 
     detail = real["client"].get(
-        f"/projects/{real['project_id']}/case-execution-records/{body['record_id']}"
+        f"{project_api_base(real['project_id'])}/case-execution-records/{body['record_id']}"
     )
     assert detail.status_code == 200
     assert detail.json()["result"]["summary"]["success"] == 2
@@ -247,7 +253,7 @@ def test_real_case_timeout_maps_504_and_saves_partial_steps(
     assert item["status"] == "failed"
     typed = (
         real["client"]
-        .get(f"/projects/{real['project_id']}/case-execution-records/{item['id']}")
+        .get(f"{project_api_base(real['project_id'])}/case-execution-records/{item['id']}")
         .json()
     )
     result = typed["result"]
@@ -268,7 +274,7 @@ def test_real_case_transport_maps_502_and_saves_partial_steps(real: dict[str, An
     (item,) = _records(real, asset_type="case")
     typed = (
         real["client"]
-        .get(f"/projects/{real['project_id']}/case-execution-records/{item['id']}")
+        .get(f"{project_api_base(real['project_id'])}/case-execution-records/{item['id']}")
         .json()
     )
     result = typed["result"]
@@ -283,7 +289,7 @@ def test_real_case_transport_maps_502_and_saves_partial_steps(real: dict[str, An
 
 def test_real_case_tree_and_detail_ids_agree_with_engine(real: dict[str, Any]) -> None:
     """Control 由路径推导的 Case id 与 Engine 的路径权威一致：树/详情给出的 id 可直接运行。"""
-    tree = real["client"].get(f"/projects/{real['project_id']}/assets").json()
+    tree = real["client"].get(f"{project_api_base(real['project_id'])}/assets").json()
 
     def walk(node: dict[str, Any]):
         yield node
@@ -293,7 +299,7 @@ def test_real_case_tree_and_detail_ids_agree_with_engine(real: dict[str, Any]) -
     case_ids = sorted(n["id"] for n in walk(tree) if n["id"].startswith("case."))
     assert "case.demo.create_then_get" in case_ids
     for case_id in case_ids:
-        detail = real["client"].get(f"/projects/{real['project_id']}/cases/{case_id}")
+        detail = real["client"].get(f"{project_api_base(real['project_id'])}/cases/{case_id}")
         assert detail.status_code == 200
         # 运行时 Engine 不会报 asset_not_found（可能是其他 preflight 或业务/系统结果）。
         resp = _run(real, case_id, {"missing": "x", "resource_name": "x"})
@@ -345,17 +351,14 @@ def test_real_case_mutations_rejected_precisely(
     detail_contains: str,
 ) -> None:
     """mutation：重复 step_id / 未知 type / 前向引用 → 真实 Engine 精确 422。"""
-    # real fixture 的 assets 已写入；在同一 assets_root 追加变异文件。
-    project = real["client"].get(f"/projects/{real['project_id']}").json()
-    assets_root = Path(project["assets_root"])
-    path = assets_root / relative
+    # 在源资产树追加变异文件后重新同步为新项目（快照只读）。
+    path = real["assets"] / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(snippet, encoding="utf-8")
-    case_id = path.name.replace(".case.yaml", "")
-    # 规范 id 在文件内；从相对路径推导
     case_id = "case." + relative.removeprefix("scenarios/").removesuffix(".case.yaml").replace(
         "/", "."
     )
+    real["project_id"] = create_project(real["client"], real["assets"], real["config"])
 
     resp = _run(real, case_id)
     assert resp.status_code == 422, resp.text
@@ -371,8 +374,8 @@ def test_real_case_ignores_fail_fast_and_timeout_overrides(real: dict[str, Any])
     """
     # 业务失败路径：即使请求声称 fail_fast=False，后续步骤仍必须 skipped。
     resp = real["client"].post(
-        f"/projects/{real['project_id']}/cases/case.demo.assert_failed/run",
-        json={"params": {}, "fail_fast": False, "timeout_seconds": 1},
+        f"{project_api_base(real['project_id'])}/cases/case.demo.assert_failed/run",
+        json={"env": "test", "params": {}, "fail_fast": False, "timeout_seconds": 1},
     )
     assert resp.status_code == 200, resp.text
     result = resp.json()["result"]
@@ -409,7 +412,7 @@ def test_real_case_5xx_serial_history_locate_uses_newest_failed(
     (t_item,) = _records(real, asset_type="case", asset_id="case.demo.transport", status="failed")
     t_detail = (
         real["client"]
-        .get(f"/projects/{real['project_id']}/case-execution-records/{t_item['id']}")
+        .get(f"{project_api_base(real['project_id'])}/case-execution-records/{t_item['id']}")
         .json()
     )
     assert t_detail["result"]["error"]["kind"] == "transport"
@@ -423,7 +426,9 @@ def test_real_case_5xx_serial_history_locate_uses_newest_failed(
     assert timeout_items[0]["id"] != t_item["id"]
     to_detail = (
         real["client"]
-        .get(f"/projects/{real['project_id']}/case-execution-records/{timeout_items[0]['id']}")
+        .get(
+            f"{project_api_base(real['project_id'])}/case-execution-records/{timeout_items[0]['id']}"
+        )
         .json()
     )
     assert to_detail["result"]["error"]["kind"] == "timeout"

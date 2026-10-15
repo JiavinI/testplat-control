@@ -21,11 +21,13 @@ from testplat_engine import (
 from testplat_control.adapters.fake_engine import FakeEngineAdapter
 from testplat_control.deps import get_engine_port
 from testplat_control.main import app
+from tests.case_support import create_project, project_api_base
 
 client = TestClient(app)
 
-STRUCTURED_API = """\
+STRUCTURED_API = """
 id: api.user.create
+type: api
 name: 创建用户
 method: POST
 url: /users
@@ -49,8 +51,9 @@ request:
       description: 是否启用
 """
 
-SIMPLE_API = """\
+SIMPLE_API = """
 id: api.user.login
+type: api
 name: 登录
 method: POST
 url: /login
@@ -61,14 +64,15 @@ request:
     password: 密码 (required)
 """
 
-EMPTY_API = """\
+EMPTY_API = """
 id: api.common.health_check
+type: api
 name: 健康检查
 method: GET
 url: /health
 """
 
-CASE_YAML = """\
+CASE_YAML = """
 schema_version: "0.2"
 id: case.user.login
 name: 登录流程
@@ -79,8 +83,9 @@ steps:
     name: 登录
 """
 
-ALIAS_API = """\
+ALIAS_API = """
 id: api.common.typed
+type: api
 name: 类型别名
 method: POST
 url: /typed
@@ -96,8 +101,9 @@ request:
       desc: 重试次数
 """
 
-BAD_TYPE_API = """\
+BAD_TYPE_API = """
 id: api.bad.object_param
+type: api
 name: 非法类型
 method: POST
 url: /bad
@@ -109,7 +115,7 @@ request:
       description: 请求体
 """
 
-ENV_YAML = """\
+ENV_YAML = """
 api_hosts:
   main: http://127.0.0.1:9
 timeout:
@@ -160,23 +166,14 @@ def fake_engine() -> FakeEngineAdapter:
 
 @pytest.fixture
 def project_id(assets_dir: Path, config_dir: Path, fake_engine: FakeEngineAdapter) -> str:
-    """创建指向临时资产与配置目录的项目。"""
-    response = client.post(
-        "/projects",
-        json={
-            "name": f"run-api-{uuid4().hex[:8]}",
-            "env": "test",
-            "assets_root": str(assets_dir),
-            "config_root": str(config_dir),
-        },
-    )
-    assert response.status_code == 200
-    return response.json()["id"]
+    """同步本地 git 资产仓并返回 project_id。"""
+
+    return create_project(client, assets_dir, config_dir, name=f"run-api-{uuid4().hex[:8]}")
 
 
 def test_get_params_from_structured_inputs(project_id: str) -> None:
     """结构化 inputs 提取名称、归一化类型、必填和说明。"""
-    response = client.get(f"/projects/{project_id}/assets/api.user.create/params")
+    response = client.get(f"{project_api_base(project_id)}/assets/api.user.create/params")
 
     assert response.status_code == 200
     data = response.json()
@@ -205,7 +202,7 @@ def test_get_params_from_structured_inputs(project_id: str) -> None:
 
 def test_get_params_from_string_inputs(project_id: str) -> None:
     """说明字符串默认为 string，(required) 标记必填。"""
-    response = client.get(f"/projects/{project_id}/assets/api.user.login/params")
+    response = client.get(f"{project_api_base(project_id)}/assets/api.user.login/params")
 
     assert response.status_code == 200
     by_name = {item["name"]: item for item in response.json()["params"]}
@@ -221,7 +218,7 @@ def test_get_params_from_string_inputs(project_id: str) -> None:
 
 def test_get_params_normalizes_list_inputs(project_id: str) -> None:
     """列表形式的 inputs 同样归一化类型别名。"""
-    response = client.get(f"/projects/{project_id}/assets/api.common.typed/params")
+    response = client.get(f"{project_api_base(project_id)}/assets/api.common.typed/params")
 
     assert response.status_code == 200
     by_name = {item["name"]: item for item in response.json()["params"]}
@@ -233,7 +230,7 @@ def test_get_params_normalizes_list_inputs(project_id: str) -> None:
 
 def test_get_params_empty_inputs(project_id: str) -> None:
     """没有 inputs 的 API 返回空表单。"""
-    response = client.get(f"/projects/{project_id}/assets/api.common.health_check/params")
+    response = client.get(f"{project_api_base(project_id)}/assets/api.common.health_check/params")
 
     assert response.status_code == 200
     assert response.json()["params"] == []
@@ -241,37 +238,37 @@ def test_get_params_empty_inputs(project_id: str) -> None:
 
 def test_get_params_project_not_found(fake_engine: FakeEngineAdapter) -> None:
     """项目不存在时获取参数表单返回 404。"""
-    response = client.get("/projects/missing-project/assets/api.user.login/params")
+    response = client.get("/repos/missing/projects/nope/assets/api.user.login/params")
     assert response.status_code == 404
     assert response.json()["detail"] == "Project not found"
 
 
 def test_get_params_asset_not_found(project_id: str) -> None:
     """资产不存在时获取参数表单返回 404。"""
-    response = client.get(f"/projects/{project_id}/assets/api.missing/params")
+    response = client.get(f"{project_api_base(project_id)}/assets/api.missing/params")
     assert response.status_code == 404
     assert response.json()["detail"] == "Asset not found"
 
 
 def test_get_params_rejects_non_api_assets(project_id: str) -> None:
     """目录、Case、非 YAML 和非法 YAML 不能生成参数表单。"""
-    directory = client.get(f"/projects/{project_id}/assets/api/params")
+    directory = client.get(f"{project_api_base(project_id)}/assets/api/params")
     assert directory.status_code == 422
     assert directory.json()["detail"] == "Asset is not a file"
 
-    case = client.get(f"/projects/{project_id}/assets/case.user.login/params")
+    case = client.get(f"{project_api_base(project_id)}/assets/case.user.login/params")
     assert case.status_code == 422
     assert case.json()["detail"] == "Asset is not an API"
 
-    text = client.get(f"/projects/{project_id}/assets/notes.readme/params")
+    text = client.get(f"{project_api_base(project_id)}/assets/notes.readme/params")
     assert text.status_code == 422
     assert text.json()["detail"] == "Asset is not a YAML file"
 
-    broken = client.get(f"/projects/{project_id}/assets/api.broken.bad/params")
+    broken = client.get(f"{project_api_base(project_id)}/assets/api.broken.bad/params")
     assert broken.status_code == 422
     assert "Invalid YAML" in broken.json()["detail"]
 
-    bad_type = client.get(f"/projects/{project_id}/assets/api.bad.object_param/params")
+    bad_type = client.get(f"{project_api_base(project_id)}/assets/api.bad.object_param/params")
     assert bad_type.status_code == 422
     assert "unsupported param type" in bad_type.json()["detail"]
 
@@ -287,8 +284,8 @@ def test_run_success_persists_record(project_id: str, fake_engine: FakeEngineAda
     }
 
     response = client.post(
-        f"/projects/{project_id}/assets/{asset_id}/run",
-        json={"params": payload},
+        f"{project_api_base(project_id)}/assets/{asset_id}/run",
+        json={"env": "test", "params": payload},
     )
 
     assert response.status_code == 200
@@ -303,7 +300,7 @@ def test_run_success_persists_record(project_id: str, fake_engine: FakeEngineAda
     assert dict(fake_engine.calls[0].params) == payload
     assert "api_hosts" in fake_engine.calls[0].environment
 
-    detail = client.get(f"/projects/{project_id}/execution-records/{body['record_id']}")
+    detail = client.get(f"{project_api_base(project_id)}/execution-records/{body['record_id']}")
     assert detail.status_code == 200
     saved = detail.json()
     assert saved["project_id"] == project_id
@@ -319,8 +316,8 @@ def test_run_failure_persists_record(project_id: str, fake_engine: FakeEngineAda
     asset_id = "api.user.login"
 
     response = client.post(
-        f"/projects/{project_id}/assets/{asset_id}/run",
-        json={"params": {"password": "wrong-password"}},
+        f"{project_api_base(project_id)}/assets/{asset_id}/run",
+        json={"env": "test", "params": {"password": "wrong-password"}},
     )
 
     assert response.status_code == 200
@@ -328,7 +325,7 @@ def test_run_failure_persists_record(project_id: str, fake_engine: FakeEngineAda
     assert body["status"] == "failed"
     assert body["result"]["error"]["message"] == "assertion failed"
 
-    detail = client.get(f"/projects/{project_id}/execution-records/{body['record_id']}")
+    detail = client.get(f"{project_api_base(project_id)}/execution-records/{body['record_id']}")
     assert detail.status_code == 200
     assert detail.json()["status"] == "failed"
 
@@ -339,8 +336,8 @@ def test_run_rejects_missing_required_param(
 ) -> None:
     """缺少必填参数时返回 422，且不调用引擎。"""
     response = client.post(
-        f"/projects/{project_id}/assets/api.user.create/run",
-        json={"params": {"username": "alice"}},
+        f"{project_api_base(project_id)}/assets/api.user.create/run",
+        json={"env": "test", "params": {"username": "alice"}},
     )
 
     assert response.status_code == 422
@@ -351,14 +348,15 @@ def test_run_rejects_missing_required_param(
 def test_run_rejects_wrong_param_type(project_id: str, fake_engine: FakeEngineAdapter) -> None:
     """参数类型与表单不一致时返回 422。"""
     response = client.post(
-        f"/projects/{project_id}/assets/api.user.create/run",
+        f"{project_api_base(project_id)}/assets/api.user.create/run",
         json={
+            "env": "test",
             "params": {
                 "username": "alice",
                 "email": "alice@example.com",
                 "age": "twelve",
                 "active": "yes",
-            }
+            },
         },
     )
 
@@ -374,8 +372,8 @@ def test_run_rejects_wrong_param_type(project_id: str, fake_engine: FakeEngineAd
 def test_run_rejects_unknown_param(project_id: str, fake_engine: FakeEngineAdapter) -> None:
     """未在 inputs 中声明的参数返回 422。"""
     response = client.post(
-        f"/projects/{project_id}/assets/api.common.health_check/run",
-        json={"params": {"extra": 1}},
+        f"{project_api_base(project_id)}/assets/api.common.health_check/run",
+        json={"env": "test", "params": {"extra": 1}},
     )
 
     assert response.status_code == 422
@@ -386,8 +384,8 @@ def test_run_rejects_unknown_param(project_id: str, fake_engine: FakeEngineAdapt
 def test_run_rejects_invalid_body(project_id: str) -> None:
     """params 不是对象时由请求模型返回 422。"""
     response = client.post(
-        f"/projects/{project_id}/assets/api.common.health_check/run",
-        json={"params": ["username"]},
+        f"{project_api_base(project_id)}/assets/api.common.health_check/run",
+        json={"env": "test", "params": ["username"]},
     )
     assert response.status_code == 422
 
@@ -395,8 +393,8 @@ def test_run_rejects_invalid_body(project_id: str) -> None:
 def test_run_project_not_found(fake_engine: FakeEngineAdapter) -> None:
     """项目不存在时执行返回 404。"""
     response = client.post(
-        "/projects/missing-project/assets/api.user.login/run",
-        json={"params": {}},
+        "/repos/missing/projects/nope/assets/api.user.login/run",
+        json={"env": "test", "params": {}},
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Project not found"
@@ -406,8 +404,8 @@ def test_run_project_not_found(fake_engine: FakeEngineAdapter) -> None:
 def test_run_asset_not_found(project_id: str, fake_engine: FakeEngineAdapter) -> None:
     """资产不存在时执行返回 404。"""
     response = client.post(
-        f"/projects/{project_id}/assets/api.missing/run",
-        json={"params": {}},
+        f"{project_api_base(project_id)}/assets/api.missing/run",
+        json={"env": "test", "params": {}},
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Asset not found"
@@ -437,20 +435,20 @@ def test_run_system_errors_map_and_record_by_stage(
     """系统错误按 kind/stage 映射 HTTP，并遵守记录规则。"""
     fake_engine.system_error = error  # type: ignore[assignment]
 
-    before = client.get(f"/projects/{project_id}/execution-records").json()
+    before = client.get(f"{project_api_base(project_id)}/execution-records").json()
     response = client.post(
-        f"/projects/{project_id}/assets/api.common.health_check/run",
-        json={"params": {}},
+        f"{project_api_base(project_id)}/assets/api.common.health_check/run",
+        json={"env": "test", "params": {}},
     )
 
     assert response.status_code == status
     assert error.public_message in response.json()["detail"]  # type: ignore[attr-defined]
 
-    after = client.get(f"/projects/{project_id}/execution-records").json()
+    after = client.get(f"{project_api_base(project_id)}/execution-records").json()
     if creates_record:
         assert len(after) == len(before) + 1
         assert after[0]["status"] == "failed"
-        detail = client.get(f"/projects/{project_id}/execution-records/{after[0]['id']}")
+        detail = client.get(f"{project_api_base(project_id)}/execution-records/{after[0]['id']}")
         assert detail.status_code == 200
         assert detail.json()["result"]["error"]["kind"] == error.kind  # type: ignore[attr-defined]
     else:
@@ -470,8 +468,8 @@ def test_run_unexpected_exception_returns_500_without_record(
     app.dependency_overrides[get_engine_port] = lambda: BoomEngine()
     try:
         response = client.post(
-            f"/projects/{project_id}/assets/api.common.health_check/run",
-            json={"params": {}},
+            f"{project_api_base(project_id)}/assets/api.common.health_check/run",
+            json={"env": "test", "params": {}},
         )
     finally:
         app.dependency_overrides[get_engine_port] = lambda: fake_engine
@@ -479,35 +477,21 @@ def test_run_unexpected_exception_returns_500_without_record(
     assert response.status_code == 500
     assert "RuntimeError" in response.json()["detail"]
 
-    listed = client.get(f"/projects/{project_id}/execution-records")
+    listed = client.get(f"{project_api_base(project_id)}/execution-records")
     assert listed.status_code == 200
     assert listed.json() == []
 
 
-def test_run_missing_env_config_returns_422_without_record(
-    assets_dir: Path,
+def test_run_invalid_env_returns_422_without_record(
+    project_id: str,
     fake_engine: FakeEngineAdapter,
 ) -> None:
-    """config_root 缺少环境文件时 422，不调用引擎、不写记录。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        empty_config = Path(tmp)
-        created = client.post(
-            "/projects",
-            json={
-                "name": f"no-env-{uuid4().hex[:8]}",
-                "env": "test",
-                "assets_root": str(assets_dir),
-                "config_root": str(empty_config),
-            },
-        )
-        assert created.status_code == 200
-        pid = created.json()["id"]
-
-        response = client.post(
-            f"/projects/{pid}/assets/api.common.health_check/run",
-            json={"params": {}},
-        )
-        assert response.status_code == 422
-        assert "环境配置不存在" in response.json()["detail"]
-        assert fake_engine.calls == []
-        assert client.get(f"/projects/{pid}/execution-records").json() == []
+    """env 不在项目 envs 内 → 422，不调用引擎、不写记录。"""
+    response = client.post(
+        f"{project_api_base(project_id)}/assets/api.common.health_check/run",
+        json={"env": "nosuch", "params": {}},
+    )
+    assert response.status_code == 422
+    assert "环境不在可选列表中" in response.json()["detail"]
+    assert fake_engine.calls == []
+    assert client.get(f"{project_api_base(project_id)}/execution-records").json() == []

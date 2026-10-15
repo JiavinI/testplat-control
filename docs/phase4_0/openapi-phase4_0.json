@@ -1,0 +1,2466 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "testplat-control",
+    "description": "通用接口自动化测试平台 - 控制层",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/repos": {
+      "get": {
+        "tags": [
+          "repos"
+        ],
+        "summary": "List Repos",
+        "description": "列出已配置仓库的同步状态（不含 URL）。\n\n仅返回服务端配置中的键；尚未同步成功的仓库也会出现（若启动时已写入行），\n配置有但库中无行时补一条「尚未同步」视图。",
+        "operationId": "list_repos_repos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RepoResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Repos Repos Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/sync": {
+      "post": {
+        "tags": [
+          "repos"
+        ],
+        "summary": "Sync Repo",
+        "description": "触发仓库同步；失败只返回类别，保留旧 SHA。",
+        "operationId": "sync_repo_repos__repo__sync_post",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "List Projects",
+        "description": "列出所有项目（含 archived）。",
+        "operationId": "list_projects_projects_get",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectResponse"
+                  },
+                  "title": "Response List Projects Projects Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Get Project Detail",
+        "description": "获取单个项目详情。",
+        "operationId": "get_project_detail_repos__repo__projects__project__get",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{project_id}": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Get Project By Id",
+        "description": "兼容扁平 ID ``{repo}/{project}`` 的详情读取。",
+        "operationId": "get_project_by_id_projects__project_id__get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}/execution-records": {
+      "get": {
+        "tags": [
+          "execution"
+        ],
+        "summary": "List Execution Records",
+        "description": "获取项目的执行记录；可按 status / asset_id / asset_type / env 过滤。",
+        "operationId": "list_execution_records_repos__repo__projects__project__execution_records_get",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "asset_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "api",
+                    "case"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Type"
+            }
+          },
+          {
+            "name": "env",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Env"
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "-start_time",
+              "title": "Order By"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExecutionRecordListResponse"
+                  },
+                  "title": "Response List Execution Records Repos  Repo  Projects  Project  Execution Records Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}/execution-records/{record_id}": {
+      "get": {
+        "tags": [
+          "execution"
+        ],
+        "summary": "Get Execution Record",
+        "description": "获取执行记录详情。",
+        "operationId": "get_execution_record_repos__repo__projects__project__execution_records__record_id__get",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          },
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Record Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionRecordDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}/assets": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Assets Tree",
+        "description": "获取项目的资产树（当前 commit 快照）。",
+        "operationId": "get_assets_tree_repos__repo__projects__project__assets_get",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetNodeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}/assets/{asset_id}": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset Details",
+        "description": "获取单个资产详情。",
+        "operationId": "get_asset_details_repos__repo__projects__project__assets__asset_id__get",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetDetailsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}/assets/{asset_id}/params": {
+      "get": {
+        "tags": [
+          "run"
+        ],
+        "summary": "Get Asset Params",
+        "description": "从 API YAML 的 inputs 提取参数表单（当前 SHA 快照）。",
+        "operationId": "get_asset_params_repos__repo__projects__project__assets__asset_id__params_get",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}/assets/{asset_id}/run": {
+      "post": {
+        "tags": [
+          "run"
+        ],
+        "summary": "Run Asset",
+        "description": "执行单个 API，并保存执行记录。请求体必填 ``env``。",
+        "operationId": "run_asset_repos__repo__projects__project__assets__asset_id__run_post",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}/cases/{case_id}": {
+      "get": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Get Case Detail",
+        "description": "获取 Case 资产的文件级元信息。",
+        "operationId": "get_case_detail_repos__repo__projects__project__cases__case_id__get",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseAssetDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}/cases/{case_id}/run": {
+      "post": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Run Case Asset",
+        "description": "串行运行一个 Case，并保存执行记录。",
+        "operationId": "run_case_asset_repos__repo__projects__project__cases__case_id__run_post",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo}/projects/{project}/case-execution-records/{record_id}": {
+      "get": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Get Case Execution Record",
+        "description": "获取 Case 执行记录详情。",
+        "operationId": "get_case_execution_record_repos__repo__projects__project__case_execution_records__record_id__get",
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Repo"
+            }
+          },
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project"
+            }
+          },
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Record Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseExecutionRecordDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "description": "健康检查端点。",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AssetDetailsResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "唯一标识"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "显示名称"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "类型: directory 或 file"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "相对路径"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "文件元数据"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type",
+          "path"
+        ],
+        "title": "AssetDetailsResponse",
+        "description": "资产详情响应"
+      },
+      "AssetNodeResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "唯一标识"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "显示名称"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "类型: directory 或 file"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "相对路径"
+          },
+          "children": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AssetNodeResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Children",
+            "description": "子节点 (仅目录)"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "文件元数据 (仅文件)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type",
+          "path"
+        ],
+        "title": "AssetNodeResponse",
+        "description": "资产树节点响应"
+      },
+      "CaseAssetDetailResponse": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id",
+            "description": "Case ID，由规范路径推导，例如 case.demo.login"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "相对 assets_root 的路径（POSIX 分隔符）"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name",
+            "description": "文件名，例如 login.case.yaml"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Size Bytes",
+            "description": "文件大小（字节）"
+          },
+          "modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Modified At",
+            "description": "文件最后修改时间（UTC）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "path",
+          "file_name",
+          "size_bytes",
+          "modified_at"
+        ],
+        "title": "CaseAssetDetailResponse",
+        "description": "Case 资产详情：仅文件级元信息（见模块文档字符串关于摘要来源的说明）。"
+      },
+      "CaseExecutionRecordDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "记录 ID"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id",
+            "description": "项目 ID"
+          },
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id",
+            "description": "Case ID"
+          },
+          "asset_type": {
+            "type": "string",
+            "const": "case",
+            "title": "Asset Type",
+            "description": "恒为 case"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "执行状态：success / failed"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Time",
+            "description": "开始时间"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time",
+            "description": "结束时间"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "执行时长（秒）"
+          },
+          "display": {
+            "$ref": "#/components/schemas/ExecutionDisplay",
+            "description": "格式化后的时间与耗时"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Case 结果；存档缺失或无法按 schema 解析时为 null"
+          },
+          "env": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Env",
+            "description": "运行环境"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha",
+            "description": "执行所用 commit SHA"
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo",
+            "description": "仓库键"
+          },
+          "operator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator",
+            "description": "操作人；4.0 恒为 null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "asset_id",
+          "asset_type",
+          "status",
+          "start_time",
+          "display"
+        ],
+        "title": "CaseExecutionRecordDetailResponse",
+        "description": "Case 历史详情：与通用执行记录详情同源，但 ``result`` 有明确 schema。\n\n通用端点 ``/projects/{id}/execution-records/{record_id}`` 对 Case 记录仍然可用且不变\n（``result`` 为未约束对象，``request``/``response`` 为 null）；本端点供前端稳定消费步骤数据。"
+      },
+      "CaseResult": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id",
+            "description": "Case ID"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed"
+            ],
+            "title": "Status",
+            "description": "success 当且仅当全部步骤 success"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Duration Seconds",
+            "description": "Engine 计时的 Case 总耗时（秒）"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/CaseStepResult"
+            },
+            "type": "array",
+            "title": "Steps",
+            "description": "按声明顺序的步骤结果"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CaseSummary",
+            "description": "步骤计数汇总"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseSystemError"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "仅 execution 系统错误记录非 null"
+          },
+          "logins": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Logins",
+            "description": "本次执行的登录记录（已脱敏）；无登录时为 []（A8）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "status",
+          "duration_seconds",
+          "steps",
+          "summary"
+        ],
+        "title": "CaseResult",
+        "description": "Case 完整结果：run 响应与历史详情共用同一形状。\n\n- 业务 success / failed：``error`` 为 null，``steps`` 来自 Engine 的 outcome。\n- execution 系统错误（只在历史里出现）：``status=failed``，``steps`` 来自异常携带的\n  ``partial_outcome``（前序 success、当前 failed、其后 skipped），``error`` 说明系统错误。\n- Phase 3.3b：``logins`` 只在 Case / 单 API 结果顶层（A7）；无登录时仍为 ``[]``（A8）。"
+      },
+      "CaseRunRequest": {
+        "properties": {
+          "env": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Env",
+            "description": "运行环境（须在项目 envs 内）"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "覆盖 Case 默认参数的顶层键值（自由 JSON；不得放秘密）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "env"
+        ],
+        "title": "CaseRunRequest",
+        "description": "运行 Case 的请求体。\n\n``env`` 必填且须在项目 ``envs`` 内。``params`` 覆盖 Case 默认参数。"
+      },
+      "CaseRunResponse": {
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "title": "Record Id",
+            "description": "执行记录 ID，可用于历史详情"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed"
+            ],
+            "title": "Status",
+            "description": "Case 状态"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "Control 侧测得的执行时长（秒）"
+          },
+          "result": {
+            "$ref": "#/components/schemas/CaseResult",
+            "description": "完整 Case / 步骤结果"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha",
+            "description": "本次执行固定使用的 commit SHA"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_id",
+          "status",
+          "result"
+        ],
+        "title": "CaseRunResponse",
+        "description": "Case 运行响应。业务 failed 同样是 HTTP 200，``status`` 为 failed。\n\n系统错误（timeout/transport/internal）与 preflight 错误不使用本响应，\n而是沿用 Phase 2.5 的 ``{\"detail\": \"...\"}`` 错误体与状态码映射。"
+      },
+      "CaseStepError": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "错误类别"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "面向用户的安全说明，不含秘密"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "preflight",
+                  "execution"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage",
+            "description": "仅系统错误携带；Case 开始后的系统错误恒为 execution"
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Id",
+            "description": "variable_resolution：出错的步骤"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path",
+            "description": "variable_resolution：无法解析的引用路径"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "kind",
+          "message"
+        ],
+        "title": "CaseStepError",
+        "description": "步骤级业务错误（assertion / variable_resolution 等），或系统错误对应的步骤错误。\n\n``kind`` 是开放字符串：业务错误的 kind 由 Engine 的步骤执行器定义\n（目前有 ``assertion``、``variable_resolution``，系统错误则为 timeout/transport/internal）。"
+      },
+      "CaseStepRequest": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "description": "HTTP 方法"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "完整请求 URL"
+          },
+          "headers": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Headers",
+            "description": "已脱敏的请求头"
+          },
+          "body": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body",
+            "description": "已脱敏的请求体（自由 JSON）"
+          },
+          "body_type": {
+            "type": "string",
+            "title": "Body Type",
+            "description": "请求体类型 json/form/query/raw；未声明资产时仍为 json（A8）",
+            "default": "json"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query",
+            "description": "query 类型请求的参数对象（已脱敏）；其它类型为 null/缺省"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "method",
+          "url"
+        ],
+        "title": "CaseStepRequest",
+        "description": "步骤实际发出的请求快照（已脱敏）。变量解析失败的步骤没有请求（为 null）。\n\nPhase 3.3b：``body_type`` 默认 json（A8）；``query`` 类型请求的参数在 ``query`` 字段，\n不进 ``url``（Q8）。"
+      },
+      "CaseStepResponse": {
+        "properties": {
+          "status_code": {
+            "type": "integer",
+            "title": "Status Code",
+            "description": "HTTP 状态码"
+          },
+          "headers": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Headers",
+            "description": "已脱敏的响应头"
+          },
+          "body": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body",
+            "description": "已安全化的响应体（自由 JSON）"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "status_code"
+        ],
+        "title": "CaseStepResponse",
+        "description": "步骤收到的响应快照（已脱敏）。"
+      },
+      "CaseStepResult": {
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "title": "Step Id",
+            "description": "步骤 ID（Case 内唯一）"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "步骤展示名；缺省时前端回退到 step_id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "步骤类型；第一批恒为 api"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status",
+            "description": "success / failed / skipped"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Duration Seconds",
+            "description": "步骤耗时（秒）；skipped 恒为 0"
+          },
+          "request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseStepRequest"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "请求快照；skipped/变量失败为 null"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseStepResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应快照；skipped/变量失败为 null"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseStepError"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "failed 步骤的安全错误；其余为 null"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output",
+            "description": "成功步骤声明的 output alias 名（不含响应值）"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fail_fast",
+                  "login_failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason",
+            "description": "仅 skipped 步骤：fail_fast=前序业务/系统失败；login_failed=前序登录失败（H4）"
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionAuth"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "步骤实际使用的身份（Phase 3.3d 九键）；匿名、skipped、login_failed 步骤的 request/response 为 null 时仍可带 login_ref（A6）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step_id",
+          "type",
+          "status",
+          "duration_seconds"
+        ],
+        "title": "CaseStepResult",
+        "description": "单个声明步骤的结果；顺序与 Case 资产 steps 声明顺序一一对应。"
+      },
+      "CaseSummary": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          },
+          "success": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Success"
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Failed"
+          },
+          "skipped": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "success",
+          "failed",
+          "skipped"
+        ],
+        "title": "CaseSummary",
+        "description": "步骤计数汇总，由 Engine 根据步骤结果计算。"
+      },
+      "CaseSystemError": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "timeout",
+              "transport",
+              "internal"
+            ],
+            "title": "Kind",
+            "description": "系统错误类别"
+          },
+          "stage": {
+            "type": "string",
+            "const": "execution",
+            "title": "Stage",
+            "description": "恒为 execution：preflight 不保存记录"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "安全的公开说明"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "stage",
+          "message"
+        ],
+        "title": "CaseSystemError",
+        "description": "Case 执行阶段系统错误（timeout / transport / internal）的外显信息。\n\n只出现在 execution 系统错误保存的历史记录里；``log_reason`` 永不进入此处。"
+      },
+      "ExecutionAuth": {
+        "properties": {
+          "identity": {
+            "type": "string",
+            "title": "Identity",
+            "description": "身份名，例如 admin"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "凭证 kind：static_headers 或 login"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier",
+            "description": "登录档位 generic/configured/plugin；静态 header 为 null"
+          },
+          "header_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Header Names",
+            "description": "注入的凭证 header 名（不含值）"
+          },
+          "overridden_headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Overridden Headers",
+            "description": "被凭证覆盖的资产 header 名"
+          },
+          "cookie_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cookie Names",
+            "description": "本次携带的 Cookie 名（不含值）"
+          },
+          "login_ref": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login Ref",
+            "description": "指向结果顶层 logins 的下标"
+          },
+          "session_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Source",
+            "description": "会话来源：login / execution / cache"
+          },
+          "reauthenticated": {
+            "type": "boolean",
+            "title": "Reauthenticated",
+            "description": "本步是否触发了 401 重登重发",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "identity",
+          "kind",
+          "header_names",
+          "overridden_headers",
+          "cookie_names"
+        ],
+        "title": "ExecutionAuth",
+        "description": "一次 API / 步骤实际使用的身份（Phase 3.3d）。"
+      },
+      "ExecutionDisplay": {
+        "properties": {
+          "start_time": {
+            "type": "string",
+            "title": "Start Time",
+            "description": "开始时间，YYYY-MM-DD HH:MM:SS"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time",
+            "description": "结束时间，YYYY-MM-DD HH:MM:SS"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "可读耗时"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_time"
+        ],
+        "title": "ExecutionDisplay",
+        "description": "详情页使用的格式化时间与耗时。"
+      },
+      "ExecutionRecordDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "记录ID"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id",
+            "description": "项目ID"
+          },
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id",
+            "description": "资产ID"
+          },
+          "asset_type": {
+            "type": "string",
+            "title": "Asset Type",
+            "description": "资产类型"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "执行状态"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Time",
+            "description": "开始时间"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time",
+            "description": "结束时间"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "执行时长（秒）"
+          },
+          "display": {
+            "$ref": "#/components/schemas/ExecutionDisplay",
+            "description": "格式化后的时间与耗时"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "解析后的执行结果"
+          },
+          "request": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request",
+            "description": "结果中的请求详情"
+          },
+          "response": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response",
+            "description": "结果中的响应详情"
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionAuth"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "单 API 身份；匿名/Case/旧记录为 null"
+          },
+          "env": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Env",
+            "description": "运行时选择的环境"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha",
+            "description": "执行所用 commit SHA"
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo",
+            "description": "仓库键"
+          },
+          "operator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator",
+            "description": "操作人；4.0 恒为 null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "asset_id",
+          "asset_type",
+          "status",
+          "start_time",
+          "display"
+        ],
+        "title": "ExecutionRecordDetailResponse",
+        "description": "执行记录详情。"
+      },
+      "ExecutionRecordListResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "记录ID"
+          },
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id",
+            "description": "资产ID"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "执行状态"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Time",
+            "description": "开始时间"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "执行时长（秒）"
+          },
+          "login_failed": {
+            "type": "boolean",
+            "title": "Login Failed",
+            "description": "结果中是否含 login_failed",
+            "default": false
+          },
+          "env": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Env",
+            "description": "运行时选择的环境"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha",
+            "description": "执行所用 commit SHA"
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo",
+            "description": "仓库键"
+          },
+          "operator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator",
+            "description": "操作人；4.0 恒为 null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "asset_id",
+          "status",
+          "start_time"
+        ],
+        "title": "ExecutionRecordListResponse",
+        "description": "执行记录列表项。"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ParamInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "参数名"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "number",
+              "boolean"
+            ],
+            "title": "Type",
+            "description": "参数类型：string、number 或 boolean"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "description": "是否必填"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "参数说明"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "required"
+        ],
+        "title": "ParamInfo",
+        "description": "从 YAML inputs 提取的单个参数。"
+      },
+      "ParamsResponse": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id",
+            "description": "资产 ID"
+          },
+          "params": {
+            "items": {
+              "$ref": "#/components/schemas/ParamInfo"
+            },
+            "type": "array",
+            "title": "Params",
+            "description": "参数列表，顺序与 YAML inputs 一致"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "params"
+        ],
+        "title": "ParamsResponse",
+        "description": "API 参数表单。"
+      },
+      "ProjectResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "项目 ID，形如 {repo}/{project}"
+          },
+          "repo": {
+            "type": "string",
+            "title": "Repo",
+            "description": "仓库键"
+          },
+          "project": {
+            "type": "string",
+            "title": "Project",
+            "description": "项目键（清单内）"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "显示名称"
+          },
+          "envs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Envs",
+            "description": "可选环境列表"
+          },
+          "default_env": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Env",
+            "description": "默认环境"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived",
+            "description": "清单中已消失时为 true",
+            "default": false
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha",
+            "description": "当前同步的 commit SHA"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "首次同步时间"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "最近同步更新时间"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "repo",
+          "project",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProjectResponse",
+        "description": "项目响应（只读；来自 Git 清单）。"
+      },
+      "RepoResponse": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "仓库键"
+          },
+          "branch": {
+            "type": "string",
+            "title": "Branch",
+            "description": "跟踪分支"
+          },
+          "current_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Sha",
+            "description": "当前 commit SHA"
+          },
+          "last_sync_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync At",
+            "description": "最近同步时间"
+          },
+          "last_sync_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Result",
+            "description": "最近同步结果：ok|network|auth|invalid_manifest|timeout"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "branch"
+        ],
+        "title": "RepoResponse",
+        "description": "仓库状态（不含 URL）。"
+      },
+      "RunRequest": {
+        "properties": {
+          "env": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Env",
+            "description": "运行环境（须在项目 envs 内）"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "执行参数"
+          }
+        },
+        "type": "object",
+        "required": [
+          "env"
+        ],
+        "title": "RunRequest",
+        "description": "单次 API 执行请求。"
+      },
+      "RunResponse": {
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "title": "Record Id",
+            "description": "执行记录 ID"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed"
+            ],
+            "title": "Status",
+            "description": "执行状态：success 或 failed"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "执行时长（秒）"
+          },
+          "result": {
+            "title": "Result",
+            "description": "执行结果"
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionAuth"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "本次请求使用的身份（Phase 3.3d 九键）；匿名为 null，与 result.auth 相同"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha",
+            "description": "本次执行固定使用的 commit SHA"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_id",
+          "status"
+        ],
+        "title": "RunResponse",
+        "description": "单次 API 执行结果。"
+      },
+      "SyncResponse": {
+        "properties": {
+          "repo": {
+            "type": "string",
+            "title": "Repo",
+            "description": "仓库键"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "description": "是否成功"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "ok|network|auth|invalid_manifest|timeout"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha",
+            "description": "成功时为新 SHA；失败时为保留的旧 SHA"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo",
+          "ok",
+          "category"
+        ],
+        "title": "SyncResponse",
+        "description": "同步结果（失败时只含类别，不含 git 原文）。"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

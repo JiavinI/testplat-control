@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 from testplat_control.deps import get_engine_port
 from testplat_control.main import app
 from testplat_control.services import execution_service
+from tests.case_support import create_project, project_api_base
 
 
 class _LocalHandler(BaseHTTPRequestHandler):
@@ -125,17 +126,7 @@ def real_project(tmp_path: Path, local_server: str) -> dict[str, str]:
     app.dependency_overrides.pop(get_engine_port, None)
 
     with TestClient(app) as client:
-        resp = client.post(
-            "/projects",
-            json={
-                "name": f"real-engine-{uuid4().hex[:8]}",
-                "assets_root": str(assets),
-                "config_root": str(config),
-                "env": "test",
-            },
-        )
-        assert resp.status_code == 200, resp.text
-        project_id = resp.json()["id"]
+        project_id = create_project(client, assets, config, name=f"real-engine-{uuid4().hex[:8]}")
     return {
         "project_id": project_id,
         "assets_root": str(assets),
@@ -146,17 +137,17 @@ def real_project(tmp_path: Path, local_server: str) -> dict[str, str]:
 
 def _run(client: TestClient, project_id: str, asset_id: str):
     return client.post(
-        f"/projects/{project_id}/assets/{asset_id}/run",
-        json={"params": {}},
+        f"{project_api_base(project_id)}/assets/{asset_id}/run",
+        json={"env": "test", "params": {}},
     )
 
 
 def _list_records(client: TestClient, project_id: str, **params):
-    return client.get(f"/projects/{project_id}/execution-records", params=params)
+    return client.get(f"{project_api_base(project_id)}/execution-records", params=params)
 
 
 def _detail(client: TestClient, project_id: str, record_id: str):
-    return client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    return client.get(f"{project_api_base(project_id)}/execution-records/{record_id}")
 
 
 def test_real_engine_success(real_project: dict[str, str]) -> None:
@@ -206,9 +197,7 @@ def test_real_engine_timeout_maps_504_and_records(
     with TestClient(app) as client:
         resp = _run(client, real_project["project_id"], "api.common.slow")
         assert resp.status_code == 504, resp.text
-        listing = _list_records(
-            client, real_project["project_id"], asset_id="api.common.slow"
-        )
+        listing = _list_records(client, real_project["project_id"], asset_id="api.common.slow")
         assert listing.status_code == 200
         items = listing.json()
         assert any(item.get("status") == "failed" for item in items)
@@ -216,6 +205,7 @@ def test_real_engine_timeout_maps_504_and_records(
 
 def test_real_engine_transport_maps_502_and_records(real_project: dict[str, str]) -> None:
     """传输失败：api_hosts 指向关闭端口，期望 502 + failed 记录。"""
+    assets = Path(real_project["assets_root"])
     config = Path(real_project["config_root"])
     (config / "envs" / "test.yaml").write_text(
         yaml.safe_dump(
@@ -225,34 +215,26 @@ def test_real_engine_transport_maps_502_and_records(real_project: dict[str, str]
         encoding="utf-8",
     )
     with TestClient(app) as client:
-        before = _list_records(client, real_project["project_id"])
+        # 配置变更后重新同步，执行读快照而非源目录
+        project_id = create_project(client, assets, config)
+        before = _list_records(client, project_id)
         before_count = len(before.json())
-        resp = _run(client, real_project["project_id"], "api.common.health_check")
+        resp = _run(client, project_id, "api.common.health_check")
         assert resp.status_code == 502, resp.text
-        after = _list_records(client, real_project["project_id"])
+        after = _list_records(client, project_id)
         assert len(after.json()) == before_count + 1
         assert after.json()[0]["status"] == "failed"
 
 
 def test_real_engine_invalid_environment_no_record(real_project: dict[str, str]) -> None:
-    """无效环境：422 preflight，不写记录。"""
+    """无效 env：422，不写记录。"""
     with TestClient(app) as client:
-        proj = client.get(f"/projects/{real_project['project_id']}")
-        assert proj.status_code == 200
-        payload = proj.json()
-        upd = client.put(
-            f"/projects/{real_project['project_id']}",
-            json={
-                "name": payload["name"],
-                "assets_root": payload["assets_root"],
-                "config_root": payload["config_root"],
-                "env": "missing-env",
-            },
-        )
-        assert upd.status_code == 200, upd.text
         before = _list_records(client, real_project["project_id"])
         before_count = len(before.json())
-        resp = _run(client, real_project["project_id"], "api.common.health_check")
+        resp = client.post(
+            f"{project_api_base(real_project['project_id'])}/assets/api.common.health_check/run",
+            json={"env": "missing-env", "params": {}},
+        )
         assert resp.status_code == 422, resp.text
         after = _list_records(client, real_project["project_id"])
         assert len(after.json()) == before_count

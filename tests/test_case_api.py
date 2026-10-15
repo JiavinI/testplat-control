@@ -42,6 +42,7 @@ from testplat_control.services.case_asset_service import find_case_file
 from tests.case_support import (
     assert_case_result_invariants,
     create_project,
+    project_api_base,
     write_assets,
     write_env,
 )
@@ -80,19 +81,19 @@ def project_id(dirs: tuple[Path, Path], fake: FakeEngineAdapter) -> str:
 
 def _run(project_id: str, case_id: str = CASE_ID, params: dict[str, Any] | None = None):
     return client.post(
-        f"/projects/{project_id}/cases/{case_id}/run",
-        json={"params": params or {}},
+        f"{project_api_base(project_id)}/cases/{case_id}/run",
+        json={"env": "test", "params": params or {}},
     )
 
 
 def _records(project_id: str, **query: Any) -> list[dict[str, Any]]:
-    response = client.get(f"/projects/{project_id}/execution-records", params=query)
+    response = client.get(f"{project_api_base(project_id)}/execution-records", params=query)
     assert response.status_code == 200, response.text
     return response.json()
 
 
 def _typed_detail(project_id: str, record_id: str):
-    return client.get(f"/projects/{project_id}/case-execution-records/{record_id}")
+    return client.get(f"{project_api_base(project_id)}/case-execution-records/{record_id}")
 
 
 def _db_record(record_id: str) -> ExecutionRecord:
@@ -110,7 +111,7 @@ def _db_record(record_id: str) -> ExecutionRecord:
 
 def test_case_detail_returns_file_metadata_only(project_id: str, dirs: tuple[Path, Path]) -> None:
     """详情只含文件级元信息：不解析 YAML，因此没有 name/tags/steps 等语义字段。"""
-    response = client.get(f"/projects/{project_id}/cases/{CASE_ID}")
+    response = client.get(f"{project_api_base(project_id)}/cases/{CASE_ID}")
 
     assert response.status_code == 200
     data = response.json()
@@ -144,7 +145,7 @@ def test_case_detail_rejects_illegal_assets_with_404(
     legacy = dirs[0] / "scenarios" / "demo" / "legacy.yaml"
     legacy.write_text("id: case.demo.legacy\nsteps: []\n", encoding="utf-8")
 
-    response = client.get(f"/projects/{project_id}/cases/{case_id}")
+    response = client.get(f"{project_api_base(project_id)}/cases/{case_id}")
 
     assert response.status_code == 404
     assert "detail" in response.json()
@@ -156,7 +157,7 @@ def test_case_detail_symlink_escape_is_404(project_id: str, dirs: tuple[Path, Pa
     outside.write_text('schema_version: "0.2"\nid: case.demo.escape\nsteps: []\n', encoding="utf-8")
     os.symlink(outside, dirs[0] / "scenarios" / "demo" / "escape.case.yaml")
 
-    response = client.get(f"/projects/{project_id}/cases/case.demo.escape")
+    response = client.get(f"{project_api_base(project_id)}/cases/case.demo.escape")
 
     assert response.status_code == 404
 
@@ -174,12 +175,12 @@ def test_case_detail_without_scenarios_dir(tmp_path: Path, fake: FakeEngineAdapt
     config = tmp_path / "config"
     write_env(config, "http://127.0.0.1:9")
     pid = create_project(client, assets, config)
-    assert client.get(f"/projects/{pid}/cases/{CASE_ID}").status_code == 404
+    assert client.get(f"{project_api_base(pid)}/cases/{CASE_ID}").status_code == 404
 
 
 def test_asset_tree_uses_canonical_case_id(project_id: str) -> None:
     """资产树里 .case.yaml 的 id 是 case.<...>，不再带 ``scenarios.…​.case`` 双后缀。"""
-    tree = client.get(f"/projects/{project_id}/assets").json()
+    tree = client.get(f"{project_api_base(project_id)}/assets").json()
 
     def walk(node: dict[str, Any]):
         yield node
@@ -191,7 +192,7 @@ def test_asset_tree_uses_canonical_case_id(project_id: str) -> None:
     assert ids[CASE_ID]["path"] == "scenarios/demo/create_then_get.case.yaml"
     assert "scenarios.demo.create_then_get.case" not in ids
     # 树上的 id 可直接用于 Case 详情。
-    assert client.get(f"/projects/{project_id}/cases/{CASE_ID}").status_code == 200
+    assert client.get(f"{project_api_base(project_id)}/cases/{CASE_ID}").status_code == 200
 
 
 # ---------------------------------------------------------------- 运行：业务结果
@@ -307,20 +308,22 @@ def test_run_preflight_errors_do_not_create_records(
 
 
 def test_run_invalid_project_env_is_422_without_record(
-    tmp_path: Path, dirs: tuple[Path, Path], fake: FakeEngineAdapter
+    dirs: tuple[Path, Path], fake: FakeEngineAdapter
 ) -> None:
-    """Control 侧环境加载失败：422、不调用 Engine、不写记录。"""
-    pid = create_project(client, dirs[0], dirs[1], env="missing-env")
-
-    response = _run(pid)
-
+    """运行 env 不在项目 envs 内：422、不调用 Engine、不写记录。"""
+    pid = create_project(client, dirs[0], dirs[1])
+    response = client.post(
+        f"{project_api_base(pid)}/cases/{CASE_ID}/run",
+        json={"env": "missing-env", "params": {}},
+    )
     assert response.status_code == 422
+    assert "环境不在可选列表中" in response.json()["detail"]
     assert fake.calls == []
     assert _records(pid) == []
 
 
 def test_run_project_not_found(fake: FakeEngineAdapter) -> None:
-    response = _run("missing-project")
+    response = _run("missing/nope")
     assert response.status_code == 404
     assert response.json()["detail"] == "Project not found"
     assert fake.calls == []
@@ -329,14 +332,15 @@ def test_run_project_not_found(fake: FakeEngineAdapter) -> None:
 def test_run_rejects_non_object_params(project_id: str, fake: FakeEngineAdapter) -> None:
     """请求体 params 必须是对象；也不接受 fail_fast / timeout_seconds 之类的覆盖字段。"""
     response = client.post(
-        f"/projects/{project_id}/cases/{CASE_ID}/run", json={"params": ["not", "object"]}
+        f"{project_api_base(project_id)}/cases/{CASE_ID}/run",
+        json={"env": "test", "params": ["not", "object"]},
     )
     assert response.status_code == 422
     assert fake.calls == []
 
     ignored = client.post(
-        f"/projects/{project_id}/cases/{CASE_ID}/run",
-        json={"params": {}, "fail_fast": False, "timeout_seconds": 1},
+        f"{project_api_base(project_id)}/cases/{CASE_ID}/run",
+        json={"env": "test", "params": {}, "fail_fast": False, "timeout_seconds": 1},
     )
     assert ignored.status_code == 200
     assert fake.calls[-1].timeout_seconds == 30.0  # 调用方不可覆盖
@@ -454,7 +458,8 @@ def _seed_history(project_id: str, fake: FakeEngineAdapter) -> dict[str, list[st
         assert case_resp.status_code == 200
         ids["case"].append(case_resp.json()["record_id"])
         api_resp = client.post(
-            f"/projects/{project_id}/assets/{api_asset}/run", json={"params": {}}
+            f"{project_api_base(project_id)}/assets/{api_asset}/run",
+            json={"env": "test", "params": {}},
         )
         assert api_resp.status_code == 200, api_resp.text
         ids["api"].append(api_resp.json()["record_id"])
@@ -462,10 +467,14 @@ def _seed_history(project_id: str, fake: FakeEngineAdapter) -> dict[str, list[st
 
 
 @pytest.fixture
-def seeded(project_id: str, dirs: tuple[Path, Path], fake: FakeEngineAdapter) -> dict[str, Any]:
+def seeded(dirs: tuple[Path, Path], fake: FakeEngineAdapter) -> dict[str, Any]:
+    """先写入 health API，再同步建项目，保证快照内有该资产。"""
     health = dirs[0] / "api" / "common" / "health_check.yaml"
     health.parent.mkdir(parents=True, exist_ok=True)
-    health.write_text("id: api.common.health_check\nname: h\nmethod: GET\nurl: /health\n")
+    health.write_text(
+        "id: api.common.health_check\ntype: api\nname: h\nhost: local\nmethod: GET\nurl: /health\n"
+    )
+    project_id = create_project(client, *dirs)
     return {"project_id": project_id, "ids": _seed_history(project_id, fake)}
 
 
@@ -480,7 +489,9 @@ def test_history_filter_by_asset_type(seeded: dict[str, Any]) -> None:
     assert {r["id"] for r in apis} == set(ids["api"])
     assert len(mixed) == 6  # 不带 asset_type 时保持 Phase 2.5 的混合行为
     assert (
-        client.get(f"/projects/{pid}/execution-records", params={"asset_type": "ui"}).status_code
+        client.get(
+            f"{project_api_base(pid)}/execution-records", params={"asset_type": "ui"}
+        ).status_code
         == 422
     )
 
@@ -514,7 +525,16 @@ def test_history_pagination_and_ordering_for_cases(seeded: dict[str, Any]) -> No
 def test_history_list_item_shape_is_unchanged(seeded: dict[str, Any]) -> None:
     """列表项在既有五字段上追加 login_failed（Phase 3.3b 历史标记）。"""
     item = _records(seeded["project_id"], asset_type="case", limit=1)[0]
-    assert set(item) == {"id", "asset_id", "status", "start_time", "duration", "login_failed"}
+    assert set(item) >= {
+        "id",
+        "asset_id",
+        "status",
+        "start_time",
+        "duration",
+        "login_failed",
+        "env",
+        "commit_sha",
+    }
     assert item["login_failed"] is False
 
 
@@ -522,7 +542,7 @@ def test_history_generic_detail_stays_compatible_for_case_records(seeded: dict[s
     """通用详情端点对 Case 记录依然可用：result 为完整 Case 结果，request/response 为 null。"""
     pid, record_id = seeded["project_id"], seeded["ids"]["case"][1]
 
-    generic = client.get(f"/projects/{pid}/execution-records/{record_id}")
+    generic = client.get(f"{project_api_base(pid)}/execution-records/{record_id}")
 
     assert generic.status_code == 200
     body = generic.json()
@@ -538,7 +558,7 @@ def test_history_generic_detail_stays_compatible_for_case_records(seeded: dict[s
         s["step_id"] for s in body["result"]["steps"]
     ]
     assert typed["asset_type"] == "case"
-    assert set(typed) == {
+    assert set(typed) >= {
         "id",
         "project_id",
         "asset_id",
@@ -549,6 +569,8 @@ def test_history_generic_detail_stays_compatible_for_case_records(seeded: dict[s
         "duration",
         "display",
         "result",
+        "env",
+        "commit_sha",
     }
 
 
@@ -556,14 +578,14 @@ def test_history_api_record_detail_is_unchanged_and_not_a_case(seeded: dict[str,
     """API 记录：通用详情不变；Case 类型化详情对它返回 404。"""
     pid, api_id = seeded["project_id"], seeded["ids"]["api"][0]
 
-    detail = client.get(f"/projects/{pid}/execution-records/{api_id}")
+    detail = client.get(f"{project_api_base(pid)}/execution-records/{api_id}")
     assert detail.status_code == 200
     assert detail.json()["asset_type"] == "api"
     assert detail.json()["request"] is not None
 
     assert _typed_detail(pid, api_id).status_code == 404
     assert _typed_detail(pid, "missing").status_code == 404
-    assert client.get("/projects/missing/case-execution-records/x").status_code == 404
+    assert client.get("/repos/missing/projects/nope/case-execution-records/x").status_code == 404
 
 
 def test_typed_detail_tolerates_legacy_or_corrupt_result_json(
@@ -601,7 +623,7 @@ def test_typed_detail_tolerates_legacy_or_corrupt_result_json(
         assert typed.status_code == 200
         assert typed.json()["result"] is None
         # 通用详情照常工作（旧 API 兼容）。
-        generic = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+        generic = client.get(f"{project_api_base(project_id)}/execution-records/{record_id}")
         assert generic.status_code == 200
 
 

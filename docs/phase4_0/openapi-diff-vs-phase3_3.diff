@@ -1,0 +1,42 @@
+# OpenAPI path 相对 phase3_3 的变更摘要
++ /repos  methods=['get']
++ /repos/{repo}/projects/{project}  methods=['get']
++ /repos/{repo}/projects/{project}/assets  methods=['get']
++ /repos/{repo}/projects/{project}/assets/{asset_id}  methods=['get']
++ /repos/{repo}/projects/{project}/assets/{asset_id}/params  methods=['get']
++ /repos/{repo}/projects/{project}/assets/{asset_id}/run  methods=['post']
++ /repos/{repo}/projects/{project}/case-execution-records/{record_id}  methods=['get']
++ /repos/{repo}/projects/{project}/cases/{case_id}  methods=['get']
++ /repos/{repo}/projects/{project}/cases/{case_id}/run  methods=['post']
++ /repos/{repo}/projects/{project}/execution-records  methods=['get']
++ /repos/{repo}/projects/{project}/execution-records/{record_id}  methods=['get']
++ /repos/{repo}/sync  methods=['post']
+- /projects/{project_id}/assets  methods=['get']
+- /projects/{project_id}/assets/{asset_id}  methods=['get']
+- /projects/{project_id}/assets/{asset_id}/params  methods=['get']
+- /projects/{project_id}/assets/{asset_id}/run  methods=['post']
+- /projects/{project_id}/case-execution-records/{record_id}  methods=['get']
+- /projects/{project_id}/cases/{case_id}  methods=['get']
+- /projects/{project_id}/cases/{case_id}/run  methods=['post']
+- /projects/{project_id}/execution-records  methods=['get']
+- /projects/{project_id}/execution-records/{record_id}  methods=['get']
+
+# 语义迁移（旧扁平 project_id → 两段式）
+~ /projects/{project_id}  →  /repos/{repo}/projects/{project}/...
+~ /projects/{project_id}/assets  →  /repos/{repo}/projects/{project}/...
+~ /projects/{project_id}/assets/{asset_id}  →  /repos/{repo}/projects/{project}/...
+~ /projects/{project_id}/assets/{asset_id}/params  →  /repos/{repo}/projects/{project}/...
+~ /projects/{project_id}/assets/{asset_id}/run  →  /repos/{repo}/projects/{project}/...
+~ /projects/{project_id}/case-execution-records/{record_id}  →  /repos/{repo}/projects/{project}/...
+~ /projects/{project_id}/cases/{case_id}  →  /repos/{repo}/projects/{project}/...
+~ /projects/{project_id}/cases/{case_id}/run  →  /repos/{repo}/projects/{project}/...
+~ /projects/{project_id}/execution-records  →  /repos/{repo}/projects/{project}/...
+~ /projects/{project_id}/execution-records/{record_id}  →  /repos/{repo}/projects/{project}/...
+
+# Schema 要点
++ RepoResponse / SyncResponse
++ ProjectResponse: repo/project/envs/default_env/archived/commit_sha（移除 assets_root/config_root/env）
++ RunRequest/CaseRunRequest: 必填 env
++ RunResponse/CaseRunResponse: commit_sha
++ ExecutionRecord*: env/commit_sha/repo/operator
+- ProjectCreate / ProjectUpdate

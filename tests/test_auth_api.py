@@ -37,7 +37,7 @@ from tests.auth_support import (
     log_text,
     write_auth,
 )
-from tests.case_support import create_project, write_assets, write_env
+from tests.case_support import create_project, project_api_base, write_assets, write_env
 
 client = TestClient(app)
 API_ID = "api.demo.create"
@@ -85,15 +85,19 @@ def _project(dirs: tuple[Path, Path], config: dict | str | None = STANDARD_CONFI
 
 
 def _run_api(project_id: str):
-    return client.post(f"/projects/{project_id}/assets/{API_ID}/run", json={"params": {}})
+    return client.post(
+        f"{project_api_base(project_id)}/assets/{API_ID}/run", json={"env": "test", "params": {}}
+    )
 
 
 def _run_case(project_id: str):
-    return client.post(f"/projects/{project_id}/cases/{CASE_ID}/run", json={"params": {}})
+    return client.post(
+        f"{project_api_base(project_id)}/cases/{CASE_ID}/run", json={"env": "test", "params": {}}
+    )
 
 
 def _record_count(project_id: str) -> int:
-    response = client.get(f"/projects/{project_id}/execution-records")
+    response = client.get(f"{project_api_base(project_id)}/execution-records")
     assert response.status_code == 200
     return len(response.json())
 
@@ -154,7 +158,7 @@ def test_single_api_auth_flows_to_response_and_history(
     expected = {**ADMIN_AUTH, "overridden_headers": ["authorization"]}
     assert body["auth"] == expected
     assert body["result"]["auth"] == expected
-    detail = client.get(f"/projects/{project_id}/execution-records/{body['record_id']}")
+    detail = client.get(f"{project_api_base(project_id)}/execution-records/{body['record_id']}")
     assert detail.status_code == 200
     assert detail.json()["auth"] == expected
     assert detail.json()["result"]["auth"] == expected
@@ -183,10 +187,10 @@ def test_case_step_auth_flows_to_response_and_typed_history(
     steps = response.json()["result"]["steps"]
     assert [step["auth"] for step in steps] == [partner, partner]
     record_id = response.json()["record_id"]
-    typed = client.get(f"/projects/{project_id}/case-execution-records/{record_id}")
+    typed = client.get(f"{project_api_base(project_id)}/case-execution-records/{record_id}")
     assert typed.status_code == 200
     assert [step["auth"] for step in typed.json()["result"]["steps"]] == [partner, partner]
-    generic = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    generic = client.get(f"{project_api_base(project_id)}/execution-records/{record_id}")
     assert [step["auth"] for step in generic.json()["result"]["steps"]] == [partner, partner]
     assert_no_secret([response.text, typed.text, generic.text, *_raw_rows(project_id)])
 
@@ -217,7 +221,7 @@ def test_legacy_record_without_auth_reads_as_null(
         db.commit()
     finally:
         db.close()
-    detail = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    detail = client.get(f"{project_api_base(project_id)}/execution-records/{record_id}")
     assert detail.status_code == 200 and detail.json()["auth"] is None
 
 
