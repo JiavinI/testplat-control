@@ -78,7 +78,20 @@ API 层证据：`uv run pytest -q tests/integration/test_real_engine_case_flow.p
 2. 启动同步或调用 `POST /repos/{repo}/sync`。
 3. `GET /projects` / `GET /repos/{repo}/projects/{project}` 浏览项目；选 `env` 后运行 api / case。
 
-资产与配置来自当前 commit 快照，不再使用 `assets_root` / `config_root` 字段。
+资产与登录流程来自当前 commit 快照，不再使用 `assets_root` / `config_root` 字段。
+运行时的环境地址、超时、业务参数和测试账号以数据库为准，见下一节。
+
+## 平台会话、环境与账号（Phase 4.1a）
+
+说明与 OpenAPI：`docs/phase4_1a/`。
+
+- `POST /auth/register`、`POST /auth/login`、`POST /auth/logout`、`GET /auth/me`。会话 cookie 名 `testplat_session`（HttpOnly、SameSite=Lax，库中只存 token 哈希，约 7 天）。`health`、注册、登录不要求会话；其余配置与执行接口未登录返回 401。
+- 项目前缀 `/repos/{repo}/projects/{project}` 下维护环境与测试账号。环境名、账号名保存后不可改；可以新增、编辑、停用。PUT 必须带 `revision`，过期版本返回 409。
+- 登录流程读当前快照的 `config/auth/_profiles.yaml`。`GET .../login-profiles` 只返回流程名和凭据字段名。
+- 被测凭据用 `TESTPLAT_MASTER_KEY`（Fernet）加密。密钥缺失或无效时明确报配置错误，不自动生成新密钥。平台用户密码用 Argon2 哈希。
+- 已有 Web 环境后，`api_hosts`、账号和启停只来自数据库；Git 同步不覆盖它们。项目还没有任何 Web 环境时，运行仍读取 Git 环境文件和历史 `config/auth/{env}.yaml`。
+- HTTP 步骤超时：请求显式 `timeout_seconds` > 环境 `timeout_seconds` > 默认 30。省略和显式 30 不是同一件事。仍是每步超时，不是整个 Case 的总预算。
+- 不使用 Alembic。启动发现不兼容表结构时提示显式删除数据库文件，不会自动清空。
 
 ## 执行错误映射（摘要）
 
@@ -106,8 +119,8 @@ Case 的语法校验与执行语义**归 Engine**；Control 只负责项目/环�
 | `GET /projects/{id}/case-execution-records/{record_id}` | 历史详情，`result` 有明确 schema |
 | `GET /projects/{id}/execution-records?asset_type=case` | 历史列表按类型筛选（可选参数） |
 
-`timeout_seconds`（默认 30）是 Engine 对**每个步骤**的 HTTP 超时，不是整个 Case 的总预算；
-Control 目前没有 Case 级总限时，N 步 Case 最坏约 `N × 30s`。
+`timeout_seconds` 是 Engine 对**每个步骤**的 HTTP 超时，不是整个 Case 的总预算；
+未显式指定时默认 30 秒（Phase 4.1a 起可被请求或环境覆盖）。Control 目前没有 Case 级总限时。
 
 日志硬约束：不使用 `logger.exception` / `exc_info`，不记录 `EngineError.log_reason`、`__cause__` 或异常原文，
 只记 kind、stage、ID 与异常类型名（`tests/test_log_redaction.py` 守护）。
@@ -118,3 +131,5 @@ Control 目前没有 Case 级总限时，N 步 Case 最坏约 `N × 30s`。
 - **启动即失败 / 不再延迟 503**：包只有 Interface、没有可用的 `create_engine()`，或返回值不是 EnginePort 时，lifespan 直接 fail-fast。
 - **业务 failed 却不是 200**：不应发生；检查是否把断言失败误映射成系统错误。
 - **e2e 打到真实网络**：门禁用 `harness_fake:app`；真实冒烟才用 `main:app` + 本地目标。
+- **保存账号报 TESTPLAT_MASTER_KEY 未配置 / 无效**：用 `cryptography.fernet.Fernet.generate_key()` 生成密钥后写入环境变量。不要在密钥丢失后自动换一把新密钥，旧密文将无法解密。
+- **启动提示表结构不兼容**：显式删除当前 SQLite 文件后再启动。程序不会清空数据库。

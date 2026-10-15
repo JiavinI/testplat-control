@@ -171,6 +171,12 @@ class CaseRunRequest(BaseModel):
         default_factory=dict,
         description="覆盖 Case 默认参数的顶层键值（自由 JSON；不得放秘密）",
     )
+    timeout_seconds: float | None = Field(
+        None,
+        gt=0,
+        le=300,
+        description="每步 HTTP 超时（秒）。省略则使用环境或默认 30；显式 30 会覆盖环境值",
+    )
 
 
 class CaseRunResponse(BaseModel):
@@ -185,6 +191,8 @@ class CaseRunResponse(BaseModel):
     duration: float | None = Field(None, description="Control 侧测得的执行时长（秒）")
     result: CaseResult = Field(..., description="完整 Case / 步骤结果")
     commit_sha: str | None = Field(None, description="本次执行固定使用的 commit SHA")
+    operator: str | None = Field(None, description="操作人（平台用户名）")
+    config_revision: int | None = Field(None, description="启动时冻结的环境 revision")
 
 
 class CaseAssetDetailResponse(BaseModel):
@@ -219,7 +227,14 @@ class CaseExecutionRecordDetailResponse(BaseModel):
     env: str | None = Field(None, description="运行环境")
     commit_sha: str | None = Field(None, description="执行所用 commit SHA")
     repo: str | None = Field(None, description="仓库键")
-    operator: str | None = Field(None, description="操作人；4.0 恒为 null")
+    operator: str | None = Field(None, description="操作人（平台用户名）")
+    config_revision: int | None = Field(None, description="启动时冻结的环境 revision")
+    account_revisions: dict[str, int] | None = Field(
+        None, description="本次实际账号名到 revision；不含凭据"
+    )
+    config_snapshot: dict[str, Any] | None = Field(
+        None, description="非秘密配置快照；历史详情不回查当前环境"
+    )
 
     @classmethod
     def from_model(
@@ -246,4 +261,7 @@ class CaseExecutionRecordDetailResponse(BaseModel):
             commit_sha=getattr(record, "commit_sha", None),
             repo=getattr(record, "repo", None),
             operator=getattr(record, "operator", None),
+            config_revision=getattr(record, "config_revision", None),
+            account_revisions=getattr(record, "account_revisions", None),
+            config_snapshot=getattr(record, "config_snapshot", None),
         )

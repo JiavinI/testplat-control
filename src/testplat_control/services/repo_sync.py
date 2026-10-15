@@ -23,7 +23,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from testplat_control.database.models import Project, Repo
+from testplat_control.database.models import Project, ProjectEnvironment, Repo
 from testplat_control.services.manifest import (
     ManifestError,
     envs_for_project,
@@ -376,11 +376,19 @@ class RepoSyncService:
                 db.add(row)
             else:
                 row.name = spec.name
-                row.envs = list(envs)
-                row.default_env = default_env
                 row.archived = False
                 row.commit_sha = sha
                 row.updated_at = now
+                # 已有 Web 环境时，同步不得覆盖环境名、默认环境、账号或启停。
+                has_web = (
+                    db.query(ProjectEnvironment.id)
+                    .filter(ProjectEnvironment.project_id == project_id)
+                    .first()
+                    is not None
+                )
+                if not has_web:
+                    row.envs = list(envs)
+                    row.default_env = default_env
 
         # 清单消失的项目标记 archived，不删
         existing = db.query(Project).filter(Project.repo == repo_key).all()

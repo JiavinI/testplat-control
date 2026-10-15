@@ -330,7 +330,7 @@ def test_run_project_not_found(fake: FakeEngineAdapter) -> None:
 
 
 def test_run_rejects_non_object_params(project_id: str, fake: FakeEngineAdapter) -> None:
-    """请求体 params 必须是对象；也不接受 fail_fast / timeout_seconds 之类的覆盖字段。"""
+    """params 必须是对象。fail_fast 仍被忽略；显式 timeout_seconds 覆盖默认 30。"""
     response = client.post(
         f"{project_api_base(project_id)}/cases/{CASE_ID}/run",
         json={"env": "test", "params": ["not", "object"]},
@@ -338,12 +338,12 @@ def test_run_rejects_non_object_params(project_id: str, fake: FakeEngineAdapter)
     assert response.status_code == 422
     assert fake.calls == []
 
-    ignored = client.post(
+    explicit = client.post(
         f"{project_api_base(project_id)}/cases/{CASE_ID}/run",
         json={"env": "test", "params": {}, "fail_fast": False, "timeout_seconds": 1},
     )
-    assert ignored.status_code == 200
-    assert fake.calls[-1].timeout_seconds == 30.0  # 调用方不可覆盖
+    assert explicit.status_code == 200
+    assert fake.calls[-1].timeout_seconds == 1.0
 
 
 # ---------------------------------------------------------------- 运行：execution 系统错误

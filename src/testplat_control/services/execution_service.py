@@ -8,9 +8,10 @@
 - **Case 语法与运行语义的权威是 Engine**：Case id 格式、文件路径映射、schema、引用
   校验、步骤执行与 fail-fast 全部发生在 ``EnginePort.execute(request)`` 之内。
   本模块不解析 Case YAML，只把 Engine 返回的 outcome / 异常原样落库和映射为 HTTP。
-- Control 只负责：项目与运行 env（``load_project_environment``）、身份表
-  （``load_auth``，cache_scope=``{repo}:{project}:{env}``；Engine 禁止 `/`）、调用与计时、
+- Control 只负责：运行配置解析（Web 环境存在时用数据库；否则 Git 文件）、身份表
+  （cache_scope=``{repo}:{project}:{env}``；Engine 禁止 `/`）、调用与计时、
   ``ExecutionRecord`` 持久化、HTTP 状态码映射。
+- 一次执行在调用 Engine 前冻结 environment / AuthTable / 超时 / 参数；之后不再读库补配置。
 
 记录生命周期（单次写入）
 ------------------------
@@ -69,7 +70,7 @@ from testplat_engine import (
 from testplat_control.database.models import ExecutionRecord, Project
 from testplat_control.ports.engine import EnginePort
 from testplat_control.services.auth_loader import AuthLoadResult, load_auth
-from testplat_control.services.env_loader import load_project_environment
+from testplat_control.services.run_config import ResolvedRunConfig, resolve_run_config
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,8 @@ def _build_record(
     asset_type: str = "api",
     env: str | None = None,
     commit_sha: str | None = None,
+    operator: str | None = None,
+    resolved: ResolvedRunConfig | None = None,
 ) -> ExecutionRecord:
     """构造尚未落库的执行记录（复用同一张表，``asset_type`` 区分 api / case）。"""
     duration = (end_time - start_time).total_seconds()
@@ -139,7 +142,10 @@ def _build_record(
         env=env,
         repo=project.repo,
         commit_sha=commit_sha,
-        operator=None,
+        operator=operator,
+        config_revision=None if resolved is None else resolved.config_revision,
+        account_revisions=None if resolved is None else dict(resolved.account_revisions),
+        config_snapshot=None if resolved is None else dict(resolved.snapshot),
     )
 
 
@@ -173,23 +179,6 @@ def _persist(db: Session, record: ExecutionRecord) -> ExecutionRecord:
             detail="Failed to persist execution record",
         ) from exc
     return record
-
-
-def _load_environment(config_root: Path, env: str, project: Project) -> dict[str, Any]:
-    """加载运行环境；失败属 Control 侧 preflight，不写记录。"""
-    try:
-        return load_project_environment(config_root, env)
-    except EngineError as exc:
-        _log_engine_error(
-            project=project,
-            asset_id="-",
-            exc=exc,
-            what=f"环境配置 preflight 失败 env={env}",
-        )
-        raise HTTPException(
-            status_code=map_engine_error_http_status(exc),
-            detail=exc.public_message,
-        ) from exc
 
 
 def _load_auth(config_root: Path, env: str, project: Project) -> AuthLoadResult | None:
@@ -266,21 +255,32 @@ async def run_single_api(
     commit_sha: str,
     assets_root: Path,
     config_root: Path,
-    timeout_seconds: float = 30.0,
+    timeout_seconds: float | None = None,
+    operator: str | None = None,
 ) -> ExecutionRecord:
-    """编排一次单 API 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。"""
-    environment = _load_environment(config_root, env, project)
-    loaded = _load_auth(config_root, env, project)
-    auth = None if loaded is None else loaded.table
-    engine = _engine_for_auth(engine, loaded, project)
+    """编排一次单 API 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。
+
+    ``timeout_seconds is None`` 表示请求省略了超时，可回落到环境或默认 30。
+    显式传入的数字（包括 30）优先于环境配置。
+    """
+    resolved = _resolve(
+        db,
+        project,
+        env,
+        config_root,
+        params=params,
+        timeout_seconds=timeout_seconds,
+    )
+    auth = None if resolved.auth is None else resolved.auth.table
+    engine = _engine_for_auth(engine, resolved.auth, project)
 
     try:
         request = ApiExecutionRequest(
             api_id=asset_id,
             assets_root=Path(assets_root),
-            environment=environment,
-            params=params,
-            timeout_seconds=timeout_seconds,
+            environment=resolved.environment,
+            params=resolved.params,
+            timeout_seconds=resolved.timeout_seconds,
             auth=auth,
         )
     except (TypeError, ValueError) as exc:
@@ -309,6 +309,8 @@ async def run_single_api(
                 result_payload=payload,
                 env=env,
                 commit_sha=commit_sha,
+                operator=operator,
+                resolved=resolved,
             )
             _persist(db, record)
         raise HTTPException(
@@ -341,6 +343,8 @@ async def run_single_api(
         result_payload=payload,
         env=env,
         commit_sha=commit_sha,
+        operator=operator,
+        resolved=resolved,
     )
     return _persist(db, record)
 
@@ -382,21 +386,28 @@ async def run_case(
     commit_sha: str,
     assets_root: Path,
     config_root: Path,
-    timeout_seconds: float = 30.0,
+    timeout_seconds: float | None = None,
+    operator: str | None = None,
 ) -> ExecutionRecord:
     """编排一次 Case 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。"""
-    environment = _load_environment(config_root, env, project)
-    loaded = _load_auth(config_root, env, project)
-    auth = None if loaded is None else loaded.table
-    engine = _engine_for_auth(engine, loaded, project)
+    resolved = _resolve(
+        db,
+        project,
+        env,
+        config_root,
+        params=params,
+        timeout_seconds=timeout_seconds,
+    )
+    auth = None if resolved.auth is None else resolved.auth.table
+    engine = _engine_for_auth(engine, resolved.auth, project)
 
     try:
         request = CaseExecutionRequest(
             case_id=case_id,
             assets_root=Path(assets_root),
-            environment=environment,
-            params=params,
-            timeout_seconds=timeout_seconds,
+            environment=resolved.environment,
+            params=resolved.params,
+            timeout_seconds=resolved.timeout_seconds,
             auth=auth,
         )
     except (TypeError, ValueError) as exc:
@@ -423,6 +434,8 @@ async def run_case(
                 asset_type="case",
                 env=env,
                 commit_sha=commit_sha,
+                operator=operator,
+                resolved=resolved,
             )
             _persist(db, record)
         raise HTTPException(
@@ -455,5 +468,27 @@ async def run_case(
         asset_type="case",
         env=env,
         commit_sha=commit_sha,
+        operator=operator,
+        resolved=resolved,
     )
     return _persist(db, record)
+
+
+def _resolve(
+    db: Session,
+    project: Project,
+    env: str,
+    config_root: Path,
+    *,
+    params: dict[str, Any],
+    timeout_seconds: float | None,
+) -> ResolvedRunConfig:
+    """冻结本次运行材料。配置错误在进入 Engine 之前返回，不写记录。"""
+    return resolve_run_config(
+        db,
+        project,
+        env,
+        config_root,
+        request_params=params,
+        request_timeout=timeout_seconds,
+    )

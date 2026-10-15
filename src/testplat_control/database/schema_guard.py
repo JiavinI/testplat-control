@@ -7,11 +7,22 @@ from sqlalchemy.engine import Engine
 
 OLD_PROJECT_COLUMNS = frozenset({"assets_root", "config_root"})
 REQUIRED_PROJECT_COLUMNS = frozenset({"repo", "project_key", "envs", "archived"})
-REQUIRED_EXEC_COLUMNS = frozenset({"env", "repo", "commit_sha", "operator"})
+REQUIRED_EXEC_COLUMNS = frozenset(
+    {
+        "env",
+        "repo",
+        "commit_sha",
+        "operator",
+        "config_revision",
+        "account_revisions",
+        "config_snapshot",
+    }
+)
 
 SCHEMA_HINT = (
-    "数据库表结构与 Phase 4.0 不兼容（项目已改为 Git 清单驱动）。"
-    "请删除当前 SQLite 数据库文件后重启；开发期数据可接受重建。"
+    "数据库表结构与当前 Control 不兼容（Phase 4.1a 增加了平台用户、环境、账号"
+    "以及执行记录上的配置版本列）。请显式删除当前 SQLite 数据库文件后重启。"
+    "程序不会自动清空数据库。"
 )
 
 

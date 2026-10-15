@@ -16,12 +16,14 @@ from testplat_control.api.case_schemas import (
     CaseRunRequest,
     CaseRunResponse,
 )
+from testplat_control.api.platform_session import require_user
 from testplat_control.database.models import ExecutionRecord
 from testplat_control.database.session import get_db
 from testplat_control.deps import get_engine_port
 from testplat_control.ports.engine import EnginePort
 from testplat_control.services.case_asset_service import find_case_file
 from testplat_control.services.execution_service import run_case
+from testplat_control.services.platform_auth import PlatformPrincipal
 from testplat_control.services.project_access import (
     ensure_snapshot_dirs,
     get_project,
@@ -81,10 +83,11 @@ async def run_case_asset(
     request: Request,
     db: Session = Depends(get_db),
     engine: EnginePort = Depends(get_engine_port),
+    user: PlatformPrincipal = Depends(require_user),
 ) -> CaseRunResponse:
     """串行运行一个 Case，并保存执行记录。"""
     row = get_project(db, repo, project)
-    env = require_env(row, body.env)
+    env = require_env(db, row, body.env)
     commit_sha, assets_root, config_root = ensure_snapshot_dirs(get_repos_config(request), row)
     record = await run_case(
         db=db,
@@ -96,6 +99,8 @@ async def run_case_asset(
         commit_sha=commit_sha,
         assets_root=assets_root,
         config_root=config_root,
+        timeout_seconds=body.timeout_seconds,
+        operator=user.username,
     )
     result = _load_case_result(record)
     if result is None or not record.id:
@@ -107,6 +112,8 @@ async def run_case_asset(
         duration=duration,
         result=result,
         commit_sha=record.commit_sha,
+        operator=record.operator,
+        config_revision=record.config_revision,
     )
 
 
