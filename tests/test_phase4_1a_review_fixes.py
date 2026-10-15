@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
+from sqlalchemy import event
 from sqlalchemy.orm import sessionmaker
 
 from testplat_control.config import settings
@@ -31,6 +32,7 @@ from testplat_control.services.environment_store import (
     update_account,
     update_environment,
 )
+from testplat_control.services.run_config import resolve_run_config
 
 SECRET = "pw-persist-process-91"
 ACCOUNT_SECRET = "pw-account-persist-91"
@@ -485,3 +487,110 @@ def test_r2a_create_account_and_environment_update_do_not_reuse_revision(
         assert ACCOUNT_SECRET not in repr(touched)
     finally:
         db.close()
+
+
+def _seed_gsb(factory: sessionmaker) -> None:
+    db = factory()
+    create_account(
+        db,
+        project_id="main/demo",
+        env="test",
+        account_name="gsb",
+        display_name="初始",
+        business_role=None,
+        login_profile="gsb_login",
+        credentials={"password": ACCOUNT_SECRET},
+        enabled=True,
+        operator="tester",
+    )
+    db.close()
+
+
+@pytest.mark.parametrize("preload_environment", [False, True])
+def test_r4_read_between_selects_is_not_a_mixed_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, preload_environment: bool
+) -> None:
+    """环境查询和账号查询之间提交账号修改时，不能拼出旧环境加新账号。"""
+    monkeypatch.setattr(settings, "testplat_master_key", Fernet.generate_key().decode("ascii"))
+    db_engine = make_engine(f"sqlite:///{tmp_path / 'r4.db'}")
+    init_engine_schema(db_engine)
+    factory = sessionmaker(bind=db_engine, autoflush=False)
+    _seed(factory)
+    _seed_gsb(factory)
+
+    release = threading.Event()
+    committed = threading.Event()
+    opened = False
+    errors: list[BaseException] = []
+
+    def writer() -> None:
+        try:
+            assert release.wait(5)
+            session = factory()
+            try:
+                update_account(
+                    session,
+                    project_id="main/demo",
+                    env="test",
+                    name="gsb",
+                    expected_revision=1,
+                    operator="tester",
+                    fields={"display_name": "已更新"},
+                    credentials=None,
+                )
+            finally:
+                session.close()
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+        finally:
+            committed.set()
+
+    def before_account_select(conn, cursor, statement, parameters, context, executemany) -> None:  # noqa: ANN001
+        del conn, cursor, parameters, context, executemany
+        normalized = " ".join(statement.lower().split())
+        if not normalized.startswith("select") or "test_accounts" not in normalized:
+            return
+        nonlocal opened
+        if opened:
+            return
+        opened = True
+        release.set()
+        assert committed.wait(5)
+
+    reader = factory()
+    if preload_environment:
+        preloaded = reader.query(ProjectEnvironment).filter_by(env="test").one()
+        assert int(preloaded.revision) == 2
+    project = reader.query(Project).one()
+    event.listen(db_engine, "before_cursor_execute", before_account_select)
+    worker = threading.Thread(target=writer)
+    worker.start()
+    try:
+        resolved = resolve_run_config(
+            reader,
+            project,
+            "test",
+            tmp_path,
+            request_params={},
+            request_timeout=None,
+        )
+    finally:
+        event.remove(db_engine, "before_cursor_execute", before_account_select)
+        committed.set()
+        worker.join(5)
+        reader.close()
+
+    assert not errors
+    assert opened
+    pair = (resolved.config_revision, resolved.account_revisions["gsb"])
+    assert pair in {(2, 1), (3, 2)}
+    saved = resolved.snapshot["accounts"][0]
+    assert saved["revision"] == pair[1]
+    assert resolved.snapshot["config_revision"] == pair[0]
+    assert saved["display_name"] == ("初始" if pair == (2, 1) else "已更新")
+    fresh = factory()
+    try:
+        assert int(fresh.query(ProjectEnvironment).one().revision) == 3
+        assert int(fresh.query(TestAccount).one().revision) == 2
+    finally:
+        fresh.close()

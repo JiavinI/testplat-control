@@ -11,8 +11,9 @@
 - Control 只负责：运行配置解析（Web 环境存在时用数据库；否则 Git 文件）、身份表
   （cache_scope=``{repo}:{project}:{env}``；Engine 禁止 `/`）、调用与计时、
   ``ExecutionRecord`` 持久化、HTTP 状态码映射。
-- 一次执行在调用 Engine 前，于同一事务读出并复制 environment / AuthTable / 超时 /
-  参数 / revision。然后结束该读取事务，再进入 Engine。执行记录在之后的单独事务写入。
+- 一次执行在调用 Engine 前读出同一环境版本下的 environment / AuthTable / 超时 /
+  参数 / revision 并复制成普通值。然后结束会话上的读取事务，再进入 Engine。
+  执行记录在之后的单独事务写入。
 
 记录生命周期（单次写入）
 ------------------------
