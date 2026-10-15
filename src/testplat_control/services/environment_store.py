@@ -1,6 +1,6 @@
 """项目环境与测试账号的持久化。
 
-环境名、账号名保存后不可改。账号与环境的修改在同一事务里递增环境 revision。
+环境名、账号名保存后不可改。账号的创建和更新都在同一事务里原子递增环境 revision。
 ConfigChange 只记字段名；凭据变更记「已修改」，不记原值。
 """
 
@@ -344,13 +344,6 @@ def get_account(db: Session, project_id: str, env: str, name: str) -> TestAccoun
     return row
 
 
-def _bump_environment(env_row: ProjectEnvironment, operator: str) -> int:
-    env_row.revision = int(env_row.revision) + 1
-    env_row.updated_by = operator
-    env_row.updated_at = _now()
-    return int(env_row.revision)
-
-
 def create_account(
     db: Session,
     *,
@@ -399,7 +392,7 @@ def create_account(
         updated_at=now,
     )
     db.add(row)
-    env_revision = _bump_environment(env_row, operator)
+    env_revision = _bump_environment_sql(db, env_row, operator)
     _record_change(
         db,
         operator=operator,

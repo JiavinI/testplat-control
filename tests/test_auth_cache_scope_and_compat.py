@@ -8,13 +8,14 @@ from types import SimpleNamespace
 import pytest
 
 from testplat_control.api.schemas import ExecutionAuth, parse_execution_auth
-from testplat_control.services import execution_service
+from testplat_control.database.session import SessionLocal
+from testplat_control.services.run_config import resolve_run_config
 
 
-def test_load_auth_passes_repo_project_env_as_cache_scope(
+def test_legacy_resolve_passes_repo_project_env_as_cache_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """execution_service._load_auth 拼 f"{repo}:{project}:{env}"。"""
+    """没有 Web 环境时，resolve_run_config 把 cache_scope 拼成 repo:project:env。"""
     captured: dict[str, object] = {}
 
     def fake_load_auth(config_root, env, *, environ=None, cache_scope=None):  # noqa: ANN001
@@ -23,12 +24,33 @@ def test_load_auth_passes_repo_project_env_as_cache_scope(
         captured["cache_scope"] = cache_scope
         return None
 
-    monkeypatch.setattr(execution_service, "load_auth", fake_load_auth)
-    project = SimpleNamespace(id="main/demo", repo="main", project_key="demo")
-    assert execution_service._load_auth(Path("/tmp/cfg"), "staging", project) is None  # noqa: SLF001
+    def fake_environment(config_root, env):  # noqa: ANN001
+        del config_root, env
+        return {"api_hosts": {"local": "http://127.0.0.1:9"}}
+
+    monkeypatch.setattr(
+        "testplat_control.services.run_config.load_auth",
+        fake_load_auth,
+    )
+    monkeypatch.setattr(
+        "testplat_control.services.run_config.load_project_environment",
+        fake_environment,
+    )
+    project = SimpleNamespace(id="cache-scope-only", repo="main", project_key="demo")
+    with SessionLocal() as db:
+        resolved = resolve_run_config(
+            db,
+            project,  # type: ignore[arg-type]
+            "staging",
+            Path("/tmp/cfg"),
+            request_params={},
+            request_timeout=None,
+        )
     assert captured["cache_scope"] == "main:demo:staging"
     assert captured["env"] == "staging"
     assert captured["config_root"] == "/tmp/cfg"
+    assert resolved.config_revision is None
+    assert resolved.params == {}
 
 
 def test_parse_old_seven_key_auth_defaults_new_fields() -> None:

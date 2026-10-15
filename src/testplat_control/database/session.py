@@ -15,9 +15,6 @@ from testplat_control.config import settings
 from .models import Base
 from .schema_guard import assert_schema_compatible
 
-# 与配置默认值一致，供尚未读配置的旧调用辨认内存库。实际引擎以 settings 为准。
-DATABASE_URL = "sqlite:///:memory:"
-
 
 def enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
     """打开 SQLite 外键，并在锁冲突时等待，而不是立刻失败。"""
@@ -66,14 +63,18 @@ def get_db() -> Session:
 
 
 def create_session(db_path: str) -> sessionmaker:
-    """创建数据库会话工厂。"""
-    db_engine = prepare_engine(create_engine(f"sqlite:///{db_path}", echo=False))
-    return sessionmaker(bind=db_engine, class_=Session)
+    """文件库会话工厂。与进程引擎一样走 ``make_engine``。供测试准备临时库。"""
+    return sessionmaker(
+        bind=make_engine(f"sqlite:///{db_path}"),
+        class_=Session,
+        autoflush=False,
+        autocommit=False,
+    )
 
 
-def get_engine(db_path: str):
-    """获取数据库引擎。"""
-    return prepare_engine(create_engine(f"sqlite:///{db_path}", echo=False))
+def get_engine(db_path: str) -> Engine:
+    """文件库引擎。与进程引擎一样走 ``make_engine``。"""
+    return make_engine(f"sqlite:///{db_path}")
 
 
 def init_engine_schema(db_engine: Engine) -> None:

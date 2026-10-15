@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from testplat_control.api.platform_session import require_user
 from testplat_control.api.schemas import ExecutionAuth, parse_execution_auth
-from testplat_control.database.models import ExecutionRecord, ProjectEnvironment
+from testplat_control.database.models import ExecutionRecord
 from testplat_control.database.session import get_db
 from testplat_control.deps import get_engine_port
 from testplat_control.parsers.yaml_parser import YamlParser
@@ -28,7 +28,6 @@ from testplat_control.services.project_access import (
     get_repos_config,
     require_env,
 )
-from testplat_control.services.run_config import merge_layered_params
 
 logger = logging.getLogger(__name__)
 
@@ -259,18 +258,6 @@ def asset_default_params(inputs: Any) -> dict[str, Any]:
     return found
 
 
-def stored_case_params(db: Session, project_id: str, env: str) -> dict[str, Any]:
-    """Web 环境的 case_params。还没有环境行时为空，不读 Git。"""
-    row = (
-        db.query(ProjectEnvironment)
-        .filter(ProjectEnvironment.project_id == project_id, ProjectEnvironment.env == env)
-        .first()
-    )
-    if row is None or not isinstance(row.case_params, dict):
-        return {}
-    return dict(row.case_params)
-
-
 def _validate_run_params(form: list[ParamInfo], params: dict[str, Any]) -> None:
     """按参数表单校验已经合并后的运行参数。
 
@@ -417,18 +404,13 @@ async def run_asset(
         form = build_param_infos(api.get("inputs"))
     except (ValueError, ValidationError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    effective = merge_layered_params(
-        asset_default_params(api.get("inputs")),
-        stored_case_params(db, row.id, env),
-        body.params,
-    )
-    _validate_run_params(form, effective)
+    declared_names = {item.name for item in form}
 
     record = await run_single_api(
         db=db,
         project=row,
         asset_id=asset_id,
-        params=effective,
+        params=body.params,
         engine=engine,
         env=env,
         commit_sha=commit_sha,
@@ -436,5 +418,8 @@ async def run_asset(
         config_root=config_root,
         timeout_seconds=body.timeout_seconds,
         operator=user.username,
+        declared_names=declared_names,
+        asset_defaults=asset_default_params(api.get("inputs")),
+        validate_params=lambda params: _validate_run_params(form, params),
     )
     return _run_response(record)

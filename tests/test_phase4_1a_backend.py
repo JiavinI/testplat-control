@@ -13,7 +13,7 @@ from testplat_engine import UnavailableAuth
 
 from testplat_control.adapters.fake_engine import FakeEngineAdapter
 from testplat_control.config import settings
-from testplat_control.database.session import SessionLocal
+from testplat_control.database.session import SessionLocal, get_db
 from testplat_control.deps import get_engine_port
 from testplat_control.main import app
 from testplat_control.services.auth_loader import build_auth_from_document
@@ -359,11 +359,6 @@ def test_a5_a7_frozen_config_and_overrides(
         return await original(request)
 
     fake.execute = blocking  # type: ignore[method-assign]
-    # health_check 没有 age。先清掉环境默认参数，避免合并后被当成未知参数。
-    client.put(
-        f"{base}/environments/test",
-        json={"revision": 1, "case_params": {}},
-    )
     holder: dict[str, object] = {}
 
     def runner() -> None:
@@ -377,7 +372,7 @@ def test_a5_a7_frozen_config_and_overrides(
     assert started.wait(5)
     client.put(
         f"{base}/environments/test",
-        json={"revision": 2, "api_hosts": {"local": "http://10.0.0.2"}, "timeout_seconds": 3},
+        json={"revision": 1, "api_hosts": {"local": "http://10.0.0.2"}, "timeout_seconds": 3},
     )
     release.set()
     thread.join(10)
@@ -641,6 +636,175 @@ def test_r3_merges_before_required_check(
     )
     assert still_missing.status_code == 422
     assert "email" in still_missing.json()["detail"]
+
+
+def test_r3b_shared_defaults_do_not_block_other_apis(
+    tmp_path: Path, master_key: str, fake: FakeEngineAdapter
+) -> None:
+    """环境默认值只补本接口声明的字段；请求体里的未知参数仍然拒绝。"""
+    del master_key
+    client = _client()
+    ctx = bootstrap_synced_project(client, tmp_path, repo_key="share", project_key="demo")
+    base = ctx["base"]
+    created = client.post(
+        f"{base}/environments",
+        json={
+            "env": "test",
+            "api_hosts": {"local": "http://10.0.0.5"},
+            "case_params": {"username": "from-env", "email": "env@b.c"},
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    created_run = client.post(
+        f"{base}/assets/api.user.create/run",
+        json={"env": "test", "params": {}},
+    )
+    assert created_run.status_code == 200, created_run.text
+    assert fake.calls[-1].params["username"] == "from-env"
+    assert fake.calls[-1].params["email"] == "env@b.c"
+
+    health = client.post(
+        f"{base}/assets/api.common.health_check/run",
+        json={"env": "test", "params": {}},
+    )
+    assert health.status_code == 200, health.text
+    assert "username" not in fake.calls[-1].params
+    assert "email" not in fake.calls[-1].params
+
+    unknown = client.post(
+        f"{base}/assets/api.common.health_check/run",
+        json={"env": "test", "params": {"username": "explicit"}},
+    )
+    assert unknown.status_code == 422
+    assert "unknown param 'username'" in unknown.json()["detail"]
+
+
+def test_r3a_record_uses_the_frozen_params(
+    tmp_path: Path, master_key: str, fake: FakeEngineAdapter
+) -> None:
+    """执行期间改环境后，记录版本、快照和实际参数仍是同一次冻结结果。"""
+    del master_key
+    import asyncio
+    import threading
+
+    client = _client()
+    ctx = bootstrap_synced_project(client, tmp_path, repo_key="once", project_key="demo")
+    base = ctx["base"]
+    created = client.post(
+        f"{base}/environments",
+        json={
+            "env": "test",
+            "api_hosts": {"local": "http://10.0.0.1"},
+            "case_params": {"username": "from-env", "email": "env@b.c", "age": 1},
+        },
+    )
+    assert created.status_code == 201, created.text
+    frozen_revision = created.json()["revision"]
+
+    release = threading.Event()
+    started = threading.Event()
+    original = fake.execute
+
+    async def blocking(request):  # noqa: ANN001
+        started.set()
+        for _ in range(200):
+            if release.is_set():
+                break
+            await asyncio.sleep(0.01)
+        return await original(request)
+
+    fake.execute = blocking  # type: ignore[method-assign]
+    holder: dict[str, object] = {}
+
+    def runner() -> None:
+        holder["response"] = client.post(
+            f"{base}/assets/api.user.create/run",
+            json={"env": "test", "params": {}},
+        )
+
+    thread = threading.Thread(target=runner)
+    thread.start()
+    assert started.wait(5)
+    updated = client.put(
+        f"{base}/environments/test",
+        json={
+            "revision": frozen_revision,
+            "case_params": {"username": "from-env", "email": "env@b.c", "age": 99},
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    release.set()
+    thread.join(10)
+    response = holder["response"]
+    assert response.status_code == 200, response.text  # type: ignore[attr-defined]
+    sent = fake.calls[-1]
+    assert sent.params["age"] == 1
+    assert sent.params["username"] == "from-env"
+    assert sent.params["email"] == "env@b.c"
+    detail = client.get(f"{base}/execution-records/{response.json()['record_id']}")  # type: ignore[attr-defined]
+    assert detail.status_code == 200, detail.text
+    saved = detail.json()
+    assert saved["config_revision"] == frozen_revision
+    assert saved["config_snapshot"]["config_revision"] == frozen_revision
+    assert saved["config_snapshot"]["case_params"]["age"] == 1
+
+
+def test_d1_engine_entry_does_not_hold_read_transaction(
+    tmp_path: Path, master_key: str, fake: FakeEngineAdapter
+) -> None:
+    """API 与 Case 进入 Engine 时，配置读取事务已经结束，结果仍能落库。"""
+    del master_key
+    sessions: list = []
+
+    def tracking_get_db():
+        db = SessionLocal()
+        sessions.append(db)
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = tracking_get_db
+    flags: dict[str, bool] = {}
+    original = fake.execute
+
+    async def spy(request):  # noqa: ANN001
+        open_sessions = [item for item in sessions if item.is_active]
+        flags[type(request).__name__] = bool(open_sessions) and all(
+            not item.in_transaction() for item in open_sessions
+        )
+        return await original(request)
+
+    fake.execute = spy  # type: ignore[method-assign]
+    try:
+        client = _client()
+        ctx = bootstrap_synced_project(client, tmp_path, repo_key="notx", project_key="demo")
+        base = ctx["base"]
+        assert (
+            client.post(
+                f"{base}/environments",
+                json={"env": "test", "api_hosts": {"local": "http://10.0.0.8"}},
+            ).status_code
+            == 201
+        )
+        api_run = client.post(
+            f"{base}/assets/api.common.health_check/run",
+            json={"env": "test", "params": {}},
+        )
+        case_run = client.post(
+            f"{base}/cases/case.user.login/run",
+            json={"env": "test", "params": {}},
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert api_run.status_code == 200, api_run.text
+    assert case_run.status_code == 200, case_run.text
+    assert flags["ApiExecutionRequest"] is True
+    assert flags["CaseExecutionRequest"] is True
+    assert api_run.json()["record_id"]
+    assert case_run.json()["record_id"]
 
 
 @pytest.mark.platform_auth

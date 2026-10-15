@@ -11,7 +11,8 @@
 - Control 只负责：运行配置解析（Web 环境存在时用数据库；否则 Git 文件）、身份表
   （cache_scope=``{repo}:{project}:{env}``；Engine 禁止 `/`）、调用与计时、
   ``ExecutionRecord`` 持久化、HTTP 状态码映射。
-- 一次执行在调用 Engine 前冻结 environment / AuthTable / 超时 / 参数；之后不再读库补配置。
+- 一次执行在调用 Engine 前，于同一事务读出并复制 environment / AuthTable / 超时 /
+  参数 / revision。然后结束该读取事务，再进入 Engine。执行记录在之后的单独事务写入。
 
 记录生命周期（单次写入）
 ------------------------
@@ -51,6 +52,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -69,7 +71,7 @@ from testplat_engine import (
 
 from testplat_control.database.models import ExecutionRecord, Project
 from testplat_control.ports.engine import EnginePort
-from testplat_control.services.auth_loader import AuthLoadResult, load_auth
+from testplat_control.services.auth_loader import AuthLoadResult
 from testplat_control.services.run_config import ResolvedRunConfig, resolve_run_config
 
 logger = logging.getLogger(__name__)
@@ -94,7 +96,7 @@ def map_engine_error_http_status(error: EngineError) -> int:
 
 
 def _log_engine_error(
-    *, project: Project, asset_id: str, exc: EngineError, what: str = "Engine 系统错误"
+    *, project_id: str, asset_id: str, exc: EngineError, what: str = "Engine 系统错误"
 ) -> None:
     """记录 Engine 系统错误的**安全字段**。
 
@@ -104,7 +106,7 @@ def _log_engine_error(
     logger.error(
         "%s project=%s asset=%s kind=%s stage=%s exc_type=%s cause_type=%s",
         what,
-        project.id,
+        project_id,
         asset_id,
         exc.kind,
         exc.stage,
@@ -115,7 +117,8 @@ def _log_engine_error(
 
 def _build_record(
     *,
-    project: Project,
+    project_id: str,
+    repo: str | None,
     asset_id: str,
     status: str,
     start_time: datetime,
@@ -131,7 +134,7 @@ def _build_record(
     duration = (end_time - start_time).total_seconds()
     return ExecutionRecord(
         id=str(uuid4()),
-        project_id=project.id,
+        project_id=project_id,
         asset_type=asset_type,
         asset_id=asset_id,
         status=status,
@@ -140,7 +143,7 @@ def _build_record(
         duration=duration,
         result_json=json.dumps(result_payload, ensure_ascii=False, default=str),
         env=env,
-        repo=project.repo,
+        repo=repo,
         commit_sha=commit_sha,
         operator=operator,
         config_revision=None if resolved is None else resolved.config_revision,
@@ -181,26 +184,14 @@ def _persist(db: Session, record: ExecutionRecord) -> ExecutionRecord:
     return record
 
 
-def _load_auth(config_root: Path, env: str, project: Project) -> AuthLoadResult | None:
-    """加载身份表；``cache_scope=f"{repo}/{project}:{env}"``（设计稿 §5.3）。"""
-    cache_scope = f"{project.repo}:{project.project_key}:{env}"
-    try:
-        return load_auth(
-            config_root,
-            env,
-            cache_scope=cache_scope,
-        )
-    except EngineError as exc:
-        _log_engine_error(
-            project=project,
-            asset_id="-",
-            exc=exc,
-            what=f"鉴权配置 preflight 失败 env={env}",
-        )
-        raise HTTPException(
-            status_code=map_engine_error_http_status(exc),
-            detail=exc.public_message,
-        ) from exc
+def release_read_transaction(db: Session) -> None:
+    """结束配置读取事务，把连接交还，再进入 Engine。
+
+    调用前必须已经把项目标识和冻结配置复制成普通值。回滚会使会话里的 ORM
+    对象过期；之后再读它们会新开事务。
+    """
+    if db.in_transaction():
+        db.rollback()
 
 
 def _engine_for_auth(
@@ -219,7 +210,7 @@ def _engine_for_auth(
         return binder(plugins)  # type: ignore[no-any-return]
     except EngineError as exc:
         _log_engine_error(
-            project=project,
+            project_id=project.id,
             asset_id="-",
             exc=exc,
             what="登录插件注册失败",
@@ -234,11 +225,11 @@ def _engine_for_auth(
 _INVALID_REQUEST_DETAIL = "执行请求无效：参数或环境配置不合法"
 
 
-def _log_request_build_error(*, project: Project, asset_id: str, exc: Exception) -> None:
+def _log_request_build_error(*, project_id: str, asset_id: str, exc: Exception) -> None:
     """请求 DTO 构造失败：只记 ids 与异常类型名。"""
     logger.error(
         "执行请求构造失败 project=%s asset=%s exc_type=%s",
-        project.id,
+        project_id,
         asset_id,
         type(exc).__name__,
     )
@@ -257,42 +248,54 @@ async def run_single_api(
     config_root: Path,
     timeout_seconds: float | None = None,
     operator: str | None = None,
+    declared_names: set[str] | None = None,
+    asset_defaults: dict[str, Any] | None = None,
+    validate_params: Callable[[dict[str, Any]], None] | None = None,
 ) -> ExecutionRecord:
     """编排一次单 API 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。
 
     ``timeout_seconds is None`` 表示请求省略了超时，可回落到环境或默认 30。
     显式传入的数字（包括 30）优先于环境配置。
+    ``params`` 是原始请求覆盖，不是已经合并过的环境默认值。
     """
-    resolved = _resolve(
-        db,
-        project,
-        env,
-        config_root,
-        params=params,
-        timeout_seconds=timeout_seconds,
-    )
-    auth = None if resolved.auth is None else resolved.auth.table
-    engine = _engine_for_auth(engine, resolved.auth, project)
-
+    project_id = str(project.id)
+    repo = project.repo
     try:
-        request = ApiExecutionRequest(
-            api_id=asset_id,
-            assets_root=Path(assets_root),
-            environment=resolved.environment,
-            params=resolved.params,
-            timeout_seconds=resolved.timeout_seconds,
-            auth=auth,
+        resolved = _resolve(
+            db,
+            project,
+            env,
+            config_root,
+            params=params,
+            timeout_seconds=timeout_seconds,
+            declared_names=declared_names,
+            asset_defaults=asset_defaults,
         )
-    except (TypeError, ValueError) as exc:
-        _log_request_build_error(project=project, asset_id=asset_id, exc=exc)
-        raise HTTPException(status_code=422, detail=_INVALID_REQUEST_DETAIL) from exc
+        if validate_params is not None:
+            validate_params(resolved.params)
+        auth = None if resolved.auth is None else resolved.auth.table
+        engine = _engine_for_auth(engine, resolved.auth, project)
+        try:
+            request = ApiExecutionRequest(
+                api_id=asset_id,
+                assets_root=Path(assets_root),
+                environment=resolved.environment,
+                params=resolved.params,
+                timeout_seconds=resolved.timeout_seconds,
+                auth=auth,
+            )
+        except (TypeError, ValueError) as exc:
+            _log_request_build_error(project_id=project_id, asset_id=asset_id, exc=exc)
+            raise HTTPException(status_code=422, detail=_INVALID_REQUEST_DETAIL) from exc
+    finally:
+        release_read_transaction(db)
 
     start_time = datetime.now(UTC)
     try:
         outcome = await engine.execute(request)
     except EngineError as exc:
         end_time = datetime.now(UTC)
-        _log_engine_error(project=project, asset_id=asset_id, exc=exc)
+        _log_engine_error(project_id=project_id, asset_id=asset_id, exc=exc)
         if exc.stage == "execution":
             payload = {
                 "status": "failed",
@@ -301,7 +304,8 @@ async def run_single_api(
                 "error": exc.to_dict(),
             }
             record = _build_record(
-                project=project,
+                project_id=project_id,
+                repo=repo,
                 asset_id=asset_id,
                 status="failed",
                 start_time=start_time,
@@ -320,7 +324,7 @@ async def run_single_api(
     except Exception as exc:
         logger.error(
             "未预期执行异常 project=%s asset=%s exc_type=%s",
-            project.id,
+            project_id,
             asset_id,
             type(exc).__name__,
         )
@@ -335,7 +339,8 @@ async def run_single_api(
 
     payload = outcome.to_dict()
     record = _build_record(
-        project=project,
+        project_id=project_id,
+        repo=repo,
         asset_id=asset_id,
         status=outcome.status,
         start_time=start_time,
@@ -390,42 +395,47 @@ async def run_case(
     operator: str | None = None,
 ) -> ExecutionRecord:
     """编排一次 Case 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。"""
-    resolved = _resolve(
-        db,
-        project,
-        env,
-        config_root,
-        params=params,
-        timeout_seconds=timeout_seconds,
-    )
-    auth = None if resolved.auth is None else resolved.auth.table
-    engine = _engine_for_auth(engine, resolved.auth, project)
-
+    project_id = str(project.id)
+    repo = project.repo
     try:
-        request = CaseExecutionRequest(
-            case_id=case_id,
-            assets_root=Path(assets_root),
-            environment=resolved.environment,
-            params=resolved.params,
-            timeout_seconds=resolved.timeout_seconds,
-            auth=auth,
+        resolved = _resolve(
+            db,
+            project,
+            env,
+            config_root,
+            params=params,
+            timeout_seconds=timeout_seconds,
         )
-    except (TypeError, ValueError) as exc:
-        _log_request_build_error(project=project, asset_id=case_id, exc=exc)
-        raise HTTPException(status_code=422, detail=_INVALID_REQUEST_DETAIL) from exc
+        auth = None if resolved.auth is None else resolved.auth.table
+        engine = _engine_for_auth(engine, resolved.auth, project)
+        try:
+            request = CaseExecutionRequest(
+                case_id=case_id,
+                assets_root=Path(assets_root),
+                environment=resolved.environment,
+                params=resolved.params,
+                timeout_seconds=resolved.timeout_seconds,
+                auth=auth,
+            )
+        except (TypeError, ValueError) as exc:
+            _log_request_build_error(project_id=project_id, asset_id=case_id, exc=exc)
+            raise HTTPException(status_code=422, detail=_INVALID_REQUEST_DETAIL) from exc
+    finally:
+        release_read_transaction(db)
 
     start_time = datetime.now(UTC)
     try:
         outcome = await engine.execute(request)
     except EngineError as exc:
         end_time = datetime.now(UTC)
-        _log_engine_error(project=project, asset_id=case_id, exc=exc)
+        _log_engine_error(project_id=project_id, asset_id=case_id, exc=exc)
         if exc.stage == "execution":
             payload = _system_error_case_payload(
                 exc, case_id=case_id, elapsed_seconds=(end_time - start_time).total_seconds()
             )
             record = _build_record(
-                project=project,
+                project_id=project_id,
+                repo=repo,
                 asset_id=case_id,
                 status="failed",
                 start_time=start_time,
@@ -445,7 +455,7 @@ async def run_case(
     except Exception as exc:
         logger.error(
             "未预期执行异常 project=%s case=%s exc_type=%s",
-            project.id,
+            project_id,
             case_id,
             type(exc).__name__,
         )
@@ -459,7 +469,8 @@ async def run_case(
         raise HTTPException(status_code=500, detail="Engine returned an invalid outcome")
 
     record = _build_record(
-        project=project,
+        project_id=project_id,
+        repo=repo,
         asset_id=case_id,
         status=outcome.status,
         start_time=start_time,
@@ -482,6 +493,8 @@ def _resolve(
     *,
     params: dict[str, Any],
     timeout_seconds: float | None,
+    declared_names: set[str] | None = None,
+    asset_defaults: dict[str, Any] | None = None,
 ) -> ResolvedRunConfig:
     """冻结本次运行材料。配置错误在进入 Engine 之前返回，不写记录。"""
     return resolve_run_config(
@@ -491,4 +504,6 @@ def _resolve(
         config_root,
         request_params=params,
         request_timeout=timeout_seconds,
+        declared_names=declared_names,
+        asset_defaults=asset_defaults,
     )

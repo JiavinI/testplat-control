@@ -1037,8 +1037,8 @@ def load_auth(
         config_root: 项目配置根目录。
         env: 环境名（调用方已由 ``load_project_environment`` 校验非空）。
         environ: 秘密来源；缺省为 ``os.environ``（测试注入假值）。
-        cache_scope: 跨执行缓存作用域（3.3d）；由 ``execution_service`` 传
-            ``f"{project.id}:{project.env}"``；``None`` → 不跨执行缓存。
+        cache_scope: 跨执行缓存作用域（3.3d）。当前由 ``resolve_run_config`` 传入
+            ``{repo}:{project}:{env}``；``None`` → 不跨执行缓存。
             Control 只传作用域，**不做**任何缓存实现。
 
     Returns:

@@ -45,10 +45,10 @@ def _child_env(db_path: Path, key: str) -> dict[str, str]:
 
 
 def _run_child(script: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """子进程沿用当前工作目录。脚本路径是绝对路径，不依赖某台机器的检出位置。"""
     return subprocess.run(
         [sys.executable, str(script)],
         env=env,
-        cwd="/workspace",
         capture_output=True,
         text=True,
         timeout=60,
@@ -311,5 +311,177 @@ def test_r2_concurrent_account_update_conflicts(
         assert int(env_row.revision) == 3
         assert len(updates) == 1
         assert ACCOUNT_SECRET not in repr(updates)
+    finally:
+        db.close()
+
+
+def _revisions_are_contiguous(start: int, revisions: list[int]) -> bool:
+    return revisions == list(range(start, start + len(revisions)))
+
+
+def test_r2a_concurrent_account_creates_each_bump_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """两个不同账号并发创建都成功，环境 revision 各加一，修改记录不复用版本。"""
+    monkeypatch.setattr(settings, "testplat_master_key", Fernet.generate_key().decode("ascii"))
+    engine = make_engine(f"sqlite:///{tmp_path / 'create.db'}")
+    init_engine_schema(engine)
+    factory = sessionmaker(bind=engine, autoflush=False)
+    _seed(factory)
+
+    recorded: list[tuple] = []
+    barrier = threading.Barrier(2)
+    real_get = environment_store.get_environment
+
+    def blocking_get(db, project_id, env):  # noqa: ANN001
+        row = real_get(db, project_id, env)
+        barrier.wait(5)
+        return row
+
+    environment_store.get_environment = blocking_get
+    lock = threading.Lock()
+
+    def worker(account_name: str) -> None:
+        session = factory()
+        try:
+            create_account(
+                session,
+                project_id="main/demo",
+                env="test",
+                account_name=account_name,
+                display_name=account_name,
+                business_role=None,
+                login_profile="gsb_login",
+                credentials={"password": ACCOUNT_SECRET},
+                enabled=True,
+                operator="tester",
+            )
+            with lock:
+                recorded.append(("ok", account_name))
+        except HTTPException as exc:
+            with lock:
+                recorded.append(("err", exc.status_code))
+        finally:
+            session.close()
+
+    threads = [
+        threading.Thread(target=worker, args=("buyer",)),
+        threading.Thread(target=worker, args=("seller",)),
+    ]
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(10)
+    finally:
+        environment_store.get_environment = real_get
+
+    assert sorted(recorded) == [("ok", "buyer"), ("ok", "seller")]
+    db = factory()
+    try:
+        env_row = db.query(ProjectEnvironment).one()
+        creates = (
+            db.query(ConfigChange)
+            .filter(ConfigChange.object_type == "account", ConfigChange.action == "create")
+            .order_by(ConfigChange.revision)
+            .all()
+        )
+        assert int(env_row.revision) == 3
+        assert [int(item.revision) for item in creates] == [2, 3]
+        assert len({item.object_name for item in creates}) == 2
+        assert ACCOUNT_SECRET not in repr(creates)
+    finally:
+        db.close()
+
+
+def test_r2a_create_account_and_environment_update_do_not_reuse_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """创建账号与环境更新并发时，成功写入的环境版本不重复、不倒退。"""
+    monkeypatch.setattr(settings, "testplat_master_key", Fernet.generate_key().decode("ascii"))
+    engine = make_engine(f"sqlite:///{tmp_path / 'mix.db'}")
+    init_engine_schema(engine)
+    factory = sessionmaker(bind=engine, autoflush=False)
+    _seed(factory)
+
+    recorded: list[tuple] = []
+    barrier = threading.Barrier(2)
+    real_get = environment_store.get_environment
+
+    def blocking_get(db, project_id, env):  # noqa: ANN001
+        row = real_get(db, project_id, env)
+        barrier.wait(5)
+        return row
+
+    environment_store.get_environment = blocking_get
+    lock = threading.Lock()
+
+    def create_worker() -> None:
+        session = factory()
+        try:
+            create_account(
+                session,
+                project_id="main/demo",
+                env="test",
+                account_name="buyer",
+                display_name="买家",
+                business_role=None,
+                login_profile="gsb_login",
+                credentials={"password": ACCOUNT_SECRET},
+                enabled=True,
+                operator="tester",
+            )
+            with lock:
+                recorded.append(("ok", "create"))
+        except HTTPException as exc:
+            with lock:
+                recorded.append(("err", "create", exc.status_code))
+        finally:
+            session.close()
+
+    def update_worker() -> None:
+        session = factory()
+        try:
+            update_environment(
+                session,
+                project_id="main/demo",
+                env="test",
+                expected_revision=1,
+                operator="tester",
+                fields={"timeout_seconds": 8.0},
+            )
+            with lock:
+                recorded.append(("ok", "update"))
+        except HTTPException as exc:
+            with lock:
+                recorded.append(("err", "update", exc.status_code))
+        finally:
+            session.close()
+
+    threads = [threading.Thread(target=create_worker), threading.Thread(target=update_worker)]
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(10)
+    finally:
+        environment_store.get_environment = real_get
+
+    assert ("ok", "create") in recorded
+    assert all(item[0] == "ok" or (item[0] == "err" and item[2] == 409) for item in recorded)
+    db = factory()
+    try:
+        env_row = db.query(ProjectEnvironment).one()
+        touched = (
+            db.query(ConfigChange)
+            .filter(ConfigChange.revision > 1)
+            .order_by(ConfigChange.revision)
+            .all()
+        )
+        revisions = [int(item.revision) for item in touched]
+        final = int(env_row.revision)
+        assert final == 1 + len(touched)
+        assert _revisions_are_contiguous(2, revisions)
+        assert ACCOUNT_SECRET not in repr(touched)
     finally:
         db.close()

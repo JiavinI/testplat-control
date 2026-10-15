@@ -35,12 +35,20 @@ async def get_project_detail(
     return _with_envs(db, row)
 
 
-@router.get("/projects/{project_id:path}", response_model=ProjectResponse)
+@router.get(
+    "/projects/{project_id:path}",
+    response_model=ProjectResponse,
+    deprecated=True,
+)
 async def get_project_by_id(
     project_id: str,
     db: Session = Depends(get_db),
 ) -> ProjectResponse:
-    """兼容扁平 ID ``{repo}/{project}`` 的详情读取。"""
+    """已废弃的只读别名。请改用 ``GET /repos/{repo}/projects/{project}``。
+
+    保留到 Phase 4.1a 集成验收确认没有仓外调用方后删除。
+    ``GET /projects`` 列表不是这个别名，继续使用。
+    """
     row = db.query(Project).filter(Project.id == project_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="Project not found")

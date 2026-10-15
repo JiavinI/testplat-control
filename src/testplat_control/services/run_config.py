@@ -67,6 +67,28 @@ def merge_layered_params(
     return merged
 
 
+def params_for_run(
+    case_params: dict[str, Any],
+    request_params: dict[str, Any],
+    *,
+    declared_names: set[str] | None = None,
+    asset_defaults: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """合成本次要交给 Engine 的参数。
+
+    单接口传入 ``declared_names`` 时，只取该接口声明过的环境默认值和资产默认值。
+    请求体里的键全部保留，以便调用方拒绝显式未知参数。
+    Case 不传 ``declared_names``：环境默认值整份交给 Engine，由 Engine 再叠 case 资产参数。
+    """
+    if declared_names is None:
+        return merge_params(case_params, request_params)
+    defaults = {
+        key: value for key, value in (asset_defaults or {}).items() if key in declared_names
+    }
+    applicable = {key: value for key, value in case_params.items() if key in declared_names}
+    return merge_layered_params(defaults, applicable, request_params)
+
+
 def effective_timeout(request_timeout: float | None, env_timeout: float | None) -> float:
     """请求显式值优先于环境值，再否则 30。None 表示省略，不是显式 30。"""
     if request_timeout is not None:
@@ -84,15 +106,25 @@ def resolve_run_config(
     *,
     request_params: dict[str, Any],
     request_timeout: float | None,
+    declared_names: set[str] | None = None,
+    asset_defaults: dict[str, Any] | None = None,
 ) -> ResolvedRunConfig:
-    """在一次数据库读取里冻结环境、账号和版本。"""
+    """在同一次数据库事务里冻结环境、账号、版本和参数。调用方读完后结束该事务。"""
     web = (
         db.query(ProjectEnvironment)
         .filter(ProjectEnvironment.project_id == project.id, ProjectEnvironment.env == env)
         .first()
     )
     if web is None:
-        return _legacy(project, env, config_root, request_params, request_timeout)
+        return _legacy(
+            project,
+            env,
+            config_root,
+            request_params,
+            request_timeout,
+            declared_names,
+            asset_defaults,
+        )
     if not web.enabled:
         raise HTTPException(status_code=422, detail=f"环境已停用: {env}")
     accounts = (
@@ -124,7 +156,12 @@ def resolve_run_config(
     )
     timeout = effective_timeout(request_timeout, web.timeout_seconds)
     case_params = dict(web.case_params or {})
-    params = merge_params(case_params, request_params)
+    params = params_for_run(
+        case_params,
+        request_params,
+        declared_names=declared_names,
+        asset_defaults=asset_defaults,
+    )
     api_hosts = dict(web.api_hosts or {})
     account_revisions = {item.account_name: int(item.revision) for item in accounts}
     snapshot = _snapshot(
@@ -155,6 +192,8 @@ def _legacy(
     config_root: Path,
     request_params: dict[str, Any],
     request_timeout: float | None,
+    declared_names: set[str] | None = None,
+    asset_defaults: dict[str, Any] | None = None,
 ) -> ResolvedRunConfig:
     """没有 Web 环境行时沿用 Git 文件。平台账号路径不会进入这里。"""
     from testplat_engine import EngineError
@@ -169,12 +208,18 @@ def _legacy(
     except EngineError as exc:
         raise HTTPException(status_code=422, detail=exc.public_message) from exc
     timeout = effective_timeout(request_timeout, None)
+    params = params_for_run(
+        {},
+        request_params,
+        declared_names=declared_names,
+        asset_defaults=asset_defaults,
+    )
     hosts = environment.get("api_hosts")
     safe_hosts = dict(hosts) if isinstance(hosts, dict) else {}
     return ResolvedRunConfig(
         environment=environment,
         auth=loaded,
-        params=dict(request_params),
+        params=params,
         timeout_seconds=timeout,
         config_revision=None,
         account_revisions={},

@@ -208,8 +208,9 @@ class CaseAssetDetailResponse(BaseModel):
 class CaseExecutionRecordDetailResponse(BaseModel):
     """Case 历史详情：与通用执行记录详情同源，但 ``result`` 有明确 schema。
 
-    通用端点 ``/projects/{id}/execution-records/{record_id}`` 对 Case 记录仍然可用且不变
-    （``result`` 为未约束对象，``request``/``response`` 为 null）；本端点供前端稳定消费步骤数据。
+    通用端点是 ``GET /repos/{repo}/projects/{project}/execution-records/{record_id}``
+    （``result`` 为未约束对象）。本端点 ``.../case-execution-records/{record_id}``
+    供前端稳定消费步骤数据。旧的 ``/projects/{id}/execution-records/...`` 已移除。
     """
 
     id: str = Field(..., description="记录 ID")

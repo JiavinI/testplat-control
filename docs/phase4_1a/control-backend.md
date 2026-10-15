@@ -65,7 +65,7 @@ OpenAPI：`openapi-phase4_1a.json`。相对 Phase 4.0 的路径与 schema 摘要
 
 每个启用账号按自己的 `login_profile` 解析，AuthTable 的身份名是账号名（例如 `gsb`）。多个账号不合并成一个全局秘密字典。停用账号放进表中作为 `UnavailableAuth`，避免旧登录缓存绕过停用。未引用且未配全的账号不阻断本次运行；被引用的缺失或停用在预检失败，不回退 `TESTPLAT_GSB_*`。
 
-参数浅层覆盖：请求 `params` > 环境 `case_params` > case 资产 `params`。单接口参数表单仍先校验**请求体**里的必填项和未知字段，环境默认值不能代替请求里缺的必填项。
+参数在同一次冻结里合成，不再读第二次环境。单接口：请求 `params` > 该接口声明过的环境 `case_params` > 资产 `inputs.default`。环境里其他接口的默认键不会使本接口报未知参数；请求体显式给出的未知键仍然 422。环境默认值可以补上该接口的必填项。Case：请求 `params` > 环境 `case_params`，case 资产参数仍由 Engine 再往下叠。
 
 `api_hosts` 在已有 Web 环境时只来自该环境行。`cache_scope` 仍是 `{repo}:{project}:{env}`。
 
@@ -73,7 +73,7 @@ OpenAPI：`openapi-phase4_1a.json`。相对 Phase 4.0 的路径与 schema 摘要
 
 ## revision 与执行记录
 
-一次运行在调用 Engine 之前冻结环境、账号版本和非秘密快照。执行记录复用 `operator`（当前平台用户名），并写入：
+一次运行在同一个数据库事务里读出环境、账号和版本，复制成普通值后结束该事务，再调用 Engine。执行记录在之后的单独事务写入。进行中的运行不再回库补配置。执行记录复用 `operator`（当前平台用户名），并写入：
 
 - `config_revision`
 - `account_revisions`（账号名 → 该账号 revision）
@@ -87,9 +87,9 @@ OpenAPI：`openapi-phase4_1a.json`。相对 Phase 4.0 的路径与 schema 摘要
 
 不引入 Alembic。`create_all` 只补空库。已有库若 `execution_records` 缺少 `config_revision` / `account_revisions` / `config_snapshot`，或仍是 Phase 4.0 之前的项目表，启动抛出 `IncompatibleSchemaError`，提示显式删除 SQLite 文件。程序不会自动清空。
 
-环境 PUT 与账号 PUT 都用带预期 revision 的条件更新。没有更新到行则 409，并回滚这次的版本和修改记录。账号保存成功时，同一事务原子递增环境 revision。
+环境 PUT 与账号 PUT 都用带预期 revision 的条件更新。没有更新到行则 409，并回滚这次的版本和修改记录。账号创建和账号更新成功时，同一事务用 `revision = revision + 1` 原子递增环境 revision，修改记录使用这次得到的版本，不复用、不倒退。
 
-单接口运行先按「请求 params > 环境 case_params > 资产 inputs.default」合成参数，再按原参数表单校验。环境里的必填值可以补上省略的请求字段；合并后仍缺的必填项返回 422。
+单接口在这一份冻结结果上合成参数并校验：请求 params > 本接口声明的环境 case_params > 资产 inputs.default。环境里的必填值可以补上省略的请求字段；合并后仍缺的必填项返回 422。其他接口的环境默认键不参与本接口校验。
 
 请求体校验失败只返回 `type` / `loc` / `msg`，不返回 `input` 或 `ctx`。
 
@@ -106,4 +106,14 @@ OpenAPI：`openapi-phase4_1a.json`。相对 Phase 4.0 的路径与 schema 摘要
 
 - 项目还没有 Web 环境时，运行配置仍来自 Git，而不是「api_hosts 只能来自数据库」。这是为了让 Phase 4.0 的既有测试和历史 auth 夹具继续通过。
 - `_profiles.yaml` 里的 `connections` 目前不会并入合并后的 AuthTable。本批登录流程不依赖连接配置。
-- 环境与账号更新用「预期 revision」条件 UPDATE。受影响行数不是 1 则 409，并回滚本次版本与修改记录。账号更新在同一事务里原子递增环境 revision。
+- 环境与账号更新用「预期 revision」条件 UPDATE。受影响行数不是 1 则 409，并回滚本次版本与修改记录。账号创建和更新都在同一事务里原子递增环境 revision。
+
+## 数据库与兼容路径
+
+未设置 `DATABASE_URL` 时使用 `sqlite:///:memory:`。进程退出后数据消失。要在重启后仍能读到用户、环境和账号，启动前设置 `sqlite:///绝对路径`，并固定 `TESTPLAT_MASTER_KEY`。备份时同时保留数据库文件和主密钥。不兼容的旧表只提示显式删除文件，程序不会自己清空。团队共用前再决定持久化默认值或未配置时拒绝启动；本批不引入迁移工具。
+
+`GET /projects/{project_id}` 是扁平项目详情的只读别名，OpenAPI 已标 `deprecated`。替代路径是 `GET /repos/{repo}/projects/{project}`。`GET /projects` 列表继续保留。该别名保留到 Phase 4.1a 集成验收确认没有仓外调用方之后删除，新增调用不要使用它。
+
+项目还没有 Web 环境时，运行配置来自 Git 环境文件和历史 `load_auth`（会读 `TESTPLAT_*`）。这是显式的兼容模式：判断条件只有「该项目是否已有 Web 环境行」，不是猜测。正常 Web 使用以数据库为准。`auth_loader.build_auth_from_document` 继续给 Web 登录流程用，不删除。退出条件：集成阶段的 Web 资产和新矩阵成为门禁后，把 Git 回退收成显式兼容开关或移除；在此之前不删这条路径。
+
+`scripts/phase4_0_matrix.py`、`scripts/phase4_0_e2e_real_assets.py` 以及 auth / login 矩阵目前没有平台登录，直接运行会未登录。登录迁移不在本批。历史阶段的 OpenAPI 与文档保持原样，只代表当时的版本。
