@@ -1,0 +1,142 @@
+{
+  "rows": [
+    {
+      "id": "L31",
+      "item": "§6-31",
+      "desc": "缓存命中：两次执行仅 1 次登录；session_source=cache",
+      "pass": true,
+      "login_count": 1,
+      "session_source": "cache"
+    },
+    {
+      "id": "L32",
+      "item": "§6-32",
+      "desc": "缓存命中路径：业务回显 token → ***（H1）",
+      "pass": true,
+      "echo_x_token": "***"
+    },
+    {
+      "id": "L33",
+      "item": "§6-33",
+      "desc": "短 ttl/expires_from=32 等待 3s 后重新登录",
+      "pass": true,
+      "ttl32_logins": 2,
+      "expires32_logins": 2,
+      "wait_s": 3
+    },
+    {
+      "id": "L34",
+      "item": "§6-34",
+      "desc": "R2：无 ttl/expires_from → 每次执行都登录",
+      "pass": true,
+      "login_count": 2
+    },
+    {
+      "id": "L35",
+      "item": "§6-35",
+      "desc": "R5：session:cookie 身份每次执行都登录",
+      "pass": true,
+      "login_count": 2
+    },
+    {
+      "id": "L36",
+      "item": "§6-36",
+      "desc": "指纹：改密码/改 path → 重新登录",
+      "pass": true,
+      "password_fp": true,
+      "path_fp": true
+    },
+    {
+      "id": "L37",
+      "item": "§6-37",
+      "desc": "作用域隔离：两项目各登录一次，互不命中",
+      "pass": true,
+      "login_count": 2,
+      "projects": [
+        "cache-a",
+        "cache-b"
+      ]
+    },
+    {
+      "id": "L38",
+      "item": "§6-38",
+      "desc": "401 重发成功：吊销→重登→200；POST 两次业务",
+      "pass": true,
+      "reauthenticated": true,
+      "business_posts": 2,
+      "reauth_logins": 1
+    },
+    {
+      "id": "L39",
+      "item": "§6-39",
+      "desc": "401 两次：断言失败；2 次业务 + 1 次重登",
+      "pass": true,
+      "business": 2,
+      "reauth_logins": 1
+    },
+    {
+      "id": "L40",
+      "item": "§6-40",
+      "desc": "reauth_on_401:false → 不重发，401 直接断言",
+      "pass": true,
+      "business": 1,
+      "reauthenticated": false
+    },
+    {
+      "id": "L41",
+      "item": "§6-41",
+      "desc": "重登失败 → login_failed；reauthenticated=true",
+      "pass": true,
+      "kind": "login_failed",
+      "reauthenticated": true
+    },
+    {
+      "id": "L42",
+      "item": "§6-42",
+      "desc": "缓存作废后命中重登新 token，不再登录",
+      "pass": true,
+      "session_source": "cache",
+      "extra_logins": 0
+    },
+    {
+      "id": "L43",
+      "item": "§6-43",
+      "desc": "并发冷启动：目标服务只收到 1 次登录",
+      "pass": true,
+      "login_count": 1,
+      "sources": [
+        "cache",
+        "login"
+      ]
+    },
+    {
+      "id": "L44",
+      "item": "§6-44",
+      "desc": "泄密：动态目标含吊销 token；日志无 fingerprint/scope",
+      "pass": true,
+      "dynamic_tokens": 40,
+      "dynamic_issued": 68,
+      "cache_log_lines": 118
+    },
+    {
+      "id": "L45",
+      "item": "§6-45",
+      "desc": "3.3a/b/c 矩阵与 Phase 3 回归不变（shell 对账）",
+      "pass": true,
+      "deferred_to_shell": true,
+      "auth_report": "28/28",
+      "login_report": "25/25",
+      "vcode_report": "12/12",
+      "phase3_report": "pending"
+    }
+  ],
+  "projects": {
+    "cache": "cache",
+    "cache-a": "cache-a",
+    "cache-b": "cache-b",
+    "cache-cold": "cache-cold"
+  },
+  "passed": 15,
+  "total": 15,
+  "section": "phase3_3d_cache_§6.31-45"
+}

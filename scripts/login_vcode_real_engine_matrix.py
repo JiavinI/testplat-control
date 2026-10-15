@@ -87,7 +87,9 @@ _WRITE_COMMANDS = frozenset(
 
 BACKEND = os.environ.get("MATRIX_BACKEND_URL", "http://127.0.0.1:8000")
 TARGET = os.environ["MATRIX_TARGET_URL"]
-ASSETS_ROOT = os.environ["MATRIX_LOGIN_ASSETS_ROOT"]
+ASSETS_ROOT = os.environ.get("MATRIX_LOGIN_ASSETS_ROOT", "")
+REPO = os.environ.get("MATRIX_REPO", "matrix")
+ENV = os.environ.get("MATRIX_ENV", "test")
 OUT_DIR = Path(os.environ["MATRIX_VCODE_OUT_DIR"])
 ISSUED_PATH = Path(os.environ.get("MATRIX_ISSUED_SECRETS_PATH", ""))
 REDIS_HOST = os.environ.get("MATRIX_REDIS_HOST", "127.0.0.1")
@@ -164,23 +166,18 @@ class Matrix:
 
     def project(self, root: str) -> str:
         if root not in self.projects:
-            resp = self.client.post(
-                f"{BACKEND}/projects",
-                json={
-                    "name": f"vcode-matrix-{root}-{os.getpid()}",
-                    "env": "test",
-                    "assets_root": ASSETS_ROOT,
-                    "config_root": ROOTS[root],
-                },
-            )
+            resp = self.client.get(f"{BACKEND}/repos/{REPO}/projects/{root}")
             resp.raise_for_status()
-            self.projects[root] = resp.json()["id"]
+            self.projects[root] = root
         return self.projects[root]
 
+    def _base(self, root: str) -> str:
+        return f"{BACKEND}/repos/{REPO}/projects/{self.project(root)}"
+
     def run_api(self, root: str, asset: str, params: dict | None = None) -> httpx.Response:
-        pid = self.project(root)
         return self.client.post(
-            f"{BACKEND}/projects/{pid}/assets/{asset}/run", json={"params": params or {}}
+            f"{self._base(root)}/assets/{asset}/run",
+            json={"params": params or {}, "env": ENV},
         )
 
     def reset_target(self) -> None:

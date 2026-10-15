@@ -109,7 +109,7 @@ function renderPanel(caseId = 'case.demo.create_then_get') {
     <ConfigProvider theme={{ token: { motion: false } }}>
       <AntApp>
         <QueryClientProvider client={client}>
-          <CaseExecutionPanel projectId="p1" caseId={caseId} />
+          <CaseExecutionPanel projectId="main/demo" caseId={caseId} env="test" />
         </QueryClientProvider>
       </AntApp>
     </ConfigProvider>,
@@ -136,7 +136,8 @@ describe('CaseExecutionPanel', () => {
     await user.click(screen.getByRole('button', { name: '执行 Case' }))
     expect(await screen.findByTestId('case-result-view')).toBeInTheDocument()
     expect(screen.getAllByText(/成功（success）/).length).toBeGreaterThan(0)
-    expect(runCase).toHaveBeenCalledWith('p1', 'case.demo.create_then_get', {
+    expect(runCase).toHaveBeenCalledWith('main/demo', 'case.demo.create_then_get', {
+      env: 'test',
       params: {},
     })
     // 未点开步骤时，折叠面板内 JSON 可能仍在 DOM；以可点开的 header 为准
@@ -181,7 +182,7 @@ describe('CaseExecutionPanel', () => {
     ])
     getCaseExecutionRecord.mockResolvedValue({
       id: 'rec-sys',
-      project_id: 'p1',
+      project_id: 'main/demo',
       asset_id: 'case.demo.create_then_get',
       asset_type: 'case',
       status: 'failed',
@@ -224,7 +225,7 @@ describe('CaseExecutionPanel', () => {
 
     await waitFor(() => {
       expect(listExecutionRecords).toHaveBeenCalledWith(
-        'p1',
+        'main/demo',
         expect.objectContaining({
           asset_type: 'case',
           asset_id: 'case.demo.create_then_get',

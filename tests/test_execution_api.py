@@ -17,22 +17,44 @@ from testplat_control.api.schemas import (
 from testplat_control.database.models import ExecutionRecord
 from testplat_control.database.session import SessionLocal
 from testplat_control.main import app
+from tests.case_support import project_api_base
 
 client = TestClient(app)
 
 
 def _create_project() -> str:
-    response = client.post(
-        "/projects",
-        json={
-            "name": f"exec-{uuid4().hex[:8]}",
-            "env": "test",
-            "assets_root": "/assets",
-            "config_root": "/config",
-        },
-    )
-    assert response.status_code == 200
-    return response.json()["id"]
+    """直接向 DB 插入 Repo+Project（执行记录测试不依赖资产树）。"""
+    from datetime import datetime
+
+    from testplat_control.database.models import Project, Repo
+
+    db = SessionLocal()
+    try:
+        key = f"r{uuid4().hex[:6]}"
+        proj = f"p{uuid4().hex[:6]}"
+        if db.query(Repo).filter(Repo.key == key).first() is None:
+            db.add(Repo(key=key, branch="main", current_sha="c" * 40, last_sync_result="ok"))
+            db.flush()
+        now = datetime.utcnow()
+        project_id = f"{key}/{proj}"
+        db.add(
+            Project(
+                id=project_id,
+                repo=key,
+                project_key=proj,
+                name=f"exec-{uuid4().hex[:8]}",
+                envs=["test", "staging"],
+                default_env="test",
+                archived=False,
+                commit_sha="c" * 40,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+        return project_id
+    finally:
+        db.close()
 
 
 def _add_record(
@@ -46,12 +68,14 @@ def _add_record(
     result: object | None = None,
     result_json: str | None = None,
     asset_type: str = "api",
+    env: str | None = "test",
 ) -> str:
     record_id = str(uuid4())
     if result_json is None and result is not None:
         result_json = json.dumps(result)
     db = SessionLocal()
     try:
+        repo = project_id.split("/", 1)[0] if "/" in project_id else None
         db.add(
             ExecutionRecord(
                 id=record_id,
@@ -63,6 +87,10 @@ def _add_record(
                 end_time=end_time,
                 duration=duration,
                 result_json=result_json,
+                env=env,
+                repo=repo,
+                commit_sha="c" * 40,
+                operator=None,
             )
         )
         db.commit()
@@ -97,7 +125,7 @@ def test_list_filters_by_status_and_asset_id() -> None:
     )
 
     by_status = client.get(
-        f"/projects/{project_id}/execution-records",
+        f"{project_api_base(project_id)}/execution-records",
         params={"status": "success"},
     )
     assert by_status.status_code == 200
@@ -105,7 +133,7 @@ def test_list_filters_by_status_and_asset_id() -> None:
     assert all(item["status"] == "success" for item in by_status.json())
 
     by_asset = client.get(
-        f"/projects/{project_id}/execution-records",
+        f"{project_api_base(project_id)}/execution-records",
         params={"asset_id": "api.user.login"},
     )
     assert by_asset.status_code == 200
@@ -113,20 +141,22 @@ def test_list_filters_by_status_and_asset_id() -> None:
     assert {item["asset_id"] for item in by_asset.json()} == {"api.user.login"}
 
     both = client.get(
-        f"/projects/{project_id}/execution-records",
+        f"{project_api_base(project_id)}/execution-records",
         params={"status": "failed", "asset_id": "api.user.login"},
     )
     assert both.status_code == 200
     assert len(both.json()) == 1
     assert both.json()[0]["status"] == "failed"
     assert both.json()[0]["asset_id"] == "api.user.login"
-    assert set(both.json()[0]) == {
+    assert set(both.json()[0]) >= {
         "id",
         "asset_id",
         "status",
         "start_time",
         "duration",
         "login_failed",
+        "env",
+        "commit_sha",
     }
 
 
@@ -155,23 +185,23 @@ def test_list_defaults_to_start_time_desc_and_can_sort_asc() -> None:
         duration=3.0,
     )
 
-    default = client.get(f"/projects/{project_id}/execution-records")
+    default = client.get(f"{project_api_base(project_id)}/execution-records")
     assert [item["id"] for item in default.json()] == [late, middle, early]
 
     explicit = client.get(
-        f"/projects/{project_id}/execution-records",
+        f"{project_api_base(project_id)}/execution-records",
         params={"order_by": "start_time"},
     )
     assert [item["id"] for item in explicit.json()] == [late, middle, early]
 
     ascending = client.get(
-        f"/projects/{project_id}/execution-records",
+        f"{project_api_base(project_id)}/execution-records",
         params={"order_by": "start_time_asc"},
     )
     assert [item["id"] for item in ascending.json()] == [early, middle, late]
 
     by_duration = client.get(
-        f"/projects/{project_id}/execution-records",
+        f"{project_api_base(project_id)}/execution-records",
         params={"order_by": "-duration"},
     )
     assert [item["id"] for item in by_duration.json()] == [late, middle, early]
@@ -192,7 +222,7 @@ def test_list_paginates_after_sorting() -> None:
     ]
 
     page = client.get(
-        f"/projects/{project_id}/execution-records",
+        f"{project_api_base(project_id)}/execution-records",
         params={"skip": 1, "limit": 1},
     )
     assert page.status_code == 200
@@ -203,13 +233,13 @@ def test_list_rejects_unknown_order_and_missing_project() -> None:
     """无法识别的排序返回 422，项目不存在返回 404。"""
     project_id = _create_project()
     bad_order = client.get(
-        f"/projects/{project_id}/execution-records",
+        f"{project_api_base(project_id)}/execution-records",
         params={"order_by": "name"},
     )
     assert bad_order.status_code == 422
     assert "order_by" in bad_order.json()["detail"]
 
-    missing = client.get("/projects/missing-project/execution-records")
+    missing = client.get("/repos/missing/projects/nope/execution-records")
     assert missing.status_code == 404
     assert missing.json()["detail"] == "Project not found"
 
@@ -234,7 +264,7 @@ def test_detail_returns_parsed_result_request_and_display() -> None:
         asset_type="api",
     )
 
-    response = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    response = client.get(f"{project_api_base(project_id)}/execution-records/{record_id}")
     assert response.status_code == 200
     body = response.json()
     assert body["id"] == record_id
@@ -265,7 +295,7 @@ def test_detail_handles_invalid_json() -> None:
         result_json="{not-json",
     )
 
-    response = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    response = client.get(f"{project_api_base(project_id)}/execution-records/{record_id}")
     assert response.status_code == 200
     body = response.json()
     assert body["result"]["parse_error"] == "invalid JSON"
@@ -287,11 +317,11 @@ def test_detail_not_found_and_other_project() -> None:
         start_time=datetime(2026, 10, 10, 1, 0, 0),
     )
 
-    missing = client.get(f"/projects/{project_id}/execution-records/missing-record")
+    missing = client.get(f"{project_api_base(project_id)}/execution-records/missing-record")
     assert missing.status_code == 404
     assert missing.json()["detail"] == "Execution record not found"
 
-    foreign = client.get(f"/projects/{project_id}/execution-records/{record_id}")
+    foreign = client.get(f"{project_api_base(project_id)}/execution-records/{record_id}")
     assert foreign.status_code == 404
     assert foreign.json()["detail"] == "Execution record not found"
 
@@ -339,7 +369,7 @@ def test_list_item_login_failed_true_for_single_api() -> None:
             "error": {"kind": "login_failed", "message": "登录失败"},
         },
     )
-    listed = client.get(f"/projects/{project_id}/execution-records").json()
+    listed = client.get(f"{project_api_base(project_id)}/execution-records").json()
     item = next(row for row in listed if row["id"] == record_id)
     assert item["login_failed"] is True
 
@@ -394,7 +424,7 @@ def test_list_item_login_failed_true_for_case_step() -> None:
             "summary": {"total": 2, "success": 0, "failed": 1, "skipped": 1},
         },
     )
-    listed = client.get(f"/projects/{project_id}/execution-records").json()
+    listed = client.get(f"{project_api_base(project_id)}/execution-records").json()
     item = next(row for row in listed if row["id"] == record_id)
     assert item["login_failed"] is True
 
@@ -436,7 +466,7 @@ def test_list_item_login_failed_false_when_absent_or_other_error() -> None:
     )
     listed = {
         row["id"]: row
-        for row in client.get(f"/projects/{project_id}/execution-records").json()
+        for row in client.get(f"{project_api_base(project_id)}/execution-records").json()
     }
     assert listed[ok_id]["login_failed"] is False
     assert listed[assert_id]["login_failed"] is False

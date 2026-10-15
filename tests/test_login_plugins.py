@@ -93,7 +93,7 @@ def test_whitelisted_plugin_not_installed_is_503_without_record(
     from testplat_control.deps import get_engine_port
     from testplat_control.main import app
     from tests.auth_support import STANDARD_CONFIG, STANDARD_ENV, write_auth
-    from tests.case_support import create_project, write_assets, write_env
+    from tests.case_support import create_project, project_api_base, write_assets, write_env
 
     for key, value in STANDARD_ENV.items():
         monkeypatch.setenv(key, value)
@@ -116,12 +116,13 @@ def test_whitelisted_plugin_not_installed_is_503_without_record(
     )
     try:
         response = client.post(
-            f"/projects/{project_id}/assets/api.demo.create/run", json={"params": {}}
+            f"{project_api_base(project_id)}/assets/api.demo.create/run",
+            json={"env": "test", "params": {}},
         )
     finally:
         app.dependency_overrides.pop(get_engine_port, None)
 
     assert response.status_code == 503
     assert response.json()["detail"] == "执行引擎不可用：create_engine 调用失败"
-    records = client.get(f"/projects/{project_id}/execution-records").json()
+    records = client.get(f"{project_api_base(project_id)}/execution-records").json()
     assert records == []

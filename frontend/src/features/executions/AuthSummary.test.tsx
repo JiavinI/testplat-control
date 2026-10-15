@@ -166,7 +166,7 @@ describe('身份相关 422', () => {
       new ApiHttpError(sample.status, sample.body.detail, JSON.stringify(sample.body)),
     )
     const user = userEvent.setup({ delay: null })
-    const { container } = wrap(<CaseExecutionPanel projectId="p1" caseId="case.demo.create_then_get" />)
+    const { container } = wrap(<CaseExecutionPanel projectId="main/demo" caseId="case.demo.create_then_get" env="test" />)
     await user.click(await screen.findByRole('button', { name: '执行 Case' }))
     expect(await screen.findByText(sample.body.detail)).toBeInTheDocument()
     expect(screen.getByText(/预检失败/)).toBeInTheDocument()

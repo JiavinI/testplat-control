@@ -32,6 +32,7 @@ from tests.auth_support import (
     log_text,
     write_auth,
 )
+from tests.case_support import create_project, project_api_base
 
 RECEIVED: list[dict[str, str]] = []
 
@@ -128,17 +129,7 @@ def project(tmp_path: Path, server: str, monkeypatch: pytest.MonkeyPatch):
         if with_auth:
             write_auth(config, STANDARD_CONFIG)
         with TestClient(app) as client:
-            response = client.post(
-                "/projects",
-                json={
-                    "name": f"auth-real-{uuid4().hex[:8]}",
-                    "assets_root": str(assets),
-                    "config_root": str(config),
-                    "env": "test",
-                },
-            )
-        assert response.status_code == 200, response.text
-        return response.json()["id"]
+            return create_project(client, assets, config, name=f"auth-real-{uuid4().hex[:8]}")
 
     return create
 
@@ -160,11 +151,12 @@ def test_single_api_sends_credential_and_redacts_echo(
     project_id = project()
     with TestClient(app) as client, caplog.at_level(logging.DEBUG):
         response = client.post(
-            f"/projects/{project_id}/assets/api.auth.admin_echo/run", json={"params": {}}
+            f"{project_api_base(project_id)}/assets/api.auth.admin_echo/run",
+            json={"env": "test", "params": {}},
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        detail = client.get(f"/projects/{project_id}/execution-records/{body['record_id']}")
+        detail = client.get(f"{project_api_base(project_id)}/execution-records/{body['record_id']}")
     assert RECEIVED[-1]["authorization"] == f"Bearer {FAKE_SECRET}"
     expected = {
         "identity": "admin",
@@ -189,11 +181,12 @@ def test_case_alternates_identities_without_crosstalk(
     project_id = project()
     with TestClient(app) as client, caplog.at_level(logging.DEBUG):
         response = client.post(
-            f"/projects/{project_id}/cases/case.auth.alternate/run", json={"params": {}}
+            f"{project_api_base(project_id)}/cases/case.auth.alternate/run",
+            json={"env": "test", "params": {}},
         )
         assert response.status_code == 200, response.text
         record_id = response.json()["record_id"]
-        typed = client.get(f"/projects/{project_id}/case-execution-records/{record_id}")
+        typed = client.get(f"{project_api_base(project_id)}/case-execution-records/{record_id}")
     sent = {item["path"]: item for item in RECEIVED}
     assert sent["/echo/admin_echo"]["authorization"] == f"Bearer {FAKE_SECRET}"
     assert "x-api-key" not in sent["/echo/admin_echo"]
@@ -214,9 +207,10 @@ def test_unknown_identity_is_422_without_record(project) -> None:
     project_id = project()
     with TestClient(app) as client:
         response = client.post(
-            f"/projects/{project_id}/assets/api.auth.ghost_echo/run", json={"params": {}}
+            f"{project_api_base(project_id)}/assets/api.auth.ghost_echo/run",
+            json={"env": "test", "params": {}},
         )
-        records = client.get(f"/projects/{project_id}/execution-records").json()
+        records = client.get(f"{project_api_base(project_id)}/execution-records").json()
     assert response.status_code == 422 and "ghost" in response.json()["detail"]
     assert records == [] and RECEIVED == []
 
@@ -226,10 +220,12 @@ def test_declared_identity_without_auth_file_is_422(project) -> None:
     project_id = project(with_auth=False)
     with TestClient(app) as client:
         declared = client.post(
-            f"/projects/{project_id}/assets/api.auth.admin_echo/run", json={"params": {}}
+            f"{project_api_base(project_id)}/assets/api.auth.admin_echo/run",
+            json={"env": "test", "params": {}},
         )
         anonymous = client.post(
-            f"/projects/{project_id}/assets/api.auth.default_echo/run", json={"params": {}}
+            f"{project_api_base(project_id)}/assets/api.auth.default_echo/run",
+            json={"env": "test", "params": {}},
         )
     assert declared.status_code == 422
     assert anonymous.status_code == 200 and anonymous.json()["auth"] is None
@@ -243,9 +239,10 @@ def test_unavailable_identity_is_422_in_case_before_any_step(
     project_id = project()
     with TestClient(app) as client:
         response = client.post(
-            f"/projects/{project_id}/cases/case.auth.alternate/run", json={"params": {}}
+            f"{project_api_base(project_id)}/cases/case.auth.alternate/run",
+            json={"env": "test", "params": {}},
         )
-        records = client.get(f"/projects/{project_id}/execution-records").json()
+        records = client.get(f"{project_api_base(project_id)}/execution-records").json()
     assert response.status_code == 422
     assert "TESTPLAT_PARTNER_KEY" in response.json()["detail"]
     assert records == [] and RECEIVED == []  # Case 预检一次性失败，没有任何步骤发出

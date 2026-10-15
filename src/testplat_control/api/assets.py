@@ -1,17 +1,20 @@
-"""资产信息查询路由"""
+"""资产信息查询路由（读当前 SHA 快照）。"""
 
-from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from testplat_control.database.models import Project
 from testplat_control.database.session import get_db
 from testplat_control.services.asset_service import AssetService
+from testplat_control.services.project_access import (
+    ensure_snapshot_dirs,
+    get_project,
+    get_repos_config,
+)
 
-router = APIRouter(prefix="/projects", tags=["assets"])
+router = APIRouter(prefix="/repos/{repo}/projects/{project}", tags=["assets"])
 
 
 class AssetNodeResponse(BaseModel):
@@ -21,16 +24,12 @@ class AssetNodeResponse(BaseModel):
     name: str = Field(..., description="显示名称")
     type: str = Field(..., description="类型: directory 或 file")
     path: str = Field(..., description="相对路径")
-    children: list["AssetNodeResponse"] | None = Field(
-        None, description="子节点 (仅目录)"
-    )
+    children: list["AssetNodeResponse"] | None = Field(None, description="子节点 (仅目录)")
     metadata: dict[str, Any] | None = Field(None, description="文件元数据 (仅文件)")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
-# 更新 forward reference
 AssetNodeResponse.model_rebuild()
 
 
@@ -43,65 +42,35 @@ class AssetDetailsResponse(BaseModel):
     path: str = Field(..., description="相对路径")
     metadata: dict[str, Any] | None = Field(None, description="文件元数据")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
-@router.get("/{project_id}/assets", response_model=AssetNodeResponse)
+@router.get("/assets", response_model=AssetNodeResponse)
 async def get_assets_tree(
-    project_id: str,
+    repo: str,
+    project: str,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> AssetNodeResponse:
-    """获取项目的资产树
-
-    Args:
-        project_id: 项目ID
-        db: 数据库会话
-
-    Returns:
-        AssetNodeResponse: 资产树根节点
-
-    Raises:
-        HTTPException: 项目不存在返回 404
-    """
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    # 创建资产服务并扫描
-    service = AssetService(Path(project.assets_root))
-    tree = service.scan_assets()
-
+    """获取项目的资产树（当前 commit 快照）。"""
+    row = get_project(db, repo, project)
+    _, assets_root, _ = ensure_snapshot_dirs(get_repos_config(request), row)
+    tree = AssetService(assets_root).scan_assets()
     return AssetNodeResponse.model_validate(tree)
 
 
-@router.get("/{project_id}/assets/{asset_id}", response_model=AssetDetailsResponse)
+@router.get("/assets/{asset_id}", response_model=AssetDetailsResponse)
 async def get_asset_details(
-    project_id: str,
+    repo: str,
+    project: str,
     asset_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> AssetDetailsResponse:
-    """获取单个资产详情
-
-    Args:
-        project_id: 项目ID
-        asset_id: 资产ID (如 api.common.health_check)
-        db: 数据库会话
-
-    Returns:
-        AssetDetailsResponse: 资产详情
-
-    Raises:
-        HTTPException: 项目或资产不存在返回 404
-    """
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    service = AssetService(Path(project.assets_root))
-    asset = service.get_asset(asset_id)
-
+    """获取单个资产详情。"""
+    row = get_project(db, repo, project)
+    _, assets_root, _ = ensure_snapshot_dirs(get_repos_config(request), row)
+    asset = AssetService(assets_root).get_asset(asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-
     return AssetDetailsResponse.model_validate(asset)

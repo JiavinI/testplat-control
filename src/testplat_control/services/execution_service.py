@@ -8,8 +8,8 @@
 - **Case 语法与运行语义的权威是 Engine**：Case id 格式、文件路径映射、schema、引用
   校验、步骤执行与 fail-fast 全部发生在 ``EnginePort.execute(request)`` 之内。
   本模块不解析 Case YAML，只把 Engine 返回的 outcome / 异常原样落库和映射为 HTTP。
-- Control 只负责：项目与环境（``load_project_environment``）、身份表
-  （``load_auth``，Phase 3.3d 含 cache_scope）、调用与计时、
+- Control 只负责：项目与运行 env（``load_project_environment``）、身份表
+  （``load_auth``，cache_scope=``{repo}:{project}:{env}``；Engine 禁止 `/`）、调用与计时、
   ``ExecutionRecord`` 持久化、HTTP 状态码映射。
 
 记录生命周期（单次写入）
@@ -121,6 +121,8 @@ def _build_record(
     end_time: datetime,
     result_payload: dict[str, Any],
     asset_type: str = "api",
+    env: str | None = None,
+    commit_sha: str | None = None,
 ) -> ExecutionRecord:
     """构造尚未落库的执行记录（复用同一张表，``asset_type`` 区分 api / case）。"""
     duration = (end_time - start_time).total_seconds()
@@ -134,6 +136,10 @@ def _build_record(
         end_time=end_time,
         duration=duration,
         result_json=json.dumps(result_payload, ensure_ascii=False, default=str),
+        env=env,
+        repo=project.repo,
+        commit_sha=commit_sha,
+        operator=None,
     )
 
 
@@ -169,16 +175,16 @@ def _persist(db: Session, record: ExecutionRecord) -> ExecutionRecord:
     return record
 
 
-def _load_environment(project: Project) -> dict[str, Any]:
-    """加载项目环境；失败属 Control 侧 preflight，不写记录。"""
+def _load_environment(config_root: Path, env: str, project: Project) -> dict[str, Any]:
+    """加载运行环境；失败属 Control 侧 preflight，不写记录。"""
     try:
-        return load_project_environment(project.config_root, project.env)
+        return load_project_environment(config_root, env)
     except EngineError as exc:
         _log_engine_error(
             project=project,
             asset_id="-",
             exc=exc,
-            what=f"环境配置 preflight 失败 env={project.env}",
+            what=f"环境配置 preflight 失败 env={env}",
         )
         raise HTTPException(
             status_code=map_engine_error_http_status(exc),
@@ -186,26 +192,21 @@ def _load_environment(project: Project) -> dict[str, Any]:
         ) from exc
 
 
-def _load_auth(project: Project) -> AuthLoadResult | None:
-    """加载项目环境的身份表与 login_plugins；失败属 Control 侧 preflight，不写记录。
-
-    日志沿用 ``_log_engine_error`` 的安全字段；``public_message`` 由 auth_loader 保证
-    只含身份名 / header 名 / 变量名 / 策略名。
-    Phase 3.3d：传入 ``cache_scope=f"{project.id}:{project.env}"``，由 Engine 持有缓存；
-    Control 不做缓存实现，也不把 scope 写入日志。
-    """
+def _load_auth(config_root: Path, env: str, project: Project) -> AuthLoadResult | None:
+    """加载身份表；``cache_scope=f"{repo}/{project}:{env}"``（设计稿 §5.3）。"""
+    cache_scope = f"{project.repo}:{project.project_key}:{env}"
     try:
         return load_auth(
-            project.config_root,
-            project.env,
-            cache_scope=f"{project.id}:{project.env}",
+            config_root,
+            env,
+            cache_scope=cache_scope,
         )
     except EngineError as exc:
         _log_engine_error(
             project=project,
             asset_id="-",
             exc=exc,
-            what=f"鉴权配置 preflight 失败 env={project.env}",
+            what=f"鉴权配置 preflight 失败 env={env}",
         )
         raise HTTPException(
             status_code=map_engine_error_http_status(exc),
@@ -232,7 +233,7 @@ def _engine_for_auth(
             project=project,
             asset_id="-",
             exc=exc,
-            what=f"登录插件注册失败 env={project.env}",
+            what="登录插件注册失败",
         )
         raise HTTPException(
             status_code=map_engine_error_http_status(exc),
@@ -261,46 +262,28 @@ async def run_single_api(
     asset_id: str,
     params: dict[str, Any],
     engine: EnginePort,
+    env: str,
+    commit_sha: str,
+    assets_root: Path,
+    config_root: Path,
     timeout_seconds: float = 30.0,
 ) -> ExecutionRecord:
-    """编排一次单 API 执行并返回已落库记录。
-
-    记录规则（批准）：
-
-    - ``preflight`` 系统错误：不创建记录，直接 HTTP 4xx/5xx。
-    - ``execution`` 系统错误：创建 ``failed`` 记录，再返回 HTTP 5xx。
-    - 业务 success/failed：创建记录，由路由包装为 HTTP 200 RunResponse。
-
-    Args:
-        db: 数据库会话。
-        project: 已存在的项目。
-        asset_id: API 资产 ID。
-        params: 已通过表单校验的参数。
-        engine: 注入的 EnginePort（真实或 Fake）。
-        timeout_seconds: 传给 Engine 的超时。
-
-    Returns:
-        已持久化的 ExecutionRecord。
-
-    Raises:
-        HTTPException: 按错误表映射的状态码；detail 仅含安全外显信息。
-    """
-    environment = _load_environment(project)
-    loaded = _load_auth(project)
+    """编排一次单 API 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。"""
+    environment = _load_environment(config_root, env, project)
+    loaded = _load_auth(config_root, env, project)
     auth = None if loaded is None else loaded.table
     engine = _engine_for_auth(engine, loaded, project)
 
     try:
         request = ApiExecutionRequest(
             api_id=asset_id,
-            assets_root=Path(project.assets_root),
+            assets_root=Path(assets_root),
             environment=environment,
             params=params,
             timeout_seconds=timeout_seconds,
             auth=auth,
         )
     except (TypeError, ValueError) as exc:
-        # 请求 DTO 构造失败视为 Control 侧参数/环境不合法；detail 用固定文案（M1）。
         _log_request_build_error(project=project, asset_id=asset_id, exc=exc)
         raise HTTPException(status_code=422, detail=_INVALID_REQUEST_DETAIL) from exc
 
@@ -311,7 +294,6 @@ async def run_single_api(
         end_time = datetime.now(UTC)
         _log_engine_error(project=project, asset_id=asset_id, exc=exc)
         if exc.stage == "execution":
-            # 已进入执行阶段：落 failed 记录，HTTP 仍为对应 5xx。
             payload = {
                 "status": "failed",
                 "request": None,
@@ -325,6 +307,8 @@ async def run_single_api(
                 start_time=start_time,
                 end_time=end_time,
                 result_payload=payload,
+                env=env,
+                commit_sha=commit_sha,
             )
             _persist(db, record)
         raise HTTPException(
@@ -332,8 +316,6 @@ async def run_single_api(
             detail=exc.public_message,
         ) from exc
     except Exception as exc:
-        # 未分类异常：不猜测 stage，不写记录，避免污染历史。
-        # 日志硬约束：只记类型名，不用 logger.exception（traceback 会带出异常原文）。
         logger.error(
             "未预期执行异常 project=%s asset=%s exc_type=%s",
             project.id,
@@ -357,6 +339,8 @@ async def run_single_api(
         start_time=start_time,
         end_time=end_time,
         result_payload=payload,
+        env=env,
+        commit_sha=commit_sha,
     )
     return _persist(db, record)
 
@@ -364,16 +348,7 @@ async def run_single_api(
 def case_result_payload(
     outcome: CaseExecutionOutcome, *, error: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """把 Engine 的 Case outcome 原样展开为持久化 / 响应共用的 result 载荷。
-
-    ``result_json`` 的形状固定为 ``CaseExecutionOutcome.to_dict()`` + ``error``：
-
-    - 业务 success/failed：``error`` 为 ``None``；
-    - execution 系统错误：outcome 取自异常携带的 ``partial_outcome``，
-      ``error`` 为 ``{kind, stage, message}``（不含 log_reason）。
-
-    摘要（summary）完全由 Engine 计算，Control 不二次推导。
-    """
+    """把 Engine 的 Case outcome 原样展开为持久化 / 响应共用的 result 载荷。"""
     payload = outcome.to_dict()
     payload["error"] = error
     return payload
@@ -382,11 +357,7 @@ def case_result_payload(
 def _system_error_case_payload(
     exc: EngineError, *, case_id: str, elapsed_seconds: float
 ) -> dict[str, Any]:
-    """execution 系统错误的 Case 结果：步骤证据只来自异常的安全 ``partial_outcome``。
-
-    Engine 0.2 契约保证 Case 执行阶段的 timeout/transport/internal 都携带 partial；
-    若缺失（Engine 缺陷），仍保存 failed 记录但步骤为空，绝不由 Control 伪造步骤。
-    """
+    """execution 系统错误的 Case 结果。"""
     error = {"kind": exc.kind, "stage": exc.stage, "message": exc.public_message}
     if exc.partial_outcome is not None:
         return case_result_payload(exc.partial_outcome, error=error)
@@ -407,39 +378,22 @@ async def run_case(
     case_id: str,
     params: dict[str, Any],
     engine: EnginePort,
+    env: str,
+    commit_sha: str,
+    assets_root: Path,
+    config_root: Path,
     timeout_seconds: float = 30.0,
 ) -> ExecutionRecord:
-    """编排一次 Case 执行并返回已落库记录（``asset_type="case"``）。
-
-    Control 不校验 Case 语法、不检查文件是否存在：``case_id`` 原样交给 Engine，
-    由 Engine 负责路径映射与 schema 校验，并以 preflight 异常返回
-    ``asset_not_found / invalid_asset / invalid_input / invalid_environment``。
-
-    记录规则见模块文档字符串：业务 failed 与 execution 系统错误保存，preflight 不保存。
-
-    Args:
-        db: 数据库会话。
-        project: 已存在的项目。
-        case_id: Case ID，例如 ``case.demo.login_then_profile``。
-        params: 覆盖 Case 默认参数的顶层键（浅层覆盖由 Engine 完成）。
-        engine: 注入的 EnginePort（真实或 Fake）。
-        timeout_seconds: **每步骤** HTTP 超时（不是整个 Case 预算）。
-
-    Returns:
-        已持久化的 ExecutionRecord。
-
-    Raises:
-        HTTPException: 按错误表映射的状态码；detail 仅含安全外显信息。
-    """
-    environment = _load_environment(project)
-    loaded = _load_auth(project)
+    """编排一次 Case 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。"""
+    environment = _load_environment(config_root, env, project)
+    loaded = _load_auth(config_root, env, project)
     auth = None if loaded is None else loaded.table
     engine = _engine_for_auth(engine, loaded, project)
 
     try:
         request = CaseExecutionRequest(
             case_id=case_id,
-            assets_root=Path(project.assets_root),
+            assets_root=Path(assets_root),
             environment=environment,
             params=params,
             timeout_seconds=timeout_seconds,
@@ -467,6 +421,8 @@ async def run_case(
                 end_time=end_time,
                 result_payload=payload,
                 asset_type="case",
+                env=env,
+                commit_sha=commit_sha,
             )
             _persist(db, record)
         raise HTTPException(
@@ -497,5 +453,7 @@ async def run_case(
         end_time=end_time,
         result_payload=case_result_payload(outcome),
         asset_type="case",
+        env=env,
+        commit_sha=commit_sha,
     )
     return _persist(db, record)

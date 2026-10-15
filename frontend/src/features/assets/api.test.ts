@@ -30,25 +30,25 @@ function jsonResponse(data: unknown, status = 200): Response {
   })
 }
 
-describe('assets api', () => {
-  it('getAssetsTree 调用 GET /projects/:id/assets', async () => {
+describe('assets api (Phase 4.0 两段式)', () => {
+  it('getAssetsTree 调用 /repos/{repo}/projects/{project}/assets', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(tree))
-    const result = await getAssetsTree('p-1', { baseUrl: '/api', fetchImpl })
+    const result = await getAssetsTree('main/demo', { baseUrl: '/api', fetchImpl })
     expect(result.id).toBe('assets')
     expect(fetchImpl).toHaveBeenCalledWith(
-      '/api/projects/p-1/assets',
+      '/api/repos/main/projects/demo/assets',
       expect.objectContaining({ method: 'GET' }),
     )
   })
 
-  it('getAssetDetails 对 projectId 与 assetId 编码', async () => {
+  it('getAssetDetails 对 repo/project/assetId 分别编码', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(details))
-    await getAssetDetails('a/b', 'api.common.health_check', {
+    await getAssetDetails('main/demo', 'api.common.health_check', {
       baseUrl: '',
       fetchImpl,
     })
     expect(fetchImpl.mock.calls[0][0]).toBe(
-      '/projects/a%2Fb/assets/api.common.health_check',
+      '/repos/main/projects/demo/assets/api.common.health_check',
     )
   })
 
@@ -57,7 +57,7 @@ describe('assets api', () => {
       .fn()
       .mockResolvedValue(jsonResponse({ detail: 'Project not found' }, 404))
     await expect(
-      getAssetsTree('missing', { baseUrl: '', fetchImpl }),
+      getAssetsTree('main/missing', { baseUrl: '', fetchImpl }),
     ).rejects.toBeInstanceOf(ApiHttpError)
   })
 })

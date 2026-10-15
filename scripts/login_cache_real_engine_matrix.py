@@ -48,7 +48,74 @@ SEARCH_TARGETS = (
 
 BACKEND = os.environ.get("MATRIX_BACKEND_URL", "http://127.0.0.1:8000")
 TARGET = os.environ["MATRIX_TARGET_URL"]
-ASSETS_ROOT = os.environ["MATRIX_LOGIN_ASSETS_ROOT"]
+ASSETS_ROOT = os.environ.get("MATRIX_LOGIN_ASSETS_ROOT", "")
+REPO = os.environ.get("MATRIX_REPO", "matrix")
+ENV = os.environ.get("MATRIX_ENV", "test")
+
+ASSETS_GIT = Path(os.environ.get("MATRIX_ASSETS_GIT", ""))
+
+
+def _run_git(args: list[str], *, cwd: Path) -> None:
+    """矩阵内改资产仓：参数列表调用，禁止 shell，超时，不回显 stderr。"""
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    result = __import__("subprocess").run(
+        ["git", *args],
+        cwd=str(cwd),
+        env=env,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"git_failed:{args[0]}")
+
+
+def _sync_repo(client: httpx.Client) -> None:
+    resp = client.post(f"{BACKEND}/repos/{REPO}/sync")
+    resp.raise_for_status()
+    body = resp.json()
+    assert body.get("ok") is True, body.get("category")
+
+
+def _mutate_cache_auth(mutator) -> str:
+    """改 cache 项目 auth 并 commit；返回原文以便 finally 还原。"""
+    assert ASSETS_GIT.is_dir(), "MATRIX_ASSETS_GIT required for L36"
+    auth_path = ASSETS_GIT / "projects" / "cache" / "config" / "auth" / "test.yaml"
+    original = auth_path.read_text(encoding="utf-8")
+    auth_path.write_text(mutator(original), encoding="utf-8")
+    _run_git(["add", "-A"], cwd=ASSETS_GIT)
+    _run_git(["commit", "-m", "matrix L36 mutate"], cwd=ASSETS_GIT)
+    return original
+
+
+def _restore_cache_auth(original: str) -> None:
+    auth_path = ASSETS_GIT / "projects" / "cache" / "config" / "auth" / "test.yaml"
+    auth_path.write_text(original, encoding="utf-8")
+    _run_git(["add", "-A"], cwd=ASSETS_GIT)
+    # 可能无变更
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    __import__("subprocess").run(
+        ["git", "diff", "--cached", "--quiet"],
+        cwd=str(ASSETS_GIT),
+        env=env,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    staged = __import__("subprocess").run(
+        ["git", "diff", "--cached", "--quiet"],
+        cwd=str(ASSETS_GIT),
+        env=env,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    if staged.returncode != 0:
+        _run_git(["commit", "-m", "matrix L36 restore"], cwd=ASSETS_GIT)
+
+
 OUT_DIR = Path(os.environ["MATRIX_CACHE_OUT_DIR"])
 ISSUED_PATH = Path(os.environ.get("MATRIX_ISSUED_SECRETS_PATH", ""))
 BACKEND_LOG = Path(os.environ.get("MATRIX_BACKEND_LOG", OUT_DIR / "backend.log"))
@@ -87,27 +154,24 @@ class Matrix:
         self.projects: dict[str, str] = {}
 
     def project(self, key: str, config_root: str | None = None) -> str:
+        # config_root 保留形参以兼容调用方；Phase 4.0 项目已由同步建立。
+        del config_root
         if key not in self.projects:
-            root = config_root or ROOT_CACHE
-            resp = self.client.post(
-                f"{BACKEND}/projects",
-                json={
-                    "name": f"cache-matrix-{key}-{os.getpid()}",
-                    "env": "test",
-                    "assets_root": ASSETS_ROOT,
-                    "config_root": root,
-                },
-            )
+            resp = self.client.get(f"{BACKEND}/repos/{REPO}/projects/{key}")
             resp.raise_for_status()
-            self.projects[key] = resp.json()["id"]
+            self.projects[key] = key
         return self.projects[key]
+
+    def _base(self, key: str) -> str:
+        return f"{BACKEND}/repos/{REPO}/projects/{self.project(key)}"
 
     def run_api(
         self, key: str, asset: str, params: dict | None = None, *, config_root: str | None = None
     ) -> httpx.Response:
-        pid = self.project(key, config_root=config_root)
+        del config_root
         return self.client.post(
-            f"{BACKEND}/projects/{pid}/assets/{asset}/run", json={"params": params or {}}
+            f"{self._base(key)}/assets/{asset}/run",
+            json={"params": params or {}, "env": ENV},
         )
 
     def reset_target(self) -> None:
@@ -279,42 +343,49 @@ def main() -> int:
     m.check("L35", "§6-35", "R5：session:cookie 身份每次执行都登录", l35)
 
     def l36() -> dict[str, Any]:
-        auth_path = Path(ROOT_CACHE) / "auth" / "test.yaml"
-        original = auth_path.read_text("utf-8")
+        # Phase 4.0：配置在 git 快照内；改指纹须 commit + sync
+        original = (ASSETS_GIT / "projects" / "cache" / "config" / "auth" / "test.yaml").read_text(
+            encoding="utf-8"
+        )
         try:
             m.configure_target(clear_revoked=True, always_401=False)
             m.reset_target()
             r1 = m.run_api("cache", "api.login.buyer_cached_echo")
             assert r1.status_code == 200 and _status(r1.json()) == "success", _status(r1.json())
-            # 可能命中既有缓存；只记录改密前登录计数
 
-            # 改密码对应的环境变量名 → 指纹变 → 重新登录
-            mutated = original.replace(
-                "${secret:TESTPLAT_BUYER_PASSWORD}",
-                "${secret:TESTPLAT_BUYER_PASSWORD_ALT}",
-            )
-            assert mutated != original, "password secret replace failed"
-            auth_path.write_text(mutated, encoding="utf-8")
+            def _pwd(text: str) -> str:
+                out = text.replace(
+                    "${secret:TESTPLAT_BUYER_PASSWORD}",
+                    "${secret:TESTPLAT_BUYER_PASSWORD_ALT}",
+                )
+                assert out != text, "password secret replace failed"
+                return out
+
+            _mutate_cache_auth(_pwd)
+            _sync_repo(m.client)
             m.reset_target()
             r2 = m.run_api("cache", "api.login.buyer_cached_echo")
             assert r2.status_code == 200 and _status(r2.json()) == "success", r2.text[:200]
             assert m.login_count("cached_user") == 1, m.inspect().get("login_counts")
-            # 与改密前的缓存不应命中：session_source 必须是 login
             assert _auth(r2.json()).get("session_source") == "login", _auth(r2.json())
 
-            # 改登录 path → 再登录
-            auth_path.write_text(original, encoding="utf-8")
-            # 先用原配置暖缓存
+            # 还原原文并 sync，暖缓存
+            _restore_cache_auth(original)
+            _sync_repo(m.client)
             m.reset_target()
             warm = m.run_api("cache", "api.login.buyer_cached_echo")
             assert warm.status_code == 200 and _auth(warm.json()).get("session_source") in (
                 "login",
                 "cache",
             )
-            path_mutated = original.replace("path: /login/json", "path: /login/json-alt", 1)
-            # buyer_cached 的 steps 里只有一处 /login/json
-            assert path_mutated != original
-            auth_path.write_text(path_mutated, encoding="utf-8")
+
+            def _path(text: str) -> str:
+                out = text.replace("path: /login/json", "path: /login/json-alt", 1)
+                assert out != text
+                return out
+
+            _mutate_cache_auth(_path)
+            _sync_repo(m.client)
             before = m.login_count("cached_user")
             r3 = m.run_api("cache", "api.login.buyer_cached_echo")
             assert r3.status_code == 200 and _status(r3.json()) == "success", r3.text[:200]
@@ -322,7 +393,11 @@ def main() -> int:
             assert after == before + 1, (before, after, m.inspect().get("login_counts"))
             assert _auth(r3.json()).get("session_source") == "login", _auth(r3.json())
         finally:
-            auth_path.write_text(original, encoding="utf-8")
+            _restore_cache_auth(original)
+            try:
+                _sync_repo(m.client)
+            except Exception:  # noqa: BLE001
+                pass
         return {"ok": True, "password_fp": True, "path_fp": True}
 
     m.check("L36", "§6-36", "指纹：改密码/改 path → 重新登录", l36)
@@ -481,17 +556,17 @@ def main() -> int:
     def l43() -> dict[str, Any]:
         m.configure_target(always_401=False, force_login_fail=False, clear_revoked=True)
         m.reset_target()
-        # 使用全新项目，保证冷启动
-        key = f"cache-concurrent-{time.time_ns()}"
-        pid = m.project(key, config_root=ROOT_CACHE)
-        url = f"{BACKEND}/projects/{pid}/assets/api.login.buyer_cached_echo/run"
+        # cache-cold 专用于本条，保证本矩阵内冷启动（不与 cache 共享 scope）
+        key = "cache-cold"
+        pid = m.project(key)
+        url = f"{BACKEND}/repos/{REPO}/projects/{pid}/assets/api.login.buyer_cached_echo/run"
         results: list[httpx.Response] = []
         errors: list[str] = []
 
         def _one() -> None:
             try:
                 with httpx.Client(timeout=120) as c:
-                    results.append(c.post(url, json={"params": {}}))
+                    results.append(c.post(url, json={"params": {}, "env": ENV}))
             except Exception as exc:  # noqa: BLE001
                 errors.append(type(exc).__name__)
 

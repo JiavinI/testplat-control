@@ -46,7 +46,7 @@ from testplat_control.database.session import SessionLocal
 from testplat_control.deps import get_engine_port
 from testplat_control.engine_bootstrap import EngineBootstrapError
 from testplat_control.main import app
-from tests.case_support import create_project, write_assets, write_env
+from tests.case_support import create_project, project_api_base, write_assets, write_env
 
 PASSWORD = "pw-LOGLEAK-password-9f3a"
 TOKEN = "tok-LOGLEAK-token-71bc"
@@ -125,11 +125,15 @@ def _use(engine: Any) -> None:
 
 
 def _run_case(pid: str):
-    return client.post(f"/projects/{pid}/cases/{CASE_ID}/run", json={"params": {}})
+    return client.post(
+        f"{project_api_base(pid)}/cases/{CASE_ID}/run", json={"env": "test", "params": {}}
+    )
 
 
 def _run_api(pid: str):
-    return client.post(f"/projects/{pid}/assets/api.common.health/run", json={"params": {}})
+    return client.post(
+        f"{project_api_base(pid)}/assets/api.common.health/run", json={"env": "test", "params": {}}
+    )
 
 
 EXPECTED_HTTP = {"timeout": 504, "transport": 502, "internal": 500}
@@ -241,15 +245,26 @@ def test_environment_errors_do_not_log_secrets(
     _use(FakeEngineAdapter())
     bad = config / "envs" / "broken.yaml"
     bad.write_text(f"password: [{LEAKY}\n", encoding="utf-8")
-    pid = create_project(client, assets, config, env="broken")
+    # 清单会收录 broken 环境；运行它应 422 且日志不泄密
+    pid = create_project(client, assets, config)
+    assert (
+        client.post(
+            f"{project_api_base(pid)}/cases/case.demo.create_then_get/run",
+            json={"env": "broken", "params": {}},
+        ).status_code
+        == 422
+    )
 
-    assert _run_case(pid).status_code == 422
+    pid2 = create_project(client, assets, config)
+    original = Path.read_text
 
-    def _unreadable(self: Path, *args: Any, **kwargs: Any) -> str:
-        raise PermissionError(LEAKY)
+    def _selective(self: Path, *args: Any, **kwargs: Any) -> str:
+        # 只让环境 YAML 读取失败，避免误伤清单/资产读取变成 404
+        if self.name.endswith(".yaml") and "envs" in self.parts:
+            raise PermissionError(LEAKY)
+        return original(self, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "read_text", _unreadable)
-    pid2 = create_project(client, assets, config, env="test")
+    monkeypatch.setattr(Path, "read_text", _selective)
     assert _run_case(pid2).status_code == 422
     text = "\n".join(r.getMessage() for r in assert_logs_clean(caplog))
     assert "exc_type=PermissionError" in text
@@ -278,7 +293,9 @@ def test_corrupt_result_json_does_not_log_stored_content(
     db.commit()
     db.close()
 
-    response = client.get(f"/projects/{project_id}/case-execution-records/{project_id[:8]}-corrupt")
+    response = client.get(
+        f"{project_api_base(project_id)}/case-execution-records/{project_id[:8]}-corrupt"
+    )
 
     assert response.status_code == 200 and response.json()["result"] is None
     text = "\n".join(r.getMessage() for r in assert_logs_clean(caplog))

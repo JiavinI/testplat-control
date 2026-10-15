@@ -1,0 +1,59 @@
+{
+  "phase": "4.0",
+  "results": [
+    {
+      "item": "§7-1",
+      "status": "PASS",
+      "evidence": "project=main/demo create_status=405"
+    },
+    {
+      "item": "§7-2",
+      "status": "PASS",
+      "evidence": "old=264463c new=8bacaeb case_ok"
+    },
+    {
+      "item": "§7-3",
+      "status": "PASS",
+      "evidence": "unreachable=network invalid_manifest kept_sha=c5de48e"
+    },
+    {
+      "item": "§7-4",
+      "status": "PASS",
+      "evidence": "running_sha=c5de48e synced=bdd4363"
+    },
+    {
+      "item": "§7-5",
+      "status": "PASS",
+      "evidence": "illegal_env=422; test+staging both runnable"
+    },
+    {
+      "item": "§7-6",
+      "status": "PASS",
+      "evidence": "env=test sha=c5de48e filter_ok listed=3"
+    },
+    {
+      "item": "§7-7",
+      "status": "PASS",
+      "evidence": "reject .. absolute and symlink escape"
+    },
+    {
+      "item": "§7-8",
+      "status": "PASS",
+      "evidence": "category=network no_url_in_response_or_logs"
+    },
+    {
+      "item": "§7-9",
+      "status": "PASS",
+      "evidence": "scripts_migrated; after={'auth': {'passed': 28, 'total': 28}, 'login': {'passed': 25, 'total': 25}, 'vcode': {'passed': 12, 'total': 12}, 'cache': {'passed': 15, 'total': 15}}; leak_unexpected=0"
+    },
+    {
+      "item": "§7-10",
+      "status": "PASS",
+      "evidence": "pngs=6 desktop-1440x900-env-select.png,desktop-1440x900-history-env-sha.png,desktop-1440x900-project-list-sync.png,mobile-390x844-env-select.png,mobile-390x844-history-env-sha.png,mobile-390x844-project-list-sync.png"
+    }
+  ],
+  "passed": 10,
+  "failed": 0,
+  "skipped": 0,
+  "total": 10
+}

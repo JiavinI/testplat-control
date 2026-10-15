@@ -70,12 +70,15 @@ cd frontend && pnpm e2e:gate
 
 API 层证据：`uv run pytest -q tests/integration/test_real_engine_case_flow.py`。
 
-## 项目接口错误
+## 仓库与项目（Phase 4.0）
 
-约束冲突返回 409，响应体为 `{"detail": "<可读说明>"}`，不会变成 500。
+项目不再由 Web 新建 / 编辑 / 删除。流程：
 
-- 创建或重命名为已存在的项目名称：`detail` 为 `项目名称已存在`。
-- 删除仍有执行记录的项目：`detail` 为 `项目存在执行记录，无法删除`。执行历史不会被级联删除。
+1. 服务端配置 `TESTPLAT_REPOS_FILE` 登记 Git 用例仓库（见 `docs/phase4_0/repos-and-snapshots.md`）。
+2. 启动同步或调用 `POST /repos/{repo}/sync`。
+3. `GET /projects` / `GET /repos/{repo}/projects/{project}` 浏览项目；选 `env` 后运行 api / case。
+
+资产与配置来自当前 commit 快照，不再使用 `assets_root` / `config_root` 字段。
 
 ## 执行错误映射（摘要）
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -15,11 +15,14 @@ import type {
 } from '@/features/executions'
 
 const project: ProjectResponse = {
-  id: 'p-1',
+  id: 'main/demo',
+  repo: 'main',
+  project: 'demo',
   name: 'fixture-demo',
-  env: 'test',
-  assets_root: '/fixtures/assets',
-  config_root: '/fixtures/config',
+  envs: ['test', 'staging'],
+  default_env: 'test',
+  archived: false,
+  commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
   created_at: '2026-10-10T00:00:00.000Z',
   updated_at: '2026-10-10T01:00:00.000Z',
 }
@@ -98,6 +101,7 @@ const runOk: RunResponse = {
   record_id: 'rec-1',
   status: 'success',
   duration: 0.05,
+  commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
   result: {
     status: 'success',
     request: { method: 'POST' },
@@ -112,11 +116,13 @@ const historyItem: ExecutionRecordListItem = {
   status: 'success',
   start_time: '2026-10-10T02:00:00.000Z',
   duration: 0.05,
+  env: 'test',
+  commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
 }
 
 const historyDetail: ExecutionRecordDetail = {
   id: 'rec-1',
-  project_id: 'p-1',
+  project_id: 'main/demo',
   asset_id: 'api.user.login',
   asset_type: 'api',
   status: 'success',
@@ -131,6 +137,8 @@ const historyDetail: ExecutionRecordDetail = {
   result: { status: 'success' },
   request: { method: 'POST' },
   response: { status_code: 200 },
+  env: 'test',
+  commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
 }
 
 const getProject = vi.fn()
@@ -144,9 +152,6 @@ const getExecutionRecord = vi.fn()
 vi.mock('@/features/projects/api', () => ({
   getProject: (...args: unknown[]) => getProject(...args),
   listProjects: vi.fn(),
-  createProject: vi.fn(),
-  updateProject: vi.fn(),
-  deleteProject: vi.fn(),
 }))
 
 vi.mock('@/features/assets/api', () => ({
@@ -164,7 +169,7 @@ vi.mock('@/features/executions/api', () => ({
   getCaseExecutionRecord: vi.fn(),
 }))
 
-function renderWorkspace(projectId = 'p-1') {
+function renderWorkspace(repo = 'main', projectKey = 'demo') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -172,9 +177,12 @@ function renderWorkspace(projectId = 'p-1') {
     <ConfigProvider theme={{ token: { motion: false } }}>
       <AntApp>
         <QueryClientProvider client={client}>
-          <MemoryRouter initialEntries={[`/projects/${projectId}`]}>
+          <MemoryRouter initialEntries={[`/projects/${repo}/${projectKey}`]}>
             <Routes>
-              <Route path="/projects/:projectId" element={<ProjectWorkspacePage />} />
+              <Route
+                path="/projects/:repo/:project"
+                element={<ProjectWorkspacePage />}
+              />
               <Route path="/projects" element={<div data-testid="list-route">list</div>} />
             </Routes>
           </MemoryRouter>
@@ -252,7 +260,8 @@ describe('ProjectWorkspacePage 集成', () => {
     await user.click(screen.getByRole('button', { name: '执行 API' }))
 
     await waitFor(() => {
-      expect(runAsset).toHaveBeenCalledWith('p-1', 'api.user.login', {
+      expect(runAsset).toHaveBeenCalledWith('main/demo', 'api.user.login', {
+        env: 'test',
         params: { username: 'alice', password: 'secret' },
       })
     })
@@ -304,9 +313,12 @@ describe('ProjectWorkspacePage 集成', () => {
         <ConfigProvider theme={{ token: { motion: false } }}>
           <AntApp>
             <QueryClientProvider client={client}>
-              <MemoryRouter initialEntries={['/projects/p-1']}>
+              <MemoryRouter initialEntries={['/projects/main/demo']}>
                 <Routes>
-                  <Route path="/projects/:projectId" element={<ProjectWorkspacePage />} />
+                  <Route
+                    path="/projects/:repo/:project"
+                    element={<ProjectWorkspacePage />}
+                  />
                 </Routes>
               </MemoryRouter>
             </QueryClientProvider>
@@ -322,7 +334,12 @@ describe('ProjectWorkspacePage 集成', () => {
     await clickTreeNode(user, 'api.user.login')
     expect(await screen.findByTestId('api-execution-panel')).toBeInTheDocument()
 
-    getProject.mockResolvedValue({ ...project, id: 'p-2', name: 'other' })
+    getProject.mockResolvedValue({
+      ...project,
+      id: 'main/other',
+      project: 'other',
+      name: 'other',
+    })
     getAssetsTree.mockResolvedValue({
       id: 'assets',
       name: 'assets',
@@ -351,9 +368,12 @@ describe('ProjectWorkspacePage 集成', () => {
       <ConfigProvider theme={{ token: { motion: false } }}>
         <AntApp>
           <QueryClientProvider client={client}>
-            <MemoryRouter initialEntries={['/projects/p-2']}>
+            <MemoryRouter initialEntries={['/projects/main/other']}>
               <Routes>
-                <Route path="/projects/:projectId" element={<ProjectWorkspacePage />} />
+                <Route
+                  path="/projects/:repo/:project"
+                  element={<ProjectWorkspacePage />}
+                />
               </Routes>
             </MemoryRouter>
           </QueryClientProvider>
@@ -365,5 +385,51 @@ describe('ProjectWorkspacePage 集成', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('api-execution-panel')).not.toBeInTheDocument()
     })
+  })
+
+  it('环境选择写入 localStorage，运行带 env', async () => {
+    const user = userEvent.setup({ delay: null })
+    window.localStorage.clear()
+    renderWorkspace()
+    const envSelect = await screen.findByTestId('workspace-env-select')
+    expect(screen.getByTestId('workspace-commit-sha')).toHaveTextContent('abcdef0')
+
+    // 切换到 staging（antd Select：combobox + title）
+    await user.click(within(envSelect).getByRole('combobox'))
+    await user.click(await screen.findByTitle('staging'))
+
+    expect(window.localStorage.getItem('testplat.control.projectEnv:main/demo')).toBe(
+      'staging',
+    )
+
+    await clickTreeNode(user, 'api')
+    await clickTreeNode(user, 'api.user')
+    await clickTreeNode(user, 'api.user.login')
+    expect(await screen.findByTestId('api-execution-panel')).toBeInTheDocument()
+    await screen.findByLabelText('password')
+    fireEvent.change(screen.getByTestId('param-password'), {
+      target: { value: 'secret' },
+    })
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => {
+      expect(runAsset).toHaveBeenCalledWith(
+        'main/demo',
+        'api.user.login',
+        expect.objectContaining({
+          env: 'staging',
+          params: expect.objectContaining({ password: 'secret' }),
+        }),
+      )
+    })
+  }, 45_000)
+
+  it('摘要不再展示 assets_root / config_root', async () => {
+    renderWorkspace()
+    await screen.findByText('fixture-demo')
+    // 展开摘要
+    const summary = screen.getByText('项目摘要')
+    await userEvent.setup({ delay: null }).click(summary)
+    expect(screen.queryByText('资产目录')).not.toBeInTheDocument()
+    expect(screen.queryByText('配置目录')).not.toBeInTheDocument()
   })
 })

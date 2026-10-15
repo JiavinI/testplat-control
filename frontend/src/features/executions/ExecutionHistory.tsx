@@ -31,6 +31,7 @@ import {
   runStatusColor,
   runStatusLabel,
 } from './statusLabel'
+import { shortSha } from '@/shared/project/display'
 import type {
   CaseExecutionRecordDetail,
   ExecutionHistoryProps,
@@ -83,9 +84,10 @@ function isCaseAssetId(assetId: string): boolean {
  * 项目执行历史：筛选、分页（无 total，条数 < limit 判末页）、详情抽屉。
  * Case 记录走类型化详情端点；旧 API 记录仍走通用详情，不回退。
  */
-export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) {
+export function ExecutionHistory({ projectId, assetId, envs = [] }: ExecutionHistoryProps) {
   const [status, setStatus] = useState<string>('')
   const [assetType, setAssetType] = useState<string>('')
+  const [envFilter, setEnvFilter] = useState<string>('')
   const [orderBy, setOrderBy] = useState('-start_time')
   const [page, setPage] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -96,7 +98,7 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
     setPage(0)
     setSelectedId(null)
     setSelectedAssetId(null)
-  }, [projectId, assetId, status, assetType, orderBy])
+  }, [projectId, assetId, status, assetType, envFilter, orderBy])
 
   const query = useMemo(
     () => ({
@@ -107,9 +109,10 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       asset_type: (assetType === 'api' || assetType === 'case'
         ? assetType
         : undefined) as 'api' | 'case' | undefined,
+      env: envFilter || undefined,
       order_by: orderBy,
     }),
-    [page, status, assetId, assetType, orderBy],
+    [page, status, assetId, assetType, envFilter, orderBy],
   )
 
   const listQuery = useExecutionRecords(projectId, query)
@@ -188,6 +191,23 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
       key: 'duration',
       width: 80,
       render: (value: number | null) => formatDurationSeconds(value),
+    },
+    {
+      title: '环境',
+      dataIndex: 'env',
+      key: 'env',
+      width: 90,
+      render: (value: string | null | undefined) =>
+        value ? <Typography.Text code>{value}</Typography.Text> : '—',
+    },
+    {
+      title: 'Commit',
+      dataIndex: 'commit_sha',
+      key: 'commit_sha',
+      width: 90,
+      render: (value: string | null | undefined) => (
+        <Typography.Text code>{shortSha(value)}</Typography.Text>
+      ),
     },
     {
       title: '操作',
@@ -276,6 +296,17 @@ export function ExecutionHistory({ projectId, assetId }: ExecutionHistoryProps) 
           onChange={(value) => setAssetType(value)}
           aria-label="按资产类型筛选"
           data-testid="filter-asset-type"
+        />
+        <Select
+          style={{ width: 140 }}
+          value={envFilter}
+          options={[
+            { value: '', label: '全部环境' },
+            ...envs.map((e) => ({ value: e, label: e })),
+          ]}
+          onChange={(value) => setEnvFilter(value)}
+          aria-label="按环境筛选"
+          data-testid="filter-env"
         />
         <Select
           style={{ width: 160 }}
@@ -393,6 +424,16 @@ function CaseDetailBody({ detail }: { detail: CaseExecutionRecordDetail }) {
         <Descriptions.Item label="耗时">
           {detail.display.duration ?? '—'}
         </Descriptions.Item>
+        <Descriptions.Item label="环境">
+          {detail.env ? (
+            <Typography.Text code>{detail.env}</Typography.Text>
+          ) : (
+            '—'
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label="Commit">
+          <Typography.Text code>{shortSha(detail.commit_sha)}</Typography.Text>
+        </Descriptions.Item>
       </Descriptions>
 
       {detail.result ? (
@@ -504,6 +545,16 @@ function ApiDetailBody({ detail }: { detail: ExecutionRecordDetail }) {
         </Descriptions.Item>
         <Descriptions.Item label="耗时">
           {detail.display.duration ?? '—'}
+        </Descriptions.Item>
+        <Descriptions.Item label="环境">
+          {detail.env ? (
+            <Typography.Text code>{detail.env}</Typography.Text>
+          ) : (
+            '—'
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label="Commit">
+          <Typography.Text code>{shortSha(detail.commit_sha)}</Typography.Text>
         </Descriptions.Item>
         {/* API 历史详情：顶层 auth，null（含 3.3 之前的旧记录）即匿名 */}
         <Descriptions.Item label="身份">

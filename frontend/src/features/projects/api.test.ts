@@ -1,20 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  createProject,
-  deleteProject,
-  getProject,
-  listProjects,
-  updateProject,
-} from './api'
+import { getProject, listProjects } from './api'
 import type { ProjectResponse } from '@/shared/types/project'
 import { ApiHttpError } from '@/shared/api/errors'
 
 const sample: ProjectResponse = {
-  id: 'p-1',
+  id: 'main/demo',
+  repo: 'main',
+  project: 'demo',
   name: 'demo',
-  env: 'test',
-  assets_root: '/assets',
-  config_root: '/config',
+  envs: ['test', 'staging'],
+  default_env: 'test',
+  archived: false,
+  commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
   created_at: '2026-10-10T00:00:00',
   updated_at: '2026-10-10T01:00:00',
 }
@@ -30,8 +27,8 @@ function jsonResponse(data: unknown, status = 200): Response {
   })
 }
 
-describe('projects api', () => {
-  it('listProjects 调用 GET /projects', async () => {
+describe('projects api (Phase 4.0)', () => {
+  it('listProjects 调用 GET /projects 并解析新字段', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse([sample]))
     const result = await listProjects({ baseUrl: '/api', fetchImpl })
     expect(result).toEqual([sample])
@@ -39,57 +36,30 @@ describe('projects api', () => {
       '/api/projects',
       expect.objectContaining({ method: 'GET' }),
     )
+    expect(result[0]).not.toHaveProperty('assets_root')
+    expect(result[0]).not.toHaveProperty('config_root')
+    expect(result[0]).not.toHaveProperty('env')
   })
 
-  it('getProject 对 id 编码', async () => {
+  it('getProject 使用两段式 /repos/{repo}/projects/{project}', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(sample))
-    await getProject('a/b', { baseUrl: '', fetchImpl })
-    expect(fetchImpl.mock.calls[0][0]).toBe('/projects/a%2Fb')
+    await getProject('main/demo', { baseUrl: '', fetchImpl })
+    expect(fetchImpl.mock.calls[0][0]).toBe('/repos/main/projects/demo')
   })
 
-  it('createProject 提交 ProjectCreate 字段', async () => {
+  it('旧字段 assets_root 缺失时仍可解析', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(sample))
-    const payload = {
-      name: 'demo',
-      env: 'test',
-      assets_root: '/assets',
-      config_root: '/config',
-    }
-    const result = await createProject(payload, { baseUrl: '', fetchImpl })
-    expect(result.id).toBe('p-1')
-    const body = JSON.parse(String(fetchImpl.mock.calls[0][1].body)) as typeof payload
-    expect(body).toEqual(payload)
+    const result = await getProject('main/demo', { baseUrl: '', fetchImpl })
+    expect(result.envs).toEqual(['test', 'staging'])
+    expect(result.commit_sha?.startsWith('abcdef0')).toBe(true)
   })
 
-  it('updateProject 使用 PUT', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({ ...sample, name: 'renamed' }),
-    )
-    const result = await updateProject(
-      'p-1',
-      { name: 'renamed' },
-      { baseUrl: '', fetchImpl },
-    )
-    expect(result.name).toBe('renamed')
-    expect(fetchImpl.mock.calls[0][0]).toBe('/projects/p-1')
-    expect(fetchImpl.mock.calls[0][1].method).toBe('PUT')
-  })
-
-  it('deleteProject 成功返回 message', async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ message: 'Project deleted successfully' }))
-    const result = await deleteProject('p-1', { baseUrl: '', fetchImpl })
-    expect(result.message).toBe('Project deleted successfully')
-    expect(fetchImpl.mock.calls[0][1].method).toBe('DELETE')
-  })
-
-  it('deleteProject 404 抛出 ApiHttpError', async () => {
+  it('getProject 404 抛 ApiHttpError', async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValue(jsonResponse({ detail: 'Project not found' }, 404))
-    await expect(deleteProject('missing', { baseUrl: '', fetchImpl })).rejects.toBeInstanceOf(
-      ApiHttpError,
-    )
+    await expect(
+      getProject('main/missing', { baseUrl: '', fetchImpl }),
+    ).rejects.toBeInstanceOf(ApiHttpError)
   })
 })

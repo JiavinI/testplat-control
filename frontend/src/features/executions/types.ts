@@ -79,6 +79,8 @@ export interface ParamsResponse {
 }
 
 export interface RunRequest {
+  /** 必填：须在项目 envs 内，否则后端 422 */
+  env: string
   params: Record<string, string | number | boolean>
 }
 
@@ -89,6 +91,8 @@ export interface RunResponse {
   result: unknown
   /** 顶层公开身份；旧后端无此键时视为 null（匿名） */
   auth?: ExecutionAuth | null
+  /** 本次执行固定的 commit；缺省兼容旧响应 */
+  commit_sha?: string | null
 }
 
 export interface ExecutionRecordListItem {
@@ -102,6 +106,10 @@ export interface ExecutionRecordListItem {
    * 后端列表契约暂未冻结此字段；e2e mock 与后续后端可提供。
    */
   login_failed?: boolean
+  env?: string | null
+  commit_sha?: string | null
+  repo?: string | null
+  operator?: string | null
 }
 
 export interface ExecutionDisplay {
@@ -125,6 +133,10 @@ export interface ExecutionRecordDetail {
   response: unknown
   /** 顶层公开身份；Phase 3.3 之前的旧记录无此键 → null（匿名） */
   auth?: ExecutionAuth | null
+  env?: string | null
+  commit_sha?: string | null
+  repo?: string | null
+  operator?: string | null
 }
 
 export interface ExecutionListQuery {
@@ -134,17 +146,23 @@ export interface ExecutionListQuery {
   asset_id?: string
   /** Phase 3：可选 api | case */
   asset_type?: 'api' | 'case'
+  /** Phase 4.0：按运行环境过滤 */
+  env?: string
   order_by?: string
 }
 
 export type ApiExecutionPanelProps = {
   projectId: string
   assetId: string
+  /** 运行必填 env；由工作台环境下拉传入 */
+  env: string
 }
 
 export type ExecutionHistoryProps = {
   projectId: string
   assetId?: string
+  /** 项目可选环境，供历史筛选下拉 */
+  envs?: string[]
 }
 
 /** GET /projects/{id}/cases/{case_id} */
@@ -157,6 +175,8 @@ export interface CaseAssetDetail {
 }
 
 export interface CaseRunRequest {
+  /** 必填：须在项目 envs 内 */
+  env: string
   params?: Record<string, unknown>
 }
 
@@ -237,6 +257,7 @@ export interface CaseRunResponse {
   status: RunStatus
   duration: number | null
   result: CaseResult
+  commit_sha?: string | null
 }
 
 export interface CaseExecutionRecordDetail {
@@ -250,9 +271,14 @@ export interface CaseExecutionRecordDetail {
   duration: number | null
   display: ExecutionDisplay
   result: CaseResult | null
+  env?: string | null
+  commit_sha?: string | null
+  repo?: string | null
+  operator?: string | null
 }
 
 export type CaseExecutionPanelProps = {
   projectId: string
   caseId: string
+  env: string
 }

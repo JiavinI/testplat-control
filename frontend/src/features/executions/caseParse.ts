@@ -263,6 +263,10 @@ export function parseCaseRunResponse(payload: unknown): CaseRunResponse {
     status,
     duration: requireNullableNumber(payload, 'duration', 'CaseRunResponse'),
     result: parseCaseResult(payload.result, 'CaseRunResponse.result'),
+    commit_sha:
+      'commit_sha' in payload
+        ? requireNullableString(payload, 'commit_sha', 'CaseRunResponse')
+        : null,
   }
 }
 
@@ -301,6 +305,22 @@ export function parseCaseExecutionRecordDetail(
     duration: requireNullableNumber(payload, 'duration', 'CaseExecutionRecordDetail'),
     display: parseDisplay(payload.display, 'CaseExecutionRecordDetail.display'),
     result,
+    env:
+      'env' in payload
+        ? requireNullableString(payload, 'env', 'CaseExecutionRecordDetail')
+        : null,
+    commit_sha:
+      'commit_sha' in payload
+        ? requireNullableString(payload, 'commit_sha', 'CaseExecutionRecordDetail')
+        : null,
+    repo:
+      'repo' in payload
+        ? requireNullableString(payload, 'repo', 'CaseExecutionRecordDetail')
+        : null,
+    operator:
+      'operator' in payload
+        ? requireNullableString(payload, 'operator', 'CaseExecutionRecordDetail')
+        : null,
   }
 }
 

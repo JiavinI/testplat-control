@@ -3,22 +3,59 @@ import type { ApiClientOptions } from '@/shared/api/client'
 import {
   assertArray,
   assertObject,
+  requireNullableString,
   requireString,
 } from '@/shared/api/validate'
-import type {
-  ProjectCreate,
-  ProjectResponse,
-  ProjectUpdate,
-} from '@/shared/types/project'
+import { ApiParseError } from '@/shared/api/errors'
+import { projectResourcePath, splitProjectId } from '@/shared/project/ids'
+import type { ProjectResponse } from '@/shared/types/project'
+
+function requireBoolean(
+  obj: Record<string, unknown>,
+  key: string,
+  label: string,
+): boolean {
+  const value = obj[key]
+  if (typeof value !== 'boolean') {
+    throw new ApiParseError(`${label}.${key} 应为布尔值`, JSON.stringify(obj))
+  }
+  return value
+}
+
+function requireStringArray(
+  obj: Record<string, unknown>,
+  key: string,
+  label: string,
+): string[] {
+  const value = obj[key]
+  if (value === undefined || value === null) {
+    return []
+  }
+  if (!Array.isArray(value)) {
+    throw new ApiParseError(`${label}.${key} 应为数组`, JSON.stringify(obj))
+  }
+  return value.map((item, index) => {
+    if (typeof item !== 'string') {
+      throw new ApiParseError(
+        `${label}.${key}[${index}] 应为字符串`,
+        JSON.stringify(obj),
+      )
+    }
+    return item
+  })
+}
 
 function parseProject(payload: unknown, label = 'ProjectResponse'): ProjectResponse {
   assertObject(payload, label)
   return {
     id: requireString(payload, 'id', label),
+    repo: requireString(payload, 'repo', label),
+    project: requireString(payload, 'project', label),
     name: requireString(payload, 'name', label),
-    env: requireString(payload, 'env', label),
-    assets_root: requireString(payload, 'assets_root', label),
-    config_root: requireString(payload, 'config_root', label),
+    envs: requireStringArray(payload, 'envs', label),
+    default_env: requireNullableString(payload, 'default_env', label),
+    archived: requireBoolean(payload, 'archived', label),
+    commit_sha: requireNullableString(payload, 'commit_sha', label),
     created_at: requireString(payload, 'created_at', label),
     updated_at: requireString(payload, 'updated_at', label),
   }
@@ -32,46 +69,17 @@ export async function listProjects(
   return payload.map((item, index) => parseProject(item, `ProjectList[${index}]`))
 }
 
+/** 两段式详情；也接受扁平 id "{repo}/{project}" */
 export async function getProject(
   projectId: string,
   options?: ApiClientOptions,
 ): Promise<ProjectResponse> {
+  const { repo, project } = splitProjectId(projectId)
   const payload = await apiClient.get<unknown>(
-    encodePath(['projects', projectId]),
+    encodePath(['repos', repo, 'projects', project]),
     options,
   )
   return parseProject(payload)
 }
 
-export async function createProject(
-  payload: ProjectCreate,
-  options?: ApiClientOptions,
-): Promise<ProjectResponse> {
-  const data = await apiClient.post<unknown>('/projects', payload, options)
-  return parseProject(data)
-}
-
-export async function updateProject(
-  projectId: string,
-  payload: ProjectUpdate,
-  options?: ApiClientOptions,
-): Promise<ProjectResponse> {
-  const data = await apiClient.put<unknown>(
-    encodePath(['projects', projectId]),
-    payload,
-    options,
-  )
-  return parseProject(data)
-}
-
-export async function deleteProject(
-  projectId: string,
-  options?: ApiClientOptions,
-): Promise<{ message: string }> {
-  const data = await apiClient.delete<unknown>(
-    encodePath(['projects', projectId]),
-    options,
-  )
-  assertObject(data, 'DeleteProjectResponse')
-  return { message: requireString(data, 'message', 'DeleteProjectResponse') }
-}
+export { projectResourcePath, splitProjectId }

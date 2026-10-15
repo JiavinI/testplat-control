@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   Button,
   Collapse,
   Descriptions,
   Drawer,
+  Select,
   Space,
   Typography,
 } from 'antd'
@@ -31,6 +33,12 @@ import {
 } from '@/features/executions'
 import { useCaseAssetDetail } from '@/features/executions/hooks'
 import { useProject } from '@/features/projects/hooks'
+import { joinProjectId } from '@/shared/project/ids'
+import { shortSha } from '@/shared/project/display'
+import {
+  resolveInitialEnv,
+  writePreferredEnv,
+} from '@/shared/project/envPreference'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
 
 /** 窄屏用抽屉挂载资产树；jsdom stub 的 matchMedia 恒为 false，测试走桌面布局 */
@@ -49,20 +57,38 @@ function useIsNarrowViewport(query = '(max-width: 767px)'): boolean {
 /**
  * 项目工作台：组合资产浏览、API/Case 执行与执行历史。
  * api.* 挂动态参数面板；case.* 挂文件元信息 + 运行（步骤只来自运行/历史）。
+ * Phase 4.0：环境下拉默认 default_env，选择写入 localStorage；运行必带 env。
  */
 export function ProjectWorkspacePage() {
-  const { projectId = '' } = useParams()
+  const { repo = '', project: projectKey = '' } = useParams()
+  const projectId = repo && projectKey ? joinProjectId(repo, projectKey) : ''
   const projectQuery = useProject(projectId)
   const isNarrow = useIsNarrowViewport()
 
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>()
   const [assetDrawerOpen, setAssetDrawerOpen] = useState(false)
+  const [selectedEnv, setSelectedEnv] = useState<string | null>(null)
 
   // 项目切换时清空选中与抽屉，避免串数据
   useEffect(() => {
     setSelectedAssetId(undefined)
     setAssetDrawerOpen(false)
+    setSelectedEnv(null)
   }, [projectId])
+
+  // 项目加载后解析初始环境（localStorage → default_env → envs[0]）
+  useEffect(() => {
+    if (!projectQuery.data) {
+      return
+    }
+    setSelectedEnv(
+      resolveInitialEnv(
+        projectQuery.data.id,
+        projectQuery.data.envs,
+        projectQuery.data.default_env,
+      ),
+    )
+  }, [projectQuery.data])
 
   const treeQuery = useAssetsTree(projectId)
 
@@ -102,6 +128,13 @@ export function ProjectWorkspacePage() {
     }
   }
 
+  const handleEnvChange = (env: string) => {
+    setSelectedEnv(env)
+    if (projectId) {
+      writePreferredEnv(projectId, env)
+    }
+  }
+
   if (projectQuery.isLoading) {
     return <LoadingState tip="加载项目…" />
   }
@@ -135,6 +168,9 @@ export function ProjectWorkspacePage() {
       />
     )
   }
+
+  const envOptions = project.envs.map((e) => ({ value: e, label: e }))
+  const canRun = Boolean(selectedEnv)
 
   const browser = (
     <AssetBrowser
@@ -188,19 +224,30 @@ export function ProjectWorkspacePage() {
         )}
       </section>
 
-      {isApi && selectedFromTree ? (
-        <ApiExecutionPanel
-          key={`${projectId}:${selectedFromTree.id}`}
-          projectId={projectId}
-          assetId={selectedFromTree.id}
+      {!canRun && (isApi || isCase) ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="请先选择运行环境"
+          data-testid="workspace-env-required"
         />
       ) : null}
 
-      {isCase && selectedFromTree ? (
+      {isApi && selectedFromTree && selectedEnv ? (
+        <ApiExecutionPanel
+          key={`${projectId}:${selectedFromTree.id}:${selectedEnv}`}
+          projectId={projectId}
+          assetId={selectedFromTree.id}
+          env={selectedEnv}
+        />
+      ) : null}
+
+      {isCase && selectedFromTree && selectedEnv ? (
         <CaseExecutionPanel
-          key={`${projectId}:case:${selectedFromTree.id}`}
+          key={`${projectId}:case:${selectedFromTree.id}:${selectedEnv}`}
           projectId={projectId}
           caseId={selectedFromTree.id}
+          env={selectedEnv}
         />
       ) : null}
 
@@ -227,6 +274,7 @@ export function ProjectWorkspacePage() {
         assetId={
           selectedFromTree?.type === 'file' ? selectedFromTree.id : undefined
         }
+        envs={project.envs}
       />
     </div>
   )
@@ -256,12 +304,28 @@ export function ProjectWorkspacePage() {
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
+              opacity: project.archived ? 0.55 : 1,
             }}
             title={project.name}
           >
             {project.name}
           </Typography.Title>
-          <Typography.Text code>{project.env}</Typography.Text>
+          <Typography.Text type="secondary" code>
+            {project.id}
+          </Typography.Text>
+          <Typography.Text code data-testid="workspace-commit-sha">
+            {shortSha(project.commit_sha)}
+          </Typography.Text>
+          <Select
+            style={{ minWidth: 140 }}
+            value={selectedEnv ?? undefined}
+            options={envOptions}
+            placeholder="选择环境"
+            onChange={handleEnvChange}
+            disabled={envOptions.length === 0}
+            aria-label="运行环境"
+            data-testid="workspace-env-select"
+          />
         </Space>
         {isNarrow ? (
           <Button
@@ -297,16 +361,21 @@ export function ProjectWorkspacePage() {
                     {project.id}
                   </Typography.Text>
                 </Descriptions.Item>
-                <Descriptions.Item label="环境">{project.env}</Descriptions.Item>
-                <Descriptions.Item label="资产目录" span={2}>
-                  <Typography.Text code style={{ wordBreak: 'break-all' }}>
-                    {project.assets_root}
+                <Descriptions.Item label="仓库">{project.repo}</Descriptions.Item>
+                <Descriptions.Item label="项目键">{project.project}</Descriptions.Item>
+                <Descriptions.Item label="默认环境">
+                  {project.default_env ?? '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label="可选环境">
+                  {project.envs.length ? project.envs.join(', ') : '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Commit">
+                  <Typography.Text code>
+                    {shortSha(project.commit_sha)}
                   </Typography.Text>
                 </Descriptions.Item>
-                <Descriptions.Item label="配置目录" span={2}>
-                  <Typography.Text code style={{ wordBreak: 'break-all' }}>
-                    {project.config_root}
-                  </Typography.Text>
+                <Descriptions.Item label="归档">
+                  {project.archived ? '是' : '否'}
                 </Descriptions.Item>
                 <Descriptions.Item label="创建时间">
                   {project.created_at}

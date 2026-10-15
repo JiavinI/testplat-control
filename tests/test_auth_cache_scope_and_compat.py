@@ -1,7 +1,8 @@
-"""Phase 3.3d：cache_scope 拼接、旧 auth 七键兼容。"""
+"""Phase 3.3d / 4.0：cache_scope 拼接、旧 auth 七键兼容。"""
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -10,22 +11,22 @@ from testplat_control.api.schemas import ExecutionAuth, parse_execution_auth
 from testplat_control.services import execution_service
 
 
-def test_load_auth_passes_project_id_env_as_cache_scope(
+def test_load_auth_passes_repo_project_env_as_cache_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """execution_service._load_auth 拼 f"{project.id}:{project.env}"。"""
+    """execution_service._load_auth 拼 f"{repo}:{project}:{env}"。"""
     captured: dict[str, object] = {}
 
     def fake_load_auth(config_root, env, *, environ=None, cache_scope=None):  # noqa: ANN001
-        captured["config_root"] = config_root
+        captured["config_root"] = str(config_root)
         captured["env"] = env
         captured["cache_scope"] = cache_scope
         return None
 
     monkeypatch.setattr(execution_service, "load_auth", fake_load_auth)
-    project = SimpleNamespace(id="proj-uuid-1", env="staging", config_root="/tmp/cfg")
-    assert execution_service._load_auth(project) is None  # noqa: SLF001
-    assert captured["cache_scope"] == "proj-uuid-1:staging"
+    project = SimpleNamespace(id="main/demo", repo="main", project_key="demo")
+    assert execution_service._load_auth(Path("/tmp/cfg"), "staging", project) is None  # noqa: SLF001
+    assert captured["cache_scope"] == "main:demo:staging"
     assert captured["env"] == "staging"
     assert captured["config_root"] == "/tmp/cfg"
 

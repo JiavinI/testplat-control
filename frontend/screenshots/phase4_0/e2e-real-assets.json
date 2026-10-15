@@ -1,0 +1,84 @@
+{
+  "assets_src": "/Users/jiavin/Developer/products/testplat1/testplat-assets",
+  "expected_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+  "copy_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+  "url_scheme": "file",
+  "sync": {
+    "ok": true,
+    "commit_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+    "category": "ok"
+  },
+  "projects": [
+    "main/gsb"
+  ],
+  "project": {
+    "id": "main/gsb",
+    "envs": [
+      "test"
+    ],
+    "default_env": "test",
+    "commit_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40"
+  },
+  "api_run": {
+    "status": 200,
+    "body_keys": [
+      "auth",
+      "commit_sha",
+      "duration",
+      "record_id",
+      "result",
+      "status"
+    ]
+  },
+  "case_run": {
+    "status": 200
+  },
+  "api": {
+    "http": 200,
+    "env": null,
+    "commit_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+    "record_id": "3bb17a85-1c2b-439b-a120-49358526f203",
+    "status": "failed",
+    "error_category": null,
+    "detail_env": "test",
+    "detail_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+    "detail_status": "failed",
+    "looks_transport": true,
+    "transportish": true
+  },
+  "case": {
+    "http": 200,
+    "env": null,
+    "commit_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+    "record_id": "f7ead3bc-0040-4c49-a48b-8de94a611d76",
+    "status": "failed",
+    "error_category": null,
+    "detail_env": "test",
+    "detail_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+    "detail_status": "failed",
+    "looks_transport": true,
+    "transportish": true
+  },
+  "api_records": [
+    {
+      "id": "f7ead3bc-0040-4c49-a48b-8de94a611d76",
+      "env": "test",
+      "commit_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+      "status": "failed"
+    },
+    {
+      "id": "3bb17a85-1c2b-439b-a120-49358526f203",
+      "env": "test",
+      "commit_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+      "status": "failed"
+    }
+  ],
+  "case_records": [
+    {
+      "id": "f7ead3bc-0040-4c49-a48b-8de94a611d76",
+      "env": "test",
+      "commit_sha": "80ad73bc14a6adb6cda2a96a33e6235fa9892f40",
+      "status": "failed"
+    }
+  ]
+}
