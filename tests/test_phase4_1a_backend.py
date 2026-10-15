@@ -319,7 +319,7 @@ def test_a5_a7_frozen_config_and_overrides(
             "env": "test",
             "api_hosts": {"local": "http://10.0.0.1"},
             "timeout_seconds": 11,
-            "case_params": {"age": 7, "extra": "keep"},
+            "case_params": {"age": 7},
         },
     )
     omitted = client.post(
@@ -331,7 +331,6 @@ def test_a5_a7_frozen_config_and_overrides(
     assert first.environment["api_hosts"]["local"] == "http://10.0.0.1"
     assert first.timeout_seconds == 11
     assert first.params["age"] == 7
-    assert first.params["extra"] == "keep"
     assert first.params["username"] == "a"
 
     explicit = client.post(
@@ -346,7 +345,6 @@ def test_a5_a7_frozen_config_and_overrides(
     second = fake.calls[-1]
     assert second.timeout_seconds == 30
     assert second.params["age"] == 9
-    assert second.params["extra"] == "keep"
 
     release = threading.Event()
     started = threading.Event()
@@ -361,6 +359,11 @@ def test_a5_a7_frozen_config_and_overrides(
         return await original(request)
 
     fake.execute = blocking  # type: ignore[method-assign]
+    # health_check 没有 age。先清掉环境默认参数，避免合并后被当成未知参数。
+    client.put(
+        f"{base}/environments/test",
+        json={"revision": 1, "case_params": {}},
+    )
     holder: dict[str, object] = {}
 
     def runner() -> None:
@@ -374,7 +377,7 @@ def test_a5_a7_frozen_config_and_overrides(
     assert started.wait(5)
     client.put(
         f"{base}/environments/test",
-        json={"revision": 1, "api_hosts": {"local": "http://10.0.0.2"}, "timeout_seconds": 3},
+        json={"revision": 2, "api_hosts": {"local": "http://10.0.0.2"}, "timeout_seconds": 3},
     )
     release.set()
     thread.join(10)
@@ -400,7 +403,7 @@ def test_a10_history_keeps_snapshot(
     base = ctx["base"]
     client.post(
         f"{base}/environments",
-        json={"env": "test", "api_hosts": {"local": "http://10.0.0.3"}, "case_params": {"k": "v"}},
+        json={"env": "test", "api_hosts": {"local": "http://10.0.0.3"}, "case_params": {}},
     )
     client.post(
         f"{base}/environments/test/accounts",
@@ -557,3 +560,120 @@ def test_master_key_missing_is_explicit(tmp_path: Path, monkeypatch: pytest.Monk
     assert response.status_code == 500
     assert response.json()["detail"] == "服务配置错误：TESTPLAT_MASTER_KEY 未配置"
     assert PASSWORD not in response.text
+
+
+_CREATE_WITH_DEFAULT = """\
+id: api.user.create
+type: api
+name: 创建用户
+host: local
+method: POST
+url: /users
+request:
+  inputs:
+    username:
+      type: string
+      required: true
+      default: from-asset
+      description: 用户名
+    email:
+      type: string
+      required: true
+      description: 邮箱
+success:
+  status_code: 201
+"""
+
+
+def test_r3_merges_before_required_check(
+    tmp_path: Path, master_key: str, fake: FakeEngineAdapter
+) -> None:
+    """环境 case_params 能补齐必填；请求覆盖环境；资产默认值垫底；合并后仍缺则 422。"""
+    del master_key
+    from tests.repo_support import DEFAULT_FILES
+
+    files = dict(DEFAULT_FILES)
+    files["projects/demo/api/user/create.yaml"] = _CREATE_WITH_DEFAULT
+    client = _client()
+    ctx = bootstrap_synced_project(client, tmp_path, files, repo_key="mergep", project_key="demo")
+    base = ctx["base"]
+
+    missing_email = client.post(
+        f"{base}/assets/api.user.create/run",
+        json={"env": "test", "params": {}},
+    )
+    assert missing_email.status_code == 422
+    assert "email" in missing_email.json()["detail"]
+    assert fake.calls == []
+
+    created = client.post(
+        f"{base}/environments",
+        json={
+            "env": "test",
+            "api_hosts": {"local": "http://10.0.0.5"},
+            "case_params": {"username": "from-env", "email": "env@b.c"},
+        },
+    )
+    assert created.status_code == 201, created.text
+    filled = client.post(
+        f"{base}/assets/api.user.create/run",
+        json={"env": "test", "params": {}},
+    )
+    assert filled.status_code == 200, filled.text
+    assert fake.calls[-1].params["username"] == "from-env"
+    assert fake.calls[-1].params["email"] == "env@b.c"
+
+    overridden = client.post(
+        f"{base}/assets/api.user.create/run",
+        json={"env": "test", "params": {"username": "from-req"}},
+    )
+    assert overridden.status_code == 200, overridden.text
+    assert fake.calls[-1].params["username"] == "from-req"
+    assert fake.calls[-1].params["email"] == "env@b.c"
+
+    client.put(
+        f"{base}/environments/test",
+        json={"revision": created.json()["revision"], "case_params": {"username": "only-name"}},
+    )
+    still_missing = client.post(
+        f"{base}/assets/api.user.create/run",
+        json={"env": "test", "params": {}},
+    )
+    assert still_missing.status_code == 422
+    assert "email" in still_missing.json()["detail"]
+
+
+@pytest.mark.platform_auth
+def test_s1_validation_errors_hide_secrets(tmp_path: Path, master_key: str) -> None:
+    """缺字段或类型错误的 422 不回显 password / credentials。"""
+    secret = "pw-should-not-echo-91"
+    client = _client()
+    missing_user = client.post("/auth/register", json={"password": secret})
+    assert missing_user.status_code == 422
+    assert secret not in missing_user.text
+    assert "input" not in missing_user.text
+    wrong_type = client.post(
+        "/auth/register",
+        json={"username": 1, "password": secret},
+    )
+    assert wrong_type.status_code == 422
+    assert secret not in wrong_type.text
+    assert "input" not in wrong_type.text
+
+    _register(client, "s1hide", "password-1")
+    ctx = bootstrap_synced_project(client, tmp_path, repo_key="hideme", project_key="demo")
+    base = ctx["base"]
+    client.post(f"{base}/environments", json={"env": "test", "api_hosts": {}})
+    missing_name = client.post(
+        f"{base}/environments/test/accounts",
+        json={
+            "login_profile": "gsb_login",
+            "credentials": {"username": "buyer-user", "password": secret},
+        },
+    )
+    assert missing_name.status_code == 422
+    assert secret not in missing_name.text
+    assert "buyer-user" not in missing_name.text
+    detail = missing_name.json()["detail"]
+    assert isinstance(detail, list)
+    assert all("input" not in item and "ctx" not in item for item in detail)

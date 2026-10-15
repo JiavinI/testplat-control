@@ -92,6 +92,7 @@ API 层证据：`uv run pytest -q tests/integration/test_real_engine_case_flow.p
 - 已有 Web 环境后，`api_hosts`、账号和启停只来自数据库；Git 同步不覆盖它们。项目还没有任何 Web 环境时，运行仍读取 Git 环境文件和历史 `config/auth/{env}.yaml`。
 - HTTP 步骤超时：请求显式 `timeout_seconds` > 环境 `timeout_seconds` > 默认 30。省略和显式 30 不是同一件事。仍是每步超时，不是整个 Case 的总预算。
 - 不使用 Alembic。启动发现不兼容表结构时提示显式删除数据库文件，不会自动清空。
+- `DATABASE_URL` 决定实际库。默认 `sqlite:///:memory:`；设为 `sqlite:///绝对路径` 后，重启进程仍能读到用户、环境和账号。
 
 ## 执行错误映射（摘要）
 

@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from testplat_control.database.models import ConfigChange, ProjectEnvironment, TestAccount
@@ -236,6 +237,49 @@ def create_environment(
     return row
 
 
+def _update_where_revision(
+    db: Session,
+    *,
+    row_id: str,
+    expected_revision: int,
+    values: dict[str, Any],
+    model: type[ProjectEnvironment] | type[TestAccount],
+) -> None:
+    """条件更新：只有库里的 revision 仍是预期值才写入。冲突则回滚并 409。"""
+    now = _now()
+    stmt = (
+        update(model)
+        .where(model.id == row_id, model.revision == expected_revision)
+        .values(revision=expected_revision + 1, updated_at=now, **values)
+        .execution_options(synchronize_session=False)
+    )
+    result = db.execute(stmt)
+    if result.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=CONFLICT)
+
+
+def _bump_environment_sql(db: Session, env_row: ProjectEnvironment, operator: str) -> int:
+    """同一事务里原子递增环境 revision。调用方在冲突时回滚本语句。"""
+    now = _now()
+    result = db.execute(
+        update(ProjectEnvironment)
+        .where(ProjectEnvironment.id == env_row.id)
+        .values(
+            revision=ProjectEnvironment.revision + 1,
+            updated_by=operator,
+            updated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=CONFLICT)
+    db.expire(env_row)
+    db.refresh(env_row)
+    return int(env_row.revision)
+
+
 def update_environment(
     db: Session,
     *,
@@ -247,14 +291,15 @@ def update_environment(
 ) -> ProjectEnvironment:
     """按 revision 条件更新。``fields`` 只含本次要改的列。"""
     row = get_environment(db, project_id, env)
-    if row.revision != expected_revision:
-        raise HTTPException(status_code=409, detail=CONFLICT)
     changed = sorted(fields)
-    for key, value in fields.items():
-        setattr(row, key, value)
-    row.revision = expected_revision + 1
-    row.updated_by = operator
-    row.updated_at = _now()
+    _update_where_revision(
+        db,
+        row_id=row.id,
+        expected_revision=expected_revision,
+        values={**fields, "updated_by": operator},
+        model=ProjectEnvironment,
+    )
+    new_revision = expected_revision + 1
     _record_change(
         db,
         operator=operator,
@@ -265,9 +310,10 @@ def update_environment(
         action="update",
         field_names=changed,
         credentials_changed=False,
-        revision=row.revision,
+        revision=new_revision,
     )
     db.commit()
+    db.expire(row)
     db.refresh(row)
     return row
 
@@ -385,22 +431,23 @@ def update_account(
     """更新账号。``credentials is None`` 表示本次不改凭据。"""
     env_row = get_environment(db, project_id, env)
     row = get_account(db, project_id, env, name)
-    if row.revision != expected_revision:
-        raise HTTPException(status_code=409, detail=CONFLICT)
     changed = sorted(fields)
-    for key, value in fields.items():
-        setattr(row, key, value)
+    values = {**fields, "updated_by": operator}
     if credentials is not None:
         try:
-            row.encrypted_credentials = encrypt_credentials(credentials)
+            values["encrypted_credentials"] = encrypt_credentials(credentials)
         except MasterKeyError as exc:
             db.rollback()
             raise HTTPException(status_code=500, detail=exc.message) from None
         changed = sorted({*changed, "credentials"})
-    row.revision = expected_revision + 1
-    row.updated_by = operator
-    row.updated_at = _now()
-    env_revision = _bump_environment(env_row, operator)
+    _update_where_revision(
+        db,
+        row_id=row.id,
+        expected_revision=expected_revision,
+        values=values,
+        model=TestAccount,
+    )
+    env_revision = _bump_environment_sql(db, env_row, operator)
     _record_change(
         db,
         operator=operator,
@@ -414,6 +461,7 @@ def update_account(
         revision=env_revision,
     )
     db.commit()
+    db.expire(row)
     db.refresh(row)
     return row
 

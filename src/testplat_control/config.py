@@ -18,12 +18,20 @@ class Settings(BaseSettings):
     app_name: str = "testplat-control"
     app_version: str = "0.1.0"
     debug: bool = False
+    # 默认内存库。设为 sqlite:///绝对路径 后，重启进程仍能读到用户、环境和账号。
     database_url: str = "sqlite:///:memory:"
     testplat_repos_file: str | None = None
     # Fernet 密钥（urlsafe base64）。空字符串视为未配置。
     testplat_master_key: str | None = None
     # 部署在 HTTPS 时设为 true，会话 cookie 才带 Secure。
     testplat_cookie_secure: bool = False
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _blank_database_url(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return "sqlite:///:memory:"
+        return value
 
     @field_validator("testplat_repos_file", "testplat_master_key", mode="before")
     @classmethod

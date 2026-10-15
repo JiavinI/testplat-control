@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from testplat_control.api import (
     assets,
@@ -86,6 +88,29 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+def _public_validation_errors(exc: RequestValidationError) -> list[dict[str, object]]:
+    """校验错误只保留位置和类型。不回显 input，避免 password / credentials 进响应。"""
+    public: list[dict[str, object]] = []
+    for err in exc.errors():
+        loc = err.get("loc", ())
+        public.append(
+            {
+                "type": err.get("type"),
+                "loc": list(loc) if isinstance(loc, (list, tuple)) else [loc],
+                "msg": err.get("msg"),
+            }
+        )
+    return public
+
+
+@app.exception_handler(RequestValidationError)
+async def hide_validation_input(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """请求体校验失败时不返回提交的字段值或 ctx。"""
+    del request
+    return JSONResponse(status_code=422, content={"detail": _public_validation_errors(exc)})
+
 
 # 测试在 lifespan 外构造 TestClient 时也能拿到同步服务；lifespan 会再替换配置。
 app.state.repo_sync = _build_repo_sync()

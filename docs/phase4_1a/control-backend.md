@@ -83,7 +83,15 @@ OpenAPI：`openapi-phase4_1a.json`。相对 Phase 4.0 的路径与 schema 摘要
 
 ## 表结构
 
+`DATABASE_URL` 接到实际引擎。默认 `sqlite:///:memory:`（测试与未配置进程）。文件 URL 在进程重启后仍保留数据。内存库使用单连接；文件库允许多进程打开同一文件。
+
 不引入 Alembic。`create_all` 只补空库。已有库若 `execution_records` 缺少 `config_revision` / `account_revisions` / `config_snapshot`，或仍是 Phase 4.0 之前的项目表，启动抛出 `IncompatibleSchemaError`，提示显式删除 SQLite 文件。程序不会自动清空。
+
+环境 PUT 与账号 PUT 都用带预期 revision 的条件更新。没有更新到行则 409，并回滚这次的版本和修改记录。账号保存成功时，同一事务原子递增环境 revision。
+
+单接口运行先按「请求 params > 环境 case_params > 资产 inputs.default」合成参数，再按原参数表单校验。环境里的必填值可以补上省略的请求字段；合并后仍缺的必填项返回 422。
+
+请求体校验失败只返回 `type` / `loc` / `msg`，不返回 `input` 或 `ctx`。
 
 | 表 | 要点 |
 |---|---|
@@ -98,4 +106,4 @@ OpenAPI：`openapi-phase4_1a.json`。相对 Phase 4.0 的路径与 schema 摘要
 
 - 项目还没有 Web 环境时，运行配置仍来自 Git，而不是「api_hosts 只能来自数据库」。这是为了让 Phase 4.0 的既有测试和历史 auth 夹具继续通过。
 - `_profiles.yaml` 里的 `connections` 目前不会并入合并后的 AuthTable。本批登录流程不依赖连接配置。
-- revision 在同一事务里先读后写，没有 `SELECT FOR UPDATE`。顺序冲突会 409；SQLite 上的真正并发写不额外加锁。
+- 环境与账号更新用「预期 revision」条件 UPDATE。受影响行数不是 1 则 409，并回滚本次版本与修改记录。账号更新在同一事务里原子递增环境 revision。

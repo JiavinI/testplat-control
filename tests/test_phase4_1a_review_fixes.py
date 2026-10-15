@@ -1,0 +1,315 @@
+"""审查打回项：文件库跨进程持久化，以及 revision 的真实并发冲突。"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import threading
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+from cryptography.fernet import Fernet
+from fastapi import HTTPException
+from sqlalchemy.orm import sessionmaker
+
+from testplat_control.config import settings
+from testplat_control.database.models import (
+    ConfigChange,
+    Project,
+    ProjectEnvironment,
+    Repo,
+    TestAccount,
+)
+from testplat_control.database.session import init_engine_schema, make_engine
+from testplat_control.services import environment_store
+from testplat_control.services.environment_store import (
+    create_account,
+    create_environment,
+    update_account,
+    update_environment,
+)
+
+SECRET = "pw-persist-process-91"
+ACCOUNT_SECRET = "pw-account-persist-91"
+
+
+def _child_env(db_path: Path, key: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env["DATABASE_URL"] = f"sqlite:///{db_path}"
+    env["TESTPLAT_MASTER_KEY"] = key
+    env.pop("TESTPLAT_REPOS_FILE", None)
+    return env
+
+
+def _run_child(script: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(script)],
+        env=env,
+        cwd="/workspace",
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def test_r1_file_database_survives_a_second_process(tmp_path: Path) -> None:
+    """两个独立进程共用同一个文件库：第二个进程能读到并解密账号。"""
+    db_path = tmp_path / "control.db"
+    key = Fernet.generate_key().decode("ascii")
+    env = _child_env(db_path, key)
+    writer = tmp_path / "write_db.py"
+    reader = tmp_path / "read_db.py"
+    writer.write_text(
+        f"""
+from datetime import UTC, datetime
+from testplat_control.database.models import Project, Repo
+from testplat_control.database.session import SessionLocal
+from testplat_control.services.environment_store import create_account, create_environment
+from testplat_control.services.platform_auth import register_user
+
+now = datetime.now(UTC).replace(tzinfo=None)
+with SessionLocal() as db:
+    db.add(Repo(key="main", branch="main"))
+    db.commit()
+    db.add(Project(
+        id="main/demo", repo="main", project_key="demo", name="Demo",
+        envs=[], archived=False, created_at=now, updated_at=now,
+    ))
+    db.commit()
+    register_user(db, "alice", {SECRET!r})
+    create_environment(
+        db, project_id="main/demo", env="test",
+        api_hosts={{"local": "http://127.0.0.1:9"}},
+        timeout_seconds=None, case_params={{}}, enabled=True, operator="alice",
+    )
+    create_account(
+        db, project_id="main/demo", env="test", account_name="gsb",
+        display_name="采购员", business_role=None, login_profile="gsb_login",
+        credentials={{"username": "buyer-user", "password": {ACCOUNT_SECRET!r}}},
+        enabled=True, operator="alice",
+    )
+print("wrote")
+""",
+        encoding="utf-8",
+    )
+    reader.write_text(
+        """
+import json
+from sqlalchemy import text
+from testplat_control.database.session import SessionLocal
+from testplat_control.services.crypto import decrypt_credentials
+
+with SessionLocal() as db:
+    users = db.execute(text("SELECT COUNT(*) FROM platform_users")).scalar()
+    envs = db.execute(text("SELECT COUNT(*) FROM project_environments")).scalar()
+    accounts = db.execute(text("SELECT COUNT(*) FROM test_accounts")).scalar()
+    cipher = db.execute(text("SELECT encrypted_credentials FROM test_accounts")).scalar()
+creds = decrypt_credentials(cipher)
+print(json.dumps({
+    "counts": [users, envs, accounts],
+    "password": creds["password"],
+    "username": creds["username"],
+    "cipher_has_password": creds["password"] in cipher,
+}))
+""",
+        encoding="utf-8",
+    )
+    wrote = _run_child(writer, env)
+    assert wrote.returncode == 0, wrote.stderr
+    assert db_path.is_file() and db_path.stat().st_size > 0
+    read = _run_child(reader, env)
+    assert read.returncode == 0, read.stderr
+    payload = json.loads(read.stdout.strip().splitlines()[-1])
+    assert payload["counts"] == [1, 1, 1]
+    assert payload["password"] == ACCOUNT_SECRET
+    assert payload["username"] == "buyer-user"
+    assert payload["cipher_has_password"] is False
+
+
+def _seed(factory: sessionmaker) -> None:
+    now = datetime.now(UTC).replace(tzinfo=None)
+    db = factory()
+    db.add(Repo(key="main", branch="main"))
+    db.commit()
+    db.add(
+        Project(
+            id="main/demo",
+            repo="main",
+            project_key="demo",
+            name="Demo",
+            envs=[],
+            archived=False,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+    create_environment(
+        db,
+        project_id="main/demo",
+        env="test",
+        api_hosts={"local": "http://127.0.0.1:9"},
+        timeout_seconds=None,
+        case_params={},
+        enabled=True,
+        operator="tester",
+    )
+    db.close()
+
+
+def test_r2_concurrent_environment_update_conflicts(tmp_path: Path) -> None:
+    engine = make_engine(f"sqlite:///{tmp_path / 'env.db'}")
+    init_engine_schema(engine)
+    factory = sessionmaker(bind=engine, autoflush=False)
+    _seed(factory)
+
+    recorded: list[tuple] = []
+    barrier = threading.Barrier(2)
+    real_get = environment_store.get_environment
+
+    def blocking_get(db, project_id, env):  # noqa: ANN001
+        row = real_get(db, project_id, env)
+        barrier.wait(5)
+        return row
+
+    environment_store.get_environment = blocking_get
+    lock = threading.Lock()
+
+    def worker(seconds: float) -> None:
+        db = factory()
+        try:
+            updated = update_environment(
+                db,
+                project_id="main/demo",
+                env="test",
+                expected_revision=1,
+                operator="tester",
+                fields={"timeout_seconds": seconds},
+            )
+            with lock:
+                recorded.append(("ok", float(updated.timeout_seconds), int(updated.revision)))
+        except HTTPException as exc:
+            with lock:
+                recorded.append(("err", exc.status_code))
+        finally:
+            db.close()
+
+    threads = [
+        threading.Thread(target=worker, args=(8.0,)),
+        threading.Thread(target=worker, args=(9.0,)),
+    ]
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(10)
+    finally:
+        environment_store.get_environment = real_get
+
+    assert sorted(kind for kind, *_rest in recorded) == ["err", "ok"]
+    assert any(item[0] == "err" and item[1] == 409 for item in recorded)
+    winner = next(item for item in recorded if item[0] == "ok")
+    db = factory()
+    try:
+        row = db.query(ProjectEnvironment).one()
+        changes = db.query(ConfigChange).filter(ConfigChange.action == "update").all()
+        assert int(row.revision) == 2
+        assert float(row.timeout_seconds) == winner[1]
+        assert len(changes) == 1
+        assert changes[0].revision == 2
+    finally:
+        db.close()
+
+
+def test_r2_concurrent_account_update_conflicts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "testplat_master_key", Fernet.generate_key().decode("ascii"))
+    engine = make_engine(f"sqlite:///{tmp_path / 'acct.db'}")
+    init_engine_schema(engine)
+    factory = sessionmaker(bind=engine, autoflush=False)
+    _seed(factory)
+    db = factory()
+    create_account(
+        db,
+        project_id="main/demo",
+        env="test",
+        account_name="gsb",
+        display_name="初始",
+        business_role=None,
+        login_profile="gsb_login",
+        credentials={"password": ACCOUNT_SECRET},
+        enabled=True,
+        operator="tester",
+    )
+    db.close()
+
+    recorded: list[tuple] = []
+    barrier = threading.Barrier(2)
+    real_get = environment_store.get_environment
+
+    def blocking_get(db, project_id, env):  # noqa: ANN001
+        row = real_get(db, project_id, env)
+        barrier.wait(5)
+        return row
+
+    environment_store.get_environment = blocking_get
+    lock = threading.Lock()
+
+    def worker(display_name: str) -> None:
+        session = factory()
+        try:
+            updated = update_account(
+                session,
+                project_id="main/demo",
+                env="test",
+                name="gsb",
+                expected_revision=1,
+                operator="tester",
+                fields={"display_name": display_name},
+                credentials=None,
+            )
+            with lock:
+                recorded.append(("ok", updated.display_name, int(updated.revision)))
+        except HTTPException as exc:
+            with lock:
+                recorded.append(("err", exc.status_code))
+        finally:
+            session.close()
+
+    threads = [
+        threading.Thread(target=worker, args=("甲",)),
+        threading.Thread(target=worker, args=("乙",)),
+    ]
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(10)
+    finally:
+        environment_store.get_environment = real_get
+
+    assert sorted(item[0] for item in recorded) == ["err", "ok"]
+    assert any(item[0] == "err" and item[1] == 409 for item in recorded)
+    winner = next(item for item in recorded if item[0] == "ok")
+    db = factory()
+    try:
+        account = db.query(TestAccount).one()
+        env_row = db.query(ProjectEnvironment).one()
+        updates = (
+            db.query(ConfigChange)
+            .filter(ConfigChange.action == "update", ConfigChange.object_type == "account")
+            .all()
+        )
+        assert account.display_name == winner[1]
+        assert int(account.revision) == 2
+        # 创建账号把环境从 1 增到 2，只有胜出的更新再加 1。
+        assert int(env_row.revision) == 3
+        assert len(updates) == 1
+        assert ACCOUNT_SECRET not in repr(updates)
+    finally:
+        db.close()

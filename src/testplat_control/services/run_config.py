@@ -49,8 +49,20 @@ class ResolvedRunConfig:
 
 
 def merge_params(case_params: dict[str, Any], request_params: dict[str, Any]) -> dict[str, Any]:
-    """浅层覆盖：请求顶层键覆盖环境 case_params。资产 params 由 Engine 再叠一层。"""
+    """浅层覆盖：请求顶层键覆盖环境 case_params。"""
     merged = dict(case_params)
+    merged.update(request_params)
+    return merged
+
+
+def merge_layered_params(
+    asset_params: dict[str, Any],
+    case_params: dict[str, Any],
+    request_params: dict[str, Any],
+) -> dict[str, Any]:
+    """浅层覆盖：请求 > 环境 case_params > 资产默认值。"""
+    merged = dict(asset_params)
+    merged.update(case_params)
     merged.update(request_params)
     return merged
 
