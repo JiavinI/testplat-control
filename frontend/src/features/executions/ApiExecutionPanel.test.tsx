@@ -34,7 +34,11 @@ const emptyParams: ParamsResponse = {
   params: [],
 }
 
-function renderPanel(projectId = 'p1', assetId = 'api.demo.mixed') {
+function renderPanel(
+  projectId = 'main/demo',
+  assetId = 'api.demo.mixed',
+  env = 'test',
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -42,7 +46,7 @@ function renderPanel(projectId = 'p1', assetId = 'api.demo.mixed') {
     <ConfigProvider theme={{ token: { motion: false } }}>
       <AntApp>
         <QueryClientProvider client={client}>
-          <ApiExecutionPanel projectId={projectId} assetId={assetId} />
+          <ApiExecutionPanel projectId={projectId} assetId={assetId} env={env} />
         </QueryClientProvider>
       </AntApp>
     </ConfigProvider>,
@@ -90,9 +94,9 @@ describe('ApiExecutionPanel', () => {
 
     await waitFor(() => {
       expect(runAsset).toHaveBeenCalledWith(
-        'p1',
+        'main/demo',
         'api.demo.mixed',
-        { params: { username: 'alice', active: false } },
+        { env: 'test', params: { username: 'alice', active: false } },
       )
     })
     expect(runAsset.mock.calls[0][2].params).not.toHaveProperty('nickname')
@@ -134,7 +138,7 @@ describe('ApiExecutionPanel', () => {
       },
     } satisfies RunResponse)
 
-    const { client } = renderPanel('p1', 'api.common.health_check')
+    const { client } = renderPanel('main/demo', 'api.common.health_check')
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
     await screen.findByTestId('params-empty')
@@ -148,7 +152,7 @@ describe('ApiExecutionPanel', () => {
     await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          queryKey: [...executionKeys.all, 'records', 'p1'],
+          queryKey: [...executionKeys.all, 'records', 'main/demo'],
         }),
       )
     })
@@ -163,7 +167,7 @@ describe('ApiExecutionPanel', () => {
       result: { status: 'success' },
     } satisfies RunResponse)
 
-    const { client } = renderPanel('p1', 'api.common.health_check')
+    const { client } = renderPanel('main/demo', 'api.common.health_check')
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
     await screen.findByTestId('params-empty')
@@ -173,7 +177,7 @@ describe('ApiExecutionPanel', () => {
     await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          queryKey: [...executionKeys.all, 'records', 'p1'],
+          queryKey: [...executionKeys.all, 'records', 'main/demo'],
         }),
       )
     })
@@ -189,7 +193,7 @@ describe('ApiExecutionPanel', () => {
         }),
     )
 
-    renderPanel('p1', 'api.common.health_check')
+    renderPanel('main/demo', 'api.common.health_check')
     await screen.findByTestId('params-empty')
 
     const btn = screen.getByRole('button', { name: '执行 API' })
@@ -216,7 +220,7 @@ describe('ApiExecutionPanel', () => {
       .mockResolvedValueOnce(emptyParams)
     runAsset.mockRejectedValue(new ApiHttpError(500, 'boom', ''))
 
-    const { rerender, client } = renderPanel('p1', 'api.demo.mixed')
+    const { rerender, client } = renderPanel('main/demo', 'api.demo.mixed')
     await screen.findByLabelText('username')
     setInput(screen.getByLabelText('username'), 'stale')
     await user.click(screen.getByRole('button', { name: '执行 API' }))
@@ -226,7 +230,7 @@ describe('ApiExecutionPanel', () => {
       <ConfigProvider theme={{ token: { motion: false } }}>
         <AntApp>
           <QueryClientProvider client={client}>
-            <ApiExecutionPanel projectId="p1" assetId="api.common.health_check" />
+            <ApiExecutionPanel projectId="main/demo" assetId="api.common.health_check" env="test" />
           </QueryClientProvider>
         </AntApp>
       </ConfigProvider>,
@@ -242,7 +246,7 @@ describe('ApiExecutionPanel', () => {
     getAssetParams.mockResolvedValue(emptyParams)
     runAsset.mockRejectedValue(new ApiNetworkError(new Error('Failed to fetch')))
 
-    renderPanel('p1', 'api.common.health_check')
+    renderPanel('main/demo', 'api.common.health_check')
     await screen.findByTestId('params-empty')
     fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
 
@@ -255,7 +259,7 @@ describe('ApiExecutionPanel', () => {
       .mockRejectedValueOnce(new ApiHttpError(404, 'Asset not found', ''))
       .mockResolvedValueOnce(emptyParams)
 
-    renderPanel('p1', 'api.missing')
+    renderPanel('main/demo', 'api.missing')
     expect(await screen.findByRole('alert')).toHaveTextContent('Asset not found')
     await user.click(screen.getByRole('button', { name: '重试' }))
     expect(await screen.findByTestId('params-empty')).toBeInTheDocument()

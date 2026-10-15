@@ -34,7 +34,11 @@ function makeItem(
   }
 }
 
-function renderHistory(projectId = 'p1', assetId?: string) {
+function renderHistory(
+  projectId = 'main/demo',
+  assetId?: string,
+  envs: string[] = ['test', 'staging'],
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -42,7 +46,7 @@ function renderHistory(projectId = 'p1', assetId?: string) {
     <ConfigProvider theme={{ token: { motion: false } }}>
       <AntApp>
         <QueryClientProvider client={client}>
-          <ExecutionHistory projectId={projectId} assetId={assetId} />
+          <ExecutionHistory projectId={projectId} assetId={assetId} envs={envs} />
         </QueryClientProvider>
       </AntApp>
     </ConfigProvider>,
@@ -63,11 +67,11 @@ describe('ExecutionHistory', () => {
   it('按 status / asset_id / order_by 请求列表', async () => {
     const user = userEvent.setup({ delay: null })
     listExecutionRecords.mockResolvedValue([])
-    renderHistory('p1', 'api.user.login')
+    renderHistory('main/demo', 'api.user.login')
 
     await waitFor(() => {
       expect(listExecutionRecords).toHaveBeenCalledWith(
-        'p1',
+        'main/demo',
         expect.objectContaining({
           skip: 0,
           limit: 20,
@@ -84,7 +88,7 @@ describe('ExecutionHistory', () => {
 
     await waitFor(() => {
       expect(listExecutionRecords).toHaveBeenCalledWith(
-        'p1',
+        'main/demo',
         expect.objectContaining({
           status: 'failed',
           asset_id: 'api.user.login',
@@ -127,7 +131,7 @@ describe('ExecutionHistory', () => {
 
     await waitFor(() => {
       expect(listExecutionRecords).toHaveBeenLastCalledWith(
-        'p1',
+        'main/demo',
         expect.objectContaining({ skip: 20, limit: 20 }),
       )
     })
@@ -140,7 +144,7 @@ describe('ExecutionHistory', () => {
     listExecutionRecords.mockResolvedValue([makeItem({ id: 'r-bad', status: 'failed' })])
     const detail: ExecutionRecordDetail = {
       id: 'r-bad',
-      project_id: 'p1',
+      project_id: 'main/demo',
       asset_id: 'api.user.login',
       asset_type: 'api',
       status: 'failed',
@@ -208,7 +212,7 @@ describe('ExecutionHistory', () => {
 
     await waitFor(() => {
       expect(listExecutionRecords).toHaveBeenLastCalledWith(
-        'p1',
+        'main/demo',
         expect.objectContaining({ skip: 0, limit: 20 }),
       )
     })
@@ -228,7 +232,7 @@ describe('ExecutionHistory', () => {
     ])
     getCaseExecutionRecord.mockResolvedValue({
       id: 'case-rec',
-      project_id: 'p1',
+      project_id: 'main/demo',
       asset_id: 'case.demo.create_then_get',
       asset_type: 'case',
       status: 'failed',
@@ -278,7 +282,7 @@ describe('ExecutionHistory', () => {
       'data-asset-type',
       'case',
     )
-    expect(getCaseExecutionRecord).toHaveBeenCalledWith('p1', 'case-rec')
+    expect(getCaseExecutionRecord).toHaveBeenCalledWith('main/demo', 'case-rec')
     expect(getExecutionRecord).not.toHaveBeenCalled()
     expect(screen.getByTestId('case-result-view')).toBeInTheDocument()
     expect(screen.getAllByText(/已跳过（skipped）/).length).toBeGreaterThan(0)
@@ -293,9 +297,74 @@ describe('ExecutionHistory', () => {
     await user.click(await screen.findByTitle('case'))
     await waitFor(() => {
       expect(listExecutionRecords).toHaveBeenCalledWith(
-        'p1',
+        'main/demo',
         expect.objectContaining({ asset_type: 'case' }),
       )
     })
+  })
+
+  it('按 env 筛选并在列表展示 env 与短 SHA', async () => {
+    const user = userEvent.setup({ delay: null })
+    listExecutionRecords.mockResolvedValue([
+      makeItem({
+        id: 'r-env',
+        env: 'staging',
+        commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
+      }),
+    ])
+    renderHistory('main/demo')
+
+    await screen.findByText('r-env')
+    expect(screen.getByText('staging')).toBeInTheDocument()
+    expect(screen.getByText('abcdef0')).toBeInTheDocument()
+
+    const envFilter = screen.getByTestId('filter-env')
+    await user.click(within(envFilter).getByRole('combobox'))
+    await user.click(await screen.findByTitle('staging'))
+
+    await waitFor(() => {
+      expect(listExecutionRecords).toHaveBeenCalledWith(
+        'main/demo',
+        expect.objectContaining({ env: 'staging' }),
+      )
+    })
+  })
+
+  it('详情抽屉展示 env 与短 SHA', async () => {
+    const user = userEvent.setup({ delay: null })
+    listExecutionRecords.mockResolvedValue([
+      makeItem({
+        id: 'r-detail',
+        env: 'test',
+        commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
+      }),
+    ])
+    getExecutionRecord.mockResolvedValue({
+      id: 'r-detail',
+      project_id: 'main/demo',
+      asset_id: 'api.user.login',
+      asset_type: 'api',
+      status: 'success',
+      start_time: '2026-10-10T08:00:00.000Z',
+      end_time: '2026-10-10T08:00:01.000Z',
+      duration: 0.01,
+      display: {
+        start_time: '2026-10-10 08:00:00',
+        end_time: '2026-10-10 08:00:01',
+        duration: '10ms',
+      },
+      result: { status: 'success' },
+      request: null,
+      response: null,
+      auth: null,
+      env: 'test',
+      commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
+    })
+    renderHistory()
+    await screen.findByText('r-detail')
+    await user.click(screen.getByRole('button', { name: '查看记录 r-detail' }))
+    const detail = await screen.findByTestId('execution-detail')
+    expect(within(detail).getByText('test')).toBeInTheDocument()
+    expect(within(detail).getByText('abcdef0')).toBeInTheDocument()
   })
 })

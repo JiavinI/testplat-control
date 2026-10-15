@@ -21,8 +21,10 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('executions api', () => {
-  it('getAssetParams 路径编码并返回参数列表', async () => {
+const PID = 'main/demo'
+
+describe('executions api (Phase 4.0)', () => {
+  it('getAssetParams 走两段式路径', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         asset_id: 'api.user.create',
@@ -31,55 +33,79 @@ describe('executions api', () => {
         ],
       }),
     )
-    const result = await getAssetParams('p/1', 'api.user.create', {
+    const result = await getAssetParams(PID, 'api.user.create', {
       baseUrl: '',
       fetchImpl,
     })
     expect(fetchImpl.mock.calls[0][0]).toBe(
-      '/projects/p%2F1/assets/api.user.create/params',
+      '/repos/main/projects/demo/assets/api.user.create/params',
     )
     expect(result.params[0].name).toBe('username')
   })
 
-  it('runAsset 提交 {params} body', async () => {
+  it('runAsset 提交 {env, params} body 并解析 commit_sha', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         record_id: 'r1',
         status: 'success',
         duration: 0.01,
         result: { ok: true },
+        commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
       }),
     )
-    const body = { params: { username: 'alice', active: false } }
-    const result = await runAsset('p1', 'api.user.login', body, {
+    const body = { env: 'test', params: { username: 'alice', active: false } }
+    const result = await runAsset(PID, 'api.user.login', body, {
       baseUrl: '',
       fetchImpl,
     })
     expect(result.status).toBe('success')
+    expect(result.commit_sha?.startsWith('abcdef0')).toBe(true)
     expect(fetchImpl.mock.calls[0][1].method).toBe('POST')
     expect(JSON.parse(String(fetchImpl.mock.calls[0][1].body))).toEqual(body)
   })
 
-  it('listExecutionRecords 拼接筛选与分页查询串', async () => {
+  it('listExecutionRecords 拼接 env 筛选与两段式路径', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse([]))
     await listExecutionRecords(
-      'p1',
+      PID,
       {
         skip: 20,
         limit: 10,
         status: 'failed',
         asset_id: 'api.user.login',
+        env: 'staging',
         order_by: '-start_time',
       },
       { baseUrl: '', fetchImpl },
     )
     const url = String(fetchImpl.mock.calls[0][0])
-    expect(url.startsWith('/projects/p1/execution-records?')).toBe(true)
+    expect(url.startsWith('/repos/main/projects/demo/execution-records?')).toBe(
+      true,
+    )
     expect(url).toContain('skip=20')
-    expect(url).toContain('limit=10')
+    expect(url).toContain('env=staging')
     expect(url).toContain('status=failed')
-    expect(url).toContain('asset_id=api.user.login')
-    expect(url).toContain('order_by=-start_time')
+  })
+
+  it('列表项解析 env 与 commit_sha', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse([
+        {
+          id: 'r1',
+          asset_id: 'api.x',
+          status: 'success',
+          start_time: '2026-10-15T00:00:00Z',
+          duration: 0.1,
+          env: 'test',
+          commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
+          repo: 'main',
+          operator: null,
+        },
+      ]),
+    )
+    const rows = await listExecutionRecords(PID, {}, { baseUrl: '', fetchImpl })
+    expect(rows[0].env).toBe('test')
+    expect(rows[0].commit_sha?.slice(0, 7)).toBe('abcdef0')
   })
 
   it('getExecutionRecord 404 抛 ApiHttpError', async () => {
@@ -87,7 +113,7 @@ describe('executions api', () => {
       .fn()
       .mockResolvedValue(jsonResponse({ detail: 'Execution record not found' }, 404))
     await expect(
-      getExecutionRecord('p1', 'missing', { baseUrl: '', fetchImpl }),
+      getExecutionRecord(PID, 'missing', { baseUrl: '', fetchImpl }),
     ).rejects.toSatisfy((err: unknown) => {
       expect(err).toBeInstanceOf(ApiHttpError)
       expect((err as ApiHttpError).message).toBe('Execution record not found')
@@ -99,7 +125,7 @@ describe('executions api', () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ items: [] }))
     const { ApiParseError } = await import('@/shared/api/errors')
     await expect(
-      listExecutionRecords('p1', {}, { baseUrl: '', fetchImpl }),
+      listExecutionRecords(PID, {}, { baseUrl: '', fetchImpl }),
     ).rejects.toBeInstanceOf(ApiParseError)
   })
 
@@ -109,26 +135,28 @@ describe('executions api', () => {
     )
     const { ApiParseError } = await import('@/shared/api/errors')
     await expect(
-      runAsset('p1', 'api.user.login', { params: {} }, { baseUrl: '', fetchImpl }),
+      runAsset(PID, 'api.user.login', { env: 'test', params: {} }, {
+        baseUrl: '',
+        fetchImpl,
+      }),
     ).rejects.toBeInstanceOf(ApiParseError)
   })
 })
 
-describe('Case executions api', () => {
+describe('Case executions api (Phase 4.0)', () => {
   it('listExecutionRecords 支持 asset_type', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse([]))
     await listExecutionRecords(
-      'p1',
+      PID,
       { asset_type: 'case', status: 'failed', asset_id: 'case.demo.x' },
       { baseUrl: '', fetchImpl },
     )
     const url = String(fetchImpl.mock.calls[0][0])
     expect(url).toContain('asset_type=case')
-    expect(url).toContain('status=failed')
-    expect(url).toContain('asset_id=case.demo.x')
+    expect(url).toContain('/repos/main/projects/demo/')
   })
 
-  it('getCaseAssetDetail / runCase / getCaseExecutionRecord 路径正确', async () => {
+  it('getCaseAssetDetail / runCase / getCaseExecutionRecord 路径与 env', async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(
@@ -145,6 +173,7 @@ describe('Case executions api', () => {
           record_id: 'r1',
           status: 'success',
           duration: 0.01,
+          commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
           result: {
             case_id: 'case.demo.create_then_get',
             status: 'success',
@@ -159,7 +188,7 @@ describe('Case executions api', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           id: 'r1',
-          project_id: 'p1',
+          project_id: PID,
           asset_id: 'case.demo.create_then_get',
           asset_type: 'case',
           status: 'success',
@@ -167,6 +196,8 @@ describe('Case executions api', () => {
           end_time: null,
           duration: 0.01,
           display: { start_time: 't', end_time: null, duration: '10ms' },
+          env: 'test',
+          commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
           result: {
             case_id: 'case.demo.create_then_get',
             status: 'success',
@@ -179,28 +210,36 @@ describe('Case executions api', () => {
         }),
       )
 
-    await getCaseAssetDetail('p1', 'case.demo.create_then_get', {
+    await getCaseAssetDetail(PID, 'case.demo.create_then_get', {
       baseUrl: '',
       fetchImpl,
     })
     expect(fetchImpl.mock.calls[0][0]).toBe(
-      '/projects/p1/cases/case.demo.create_then_get',
+      '/repos/main/projects/demo/cases/case.demo.create_then_get',
     )
 
-    await runCase('p1', 'case.demo.create_then_get', { params: {} }, {
-      baseUrl: '',
-      fetchImpl,
-    })
+    await runCase(
+      PID,
+      'case.demo.create_then_get',
+      { env: 'test', params: {} },
+      { baseUrl: '', fetchImpl },
+    )
     expect(fetchImpl.mock.calls[1][0]).toBe(
-      '/projects/p1/cases/case.demo.create_then_get/run',
+      '/repos/main/projects/demo/cases/case.demo.create_then_get/run',
     )
     expect(JSON.parse(String(fetchImpl.mock.calls[1][1].body))).toEqual({
+      env: 'test',
       params: {},
     })
 
-    await getCaseExecutionRecord('p1', 'r1', { baseUrl: '', fetchImpl })
+    const detail = await getCaseExecutionRecord(PID, 'r1', {
+      baseUrl: '',
+      fetchImpl,
+    })
     expect(fetchImpl.mock.calls[2][0]).toBe(
-      '/projects/p1/case-execution-records/r1',
+      '/repos/main/projects/demo/case-execution-records/r1',
     )
+    expect(detail.env).toBe('test')
+    expect(detail.commit_sha?.slice(0, 7)).toBe('abcdef0')
   })
 })

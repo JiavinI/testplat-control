@@ -1,130 +1,112 @@
 import { App, Button, Space, Typography } from 'antd'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { ReloadOutlined } from '@ant-design/icons'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ProjectFormModal } from '@/features/projects/ProjectFormModal'
 import { ProjectListTable } from '@/features/projects/ProjectListTable'
-import {
-  useCreateProject,
-  useDeleteProject,
-  useProjectList,
-  useUpdateProject,
-} from '@/features/projects/hooks'
-import type { ProjectCreate, ProjectResponse } from '@/shared/types/project'
+import { useProjectList } from '@/features/projects/hooks'
+import { useRepoList, useSyncRepo } from '@/features/repos/hooks'
+import type { ProjectResponse, RepoResponse } from '@/shared/types/project'
+import { syncResultLabel } from '@/shared/project/display'
 import {
   EmptyState,
   ErrorState,
   LoadingState,
 } from '@/shared/ui/AsyncState'
 import { formatErrorMessage } from '@/shared/ui/errorMessage'
-import { ApiHttpError } from '@/shared/api/errors'
 
+/**
+ * Phase 4.0 项目列表：按仓库分组，只读；同步由服务端配置驱动，无新建/编辑/删除。
+ */
 export function ProjectListPage() {
-  const { message, modal } = App.useApp()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const listQuery = useProjectList()
-  const createMutation = useCreateProject()
-  const deleteMutation = useDeleteProject()
+  const reposQuery = useRepoList()
+  const syncMutation = useSyncRepo()
 
-  const [createOpen, setCreateOpen] = useState(false)
-  const [editing, setEditing] = useState<ProjectResponse | null>(null)
-
-  // 编辑 mutation 依赖当前编辑项 id；无编辑项时用占位 id 且不会提交
-  const updateMutation = useUpdateProject(editing?.id ?? '')
-
-  const handleCreate = async (values: ProjectCreate) => {
-    try {
-      const created = await createMutation.mutateAsync(values)
-      message.success('项目已创建')
-      setCreateOpen(false)
-      navigate(`/projects/${created.id}`)
-    } catch (error) {
-      // 409 重名等：交给表单展示 detail；其它错误 toast 后继续抛出
-      if (error instanceof ApiHttpError) {
-        throw error
+  const groups = useMemo(() => {
+    const projects = listQuery.data ?? []
+    const repos = reposQuery.data ?? []
+    const byRepo = new Map<string, ProjectResponse[]>()
+    for (const p of projects) {
+      const list = byRepo.get(p.repo) ?? []
+      list.push(p)
+      byRepo.set(p.repo, list)
+    }
+    const ordered: { repo: RepoResponse; projects: ProjectResponse[] }[] = []
+    const seen = new Set<string>()
+    for (const repo of repos) {
+      seen.add(repo.key)
+      ordered.push({ repo, projects: byRepo.get(repo.key) ?? [] })
+    }
+    // 库中有项目但 repos 列表暂缺时补占位（防御；正常同步后不应出现）
+    for (const [key, plist] of byRepo) {
+      if (!seen.has(key)) {
+        ordered.push({
+          repo: {
+            key,
+            branch: '—',
+            current_sha: plist[0]?.commit_sha ?? null,
+            last_sync_at: null,
+            last_sync_result: null,
+          },
+          projects: plist,
+        })
       }
-      message.error(formatErrorMessage(error))
-      throw error
     }
-  }
+    return ordered
+  }, [listQuery.data, reposQuery.data])
 
-  const handleEdit = async (values: ProjectCreate) => {
-    if (!editing) {
-      return
-    }
+  const handleSync = async (repoKey: string) => {
     try {
-      await updateMutation.mutateAsync(values)
-      message.success('项目已更新')
-      setEditing(null)
-      await listQuery.refetch()
-    } catch (error) {
-      if (error instanceof ApiHttpError) {
-        throw error
+      const result = await syncMutation.mutateAsync(repoKey)
+      if (result.ok) {
+        message.success(`仓库 ${repoKey} 同步成功`)
+      } else {
+        message.error(
+          `仓库 ${repoKey} 同步失败：${syncResultLabel(result.category)}`,
+        )
       }
+    } catch (error) {
       message.error(formatErrorMessage(error))
-      throw error
     }
   }
 
-  const handleDelete = (project: ProjectResponse) => {
-    modal.confirm({
-      title: '确认删除该项目？',
-      content: `将删除「${project.name}」，此操作不可撤销。`,
-      okText: '删除',
-      okType: 'danger',
-      cancelText: '取消',
-      centered: true,
-      onOk: async () => {
-        try {
-          await deleteMutation.mutateAsync(project.id)
-          message.success(`已删除「${project.name}」`)
-        } catch (error) {
-          // 已提示业务错误（如有执行记录不可删的 409）；不再向外抛，避免 pageerror
-          message.error(formatErrorMessage(error))
-        }
-      },
-    })
-  }
+  const refreshing = listQuery.isFetching || reposQuery.isFetching
+  const loading = listQuery.isLoading || reposQuery.isLoading
+  const error = listQuery.error ?? reposQuery.error
 
   const renderBody = () => {
-    if (listQuery.isLoading) {
+    if (loading) {
       return <LoadingState tip="加载项目列表…" />
     }
-    if (listQuery.isError) {
+    if (listQuery.isError || reposQuery.isError) {
       return (
         <ErrorState
-          error={listQuery.error}
+          error={error}
           onRetry={() => {
             void listQuery.refetch()
+            void reposQuery.refetch()
           }}
         />
       )
     }
-    const projects = listQuery.data ?? []
-    if (projects.length === 0) {
+    const hasProjects = (listQuery.data ?? []).length > 0
+    const hasRepos = (reposQuery.data ?? []).length > 0
+    if (!hasProjects && !hasRepos) {
       return (
-        <EmptyState
-          description="还没有项目。创建后可进入工作台管理资产与执行。"
-          action={
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setCreateOpen(true)}
-            >
-              新建项目
-            </Button>
-          }
-        />
+        <EmptyState description="尚未配置用例仓库。请在服务端设置 TESTPLAT_REPOS_FILE 后重启并同步。" />
       )
     }
     return (
       <ProjectListTable
-        data={projects}
-        loading={listQuery.isFetching && !listQuery.isLoading}
-        deletingId={deleteMutation.isPending ? deleteMutation.variables ?? null : null}
-        onOpen={(p) => navigate(`/projects/${p.id}`)}
-        onEdit={setEditing}
-        onDelete={handleDelete}
+        groups={groups}
+        loading={refreshing && !loading}
+        syncingRepo={syncMutation.isPending ? (syncMutation.variables ?? null) : null}
+        onOpen={(p) => navigate(`/projects/${p.repo}/${p.project}`)}
+        onSync={(key) => {
+          void handleSync(key)
+        }}
       />
     )
   }
@@ -141,48 +123,23 @@ export function ProjectListPage() {
             项目列表
           </Typography.Title>
           <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-            管理测试项目配置（名称、环境、资产目录、更新时间）。
+            从已登记的 Git 用例仓库同步项目；选择环境后在工作台运行 api / case。
           </Typography.Text>
         </div>
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              void listQuery.refetch()
-            }}
-            loading={listQuery.isFetching}
-            aria-label="刷新项目列表"
-          >
-            刷新
-          </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setCreateOpen(true)}
-          >
-            新建项目
-          </Button>
-        </Space>
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => {
+            void listQuery.refetch()
+            void reposQuery.refetch()
+          }}
+          loading={refreshing}
+          aria-label="刷新项目列表"
+        >
+          刷新
+        </Button>
       </Space>
 
       {renderBody()}
-
-      <ProjectFormModal
-        open={createOpen}
-        mode="create"
-        submitting={createMutation.isPending}
-        onCancel={() => setCreateOpen(false)}
-        onSubmit={handleCreate}
-      />
-
-      <ProjectFormModal
-        open={Boolean(editing)}
-        mode="edit"
-        initial={editing}
-        submitting={updateMutation.isPending}
-        onCancel={() => setEditing(null)}
-        onSubmit={handleEdit}
-      />
     </div>
   )
 }

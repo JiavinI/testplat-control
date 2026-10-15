@@ -18,7 +18,7 @@ import type { ApiExecutionPanelProps, RunResponse } from './types'
  * 单 API 执行面板：动态参数表单 + 执行 + 结果。
  * 父级用 key 绑定 projectId:assetId，切换资产时整树重挂载以清空状态。
  */
-export function ApiExecutionPanel({ projectId, assetId }: ApiExecutionPanelProps) {
+export function ApiExecutionPanel({ projectId, assetId, env }: ApiExecutionPanelProps) {
   const paramsQuery = useAssetParams(projectId, assetId)
 
   if (paramsQuery.isLoading) {
@@ -41,6 +41,7 @@ export function ApiExecutionPanel({ projectId, assetId }: ApiExecutionPanelProps
     <ApiExecutionPanelReady
       projectId={projectId}
       assetId={assetId}
+      env={env}
       params={paramsQuery.data?.params ?? []}
     />
   )
@@ -49,6 +50,7 @@ export function ApiExecutionPanel({ projectId, assetId }: ApiExecutionPanelProps
 function ApiExecutionPanelReady({
   projectId,
   assetId,
+  env,
   params,
 }: ApiExecutionPanelProps & { params: NonNullable<ReturnType<typeof useAssetParams>['data']>['params'] }) {
   // Form 实例仅在已挂载 ParamForm 的子树中创建，避免 useForm disconnected 警告
@@ -63,7 +65,8 @@ function ApiExecutionPanelReady({
     try {
       const values = await form.validateFields()
       const serialized = serializeRunParams(params, values)
-      const data = await runMutation.mutateAsync({ params: serialized })
+      // Phase 4.0：运行体必填 env（与项目环境下拉一致）
+      const data = await runMutation.mutateAsync({ env, params: serialized })
       // HTTP 200 的 success / failed 都当可查看结果，不进网络错误态
       setRunResult(data)
     } catch (error) {

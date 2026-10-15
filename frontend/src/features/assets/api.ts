@@ -1,7 +1,8 @@
-import { apiClient, encodePath } from '@/shared/api/client'
+import { apiClient } from '@/shared/api/client'
 import type { ApiClientOptions } from '@/shared/api/client'
 import { ApiParseError } from '@/shared/api/errors'
 import { assertObject, requireString } from '@/shared/api/validate'
+import { projectResourcePath } from '@/shared/project/ids'
 import type { AssetDetails, AssetNode, AssetNodeType } from './types'
 
 function parseNodeType(value: unknown, label: string): AssetNodeType {
@@ -73,7 +74,7 @@ export async function getAssetsTree(
   options?: ApiClientOptions,
 ): Promise<AssetNode> {
   const payload = await apiClient.get<unknown>(
-    encodePath(['projects', projectId, 'assets']),
+    projectResourcePath(projectId, 'assets'),
     options,
   )
   return parseAssetNode(payload, 'AssetTree')
@@ -85,7 +86,7 @@ export async function getAssetDetails(
   options?: ApiClientOptions,
 ): Promise<AssetDetails> {
   const payload = await apiClient.get<unknown>(
-    encodePath(['projects', projectId, 'assets', assetId]),
+    projectResourcePath(projectId, 'assets', assetId),
     options,
   )
   return parseAssetDetails(payload)

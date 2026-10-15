@@ -1,4 +1,4 @@
-import { apiClient, encodePath } from '@/shared/api/client'
+import { apiClient } from '@/shared/api/client'
 import type { ApiClientOptions } from '@/shared/api/client'
 import { ApiParseError } from '@/shared/api/errors'
 import {
@@ -8,6 +8,7 @@ import {
   requireNullableString,
   requireString,
 } from '@/shared/api/validate'
+import { projectResourcePath } from '@/shared/project/ids'
 import {
   parseCaseAssetDetail,
   parseCaseExecutionRecordDetail,
@@ -28,7 +29,7 @@ import type {
 } from './types'
 
 function recordsPath(projectId: string, query: ExecutionListQuery = {}): string {
-  const base = encodePath(['projects', projectId, 'execution-records'])
+  const base = projectResourcePath(projectId, 'execution-records')
   const params = new URLSearchParams()
   if (query.skip !== undefined) {
     params.set('skip', String(query.skip))
@@ -44,6 +45,9 @@ function recordsPath(projectId: string, query: ExecutionListQuery = {}): string 
   }
   if (query.asset_type) {
     params.set('asset_type', query.asset_type)
+  }
+  if (query.env) {
+    params.set('env', query.env)
   }
   if (query.order_by) {
     params.set('order_by', query.order_by)
@@ -102,21 +106,38 @@ export function parseRunResponse(payload: unknown): RunResponse {
     duration: requireNullableNumber(payload, 'duration', 'RunResponse'),
     result: payload.result,
     auth: parseExecutionAuth(payload.auth, 'RunResponse.auth'),
+    commit_sha:
+      'commit_sha' in payload
+        ? requireNullableString(payload, 'commit_sha', 'RunResponse')
+        : null,
   }
 }
 
 function parseListItem(payload: unknown, index: number): ExecutionRecordListItem {
-  assertObject(payload, `ExecutionRecordListItem[${index}]`)
+  const label = `ExecutionRecordListItem[${index}]`
+  assertObject(payload, label)
   const item: ExecutionRecordListItem = {
-    id: requireString(payload, 'id', `ExecutionRecordListItem[${index}]`),
-    asset_id: requireString(payload, 'asset_id', `ExecutionRecordListItem[${index}]`),
-    status: requireString(payload, 'status', `ExecutionRecordListItem[${index}]`),
-    start_time: requireString(payload, 'start_time', `ExecutionRecordListItem[${index}]`),
-    duration: requireNullableNumber(payload, 'duration', `ExecutionRecordListItem[${index}]`),
+    id: requireString(payload, 'id', label),
+    asset_id: requireString(payload, 'asset_id', label),
+    status: requireString(payload, 'status', label),
+    start_time: requireString(payload, 'start_time', label),
+    duration: requireNullableNumber(payload, 'duration', label),
   }
-  // 可选字段：后端未冻结时缺省；e2e mock / 后续列表契约可提供
   if (payload.login_failed === true) {
     item.login_failed = true
+  }
+  // Phase 4.0 字段：缺省兼容旧 mock
+  if ('env' in payload) {
+    item.env = requireNullableString(payload, 'env', label)
+  }
+  if ('commit_sha' in payload) {
+    item.commit_sha = requireNullableString(payload, 'commit_sha', label)
+  }
+  if ('repo' in payload) {
+    item.repo = requireNullableString(payload, 'repo', label)
+  }
+  if ('operator' in payload) {
+    item.operator = requireNullableString(payload, 'operator', label)
   }
   return item
 }
@@ -150,6 +171,22 @@ export function parseRecordDetail(payload: unknown): ExecutionRecordDetail {
     request: payload.request ?? null,
     response: payload.response ?? null,
     auth: parseExecutionAuth(payload.auth, 'ExecutionRecordDetail.auth'),
+    env:
+      'env' in payload
+        ? requireNullableString(payload, 'env', 'ExecutionRecordDetail')
+        : null,
+    commit_sha:
+      'commit_sha' in payload
+        ? requireNullableString(payload, 'commit_sha', 'ExecutionRecordDetail')
+        : null,
+    repo:
+      'repo' in payload
+        ? requireNullableString(payload, 'repo', 'ExecutionRecordDetail')
+        : null,
+    operator:
+      'operator' in payload
+        ? requireNullableString(payload, 'operator', 'ExecutionRecordDetail')
+        : null,
   }
 }
 
@@ -159,7 +196,7 @@ export async function getAssetParams(
   options?: ApiClientOptions,
 ): Promise<ParamsResponse> {
   const payload = await apiClient.get<unknown>(
-    encodePath(['projects', projectId, 'assets', assetId, 'params']),
+    projectResourcePath(projectId, 'assets', assetId, 'params'),
     options,
   )
   return parseParamsResponse(payload)
@@ -172,7 +209,7 @@ export async function runAsset(
   options?: ApiClientOptions,
 ): Promise<RunResponse> {
   const payload = await apiClient.post<unknown>(
-    encodePath(['projects', projectId, 'assets', assetId, 'run']),
+    projectResourcePath(projectId, 'assets', assetId, 'run'),
     body,
     options,
   )
@@ -195,7 +232,7 @@ export async function getExecutionRecord(
   options?: ApiClientOptions,
 ): Promise<ExecutionRecordDetail> {
   const payload = await apiClient.get<unknown>(
-    encodePath(['projects', projectId, 'execution-records', recordId]),
+    projectResourcePath(projectId, 'execution-records', recordId),
     options,
   )
   return parseRecordDetail(payload)
@@ -207,7 +244,7 @@ export async function getCaseAssetDetail(
   options?: ApiClientOptions,
 ): Promise<CaseAssetDetail> {
   const payload = await apiClient.get<unknown>(
-    encodePath(['projects', projectId, 'cases', caseId]),
+    projectResourcePath(projectId, 'cases', caseId),
     options,
   )
   return parseCaseAssetDetail(payload)
@@ -216,16 +253,17 @@ export async function getCaseAssetDetail(
 /**
  * 同步等待 Case 跑完；不设客户端 Abort 超时。
  * Control 每步最多约 30s，N 步最坏约 N×30s，短超时会误杀仍在执行的请求。
+ * 请求体必须带 env（Phase 4.0）。
  */
 export async function runCase(
   projectId: string,
   caseId: string,
-  body: CaseRunRequest = {},
+  body: CaseRunRequest,
   options?: ApiClientOptions,
 ): Promise<CaseRunResponse> {
   const payload = await apiClient.post<unknown>(
-    encodePath(['projects', projectId, 'cases', caseId, 'run']),
-    { params: body.params ?? {} },
+    projectResourcePath(projectId, 'cases', caseId, 'run'),
+    { env: body.env, params: body.params ?? {} },
     options,
   )
   return parseCaseRunResponse(payload)
@@ -237,7 +275,7 @@ export async function getCaseExecutionRecord(
   options?: ApiClientOptions,
 ): Promise<CaseExecutionRecordDetail> {
   const payload = await apiClient.get<unknown>(
-    encodePath(['projects', projectId, 'case-execution-records', recordId]),
+    projectResourcePath(projectId, 'case-execution-records', recordId),
     options,
   )
   return parseCaseExecutionRecordDetail(payload)

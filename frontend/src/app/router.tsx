@@ -10,7 +10,8 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/projects" replace /> },
       { path: 'projects', element: <ProjectListPage /> },
-      { path: 'projects/:projectId', element: <ProjectWorkspacePage /> },
+      // 两段式：与后端 /repos/{repo}/projects/{project} 主键 {repo}/{project} 对齐
+      { path: 'projects/:repo/:project', element: <ProjectWorkspacePage /> },
     ],
   },
 ])

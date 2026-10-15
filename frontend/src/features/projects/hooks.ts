@@ -1,17 +1,6 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseQueryResult,
-} from '@tanstack/react-query'
-import {
-  createProject,
-  deleteProject,
-  getProject,
-  listProjects,
-  updateProject,
-} from './api'
-import type { ProjectCreate, ProjectResponse, ProjectUpdate } from '@/shared/types/project'
+import { useQuery, type UseQueryResult } from '@tanstack/react-query'
+import { getProject, listProjects } from './api'
+import type { ProjectResponse } from '@/shared/types/project'
 
 export const projectKeys = {
   all: ['projects'] as const,
@@ -31,37 +20,5 @@ export function useProject(projectId: string): UseQueryResult<ProjectResponse, E
     queryKey: projectKeys.detail(projectId),
     queryFn: () => getProject(projectId),
     enabled: Boolean(projectId),
-  })
-}
-
-export function useCreateProject() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (payload: ProjectCreate) => createProject(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
-    },
-  })
-}
-
-export function useUpdateProject(projectId: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (payload: ProjectUpdate) => updateProject(projectId, payload),
-    onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
-      queryClient.setQueryData(projectKeys.detail(projectId), data)
-    },
-  })
-}
-
-export function useDeleteProject() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (projectId: string) => deleteProject(projectId),
-    onSuccess: (_data, projectId) => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
-      queryClient.removeQueries({ queryKey: projectKeys.detail(projectId) })
-    },
   })
 }

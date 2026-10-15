@@ -43,6 +43,35 @@ window.getComputedStyle = ((elt: Element, pseudoElt?: string | null) => {
   return originalGetComputedStyle(elt)
 }) as typeof window.getComputedStyle
 
+// Node/jsdom 下 localStorage 可能不可用（--localstorage-file 无路径）；提供内存实现
+const memoryStore = new Map<string, string>()
+const memoryLocalStorage: Storage = {
+  get length() {
+    return memoryStore.size
+  },
+  clear() {
+    memoryStore.clear()
+  },
+  getItem(key: string) {
+    return memoryStore.has(key) ? memoryStore.get(key)! : null
+  },
+  key(index: number) {
+    return [...memoryStore.keys()][index] ?? null
+  },
+  removeItem(key: string) {
+    memoryStore.delete(key)
+  },
+  setItem(key: string, value: string) {
+    memoryStore.set(key, String(value))
+  },
+}
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  writable: true,
+  value: memoryLocalStorage,
+})
+
 afterEach(() => {
+  memoryStore.clear()
   cleanup()
 })

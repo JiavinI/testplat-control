@@ -10,6 +10,7 @@ import {
   extractLoginsFromResult,
 } from './loginDisplay'
 import { RequestSnapshot } from './RequestSnapshot'
+import { shortSha } from '@/shared/project/display'
 import type { CaseStepRequest, RunResponse } from './types'
 
 interface ExecutionResultCardProps {
@@ -106,6 +107,11 @@ export function ExecutionResultCard({ result }: ExecutionResultCardProps) {
         </Descriptions.Item>
         <Descriptions.Item label="耗时">
           {formatDurationSeconds(result.duration)}
+        </Descriptions.Item>
+        <Descriptions.Item label="Commit">
+          <Typography.Text code data-testid="run-result-commit-sha">
+            {shortSha(result.commit_sha)}
+          </Typography.Text>
         </Descriptions.Item>
         {/* 单 API：auth 为 null 只表示匿名执行 */}
         <Descriptions.Item label="身份" span={2}>

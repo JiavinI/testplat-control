@@ -112,7 +112,7 @@ export function useCaseExecutionRecord(
 export function useRunCase(projectId: string, caseId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: CaseRunRequest = {}) => runCase(projectId, caseId, body),
+    mutationFn: (body: CaseRunRequest) => runCase(projectId, caseId, body),
     onSuccess: (_data: CaseRunResponse) => {
       void queryClient.invalidateQueries({
         queryKey: [...executionKeys.all, 'records', projectId],

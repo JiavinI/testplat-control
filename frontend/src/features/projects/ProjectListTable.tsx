@@ -1,30 +1,26 @@
-import { Button, Card, Grid, Pagination, Space, Table, Tag, Typography } from 'antd'
+import { Button, Card, Grid, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { DeleteOutlined, EditOutlined, FolderOpenOutlined } from '@ant-design/icons'
-import { useEffect, useState } from 'react'
-import type { ProjectResponse } from '@/shared/types/project'
+import { FolderOpenOutlined, SyncOutlined } from '@ant-design/icons'
+import type { ProjectResponse, RepoResponse } from '@/shared/types/project'
+import { shortSha, syncResultLabel } from '@/shared/project/display'
 
-const PAGE_SIZE = 20
+interface RepoGroup {
+  repo: RepoResponse
+  projects: ProjectResponse[]
+}
 
 interface ProjectListTableProps {
-  data: ProjectResponse[]
+  groups: RepoGroup[]
   loading?: boolean
-  deletingId?: string | null
+  syncingRepo: string | null
   onOpen: (project: ProjectResponse) => void
-  onEdit: (project: ProjectResponse) => void
-  onDelete: (project: ProjectResponse) => void
+  onSync: (repoKey: string) => void
 }
 
-interface ProjectActionsProps extends Pick<
-  ProjectListTableProps,
-  'deletingId' | 'onOpen' | 'onEdit' | 'onDelete'
-> {
-  project: ProjectResponse
-  wrap?: boolean
-}
-
-function formatUpdatedAt(value: string): string {
-  // 后端返回 ISO 字符串；展示时尽量本地可读，解析失败则回退原文
+function formatTime(value: string | null | undefined): string {
+  if (!value) {
+    return '—'
+  }
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
     return value
@@ -32,62 +28,133 @@ function formatUpdatedAt(value: string): string {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
-function ProjectActions({
-  project,
-  deletingId,
+export function ProjectListTable({
+  groups,
+  loading,
+  syncingRepo,
   onOpen,
-  onEdit,
-  onDelete,
-  wrap = false,
-}: ProjectActionsProps) {
+  onSync,
+}: ProjectListTableProps) {
+  const screens = Grid.useBreakpoint()
+
+  if (groups.length === 0) {
+    return null
+  }
+
   return (
-    <Space wrap={wrap} size={wrap ? 6 : 4}>
-      <Button
-        size="small"
-        icon={<FolderOpenOutlined />}
-        onClick={() => onOpen(project)}
-        aria-label={`打开工作台 ${project.name}`}
-      >
-        工作台
-      </Button>
-      <Button
-        size="small"
-        icon={<EditOutlined />}
-        onClick={() => onEdit(project)}
-        aria-label={`编辑项目 ${project.name}`}
-      >
-        编辑
-      </Button>
-      <Button
-        size="small"
-        danger
-        icon={<DeleteOutlined />}
-        loading={deletingId === project.id}
-        aria-label={`删除项目 ${project.name}`}
-        onClick={() => onDelete(project)}
-      >
-        删除
-      </Button>
+    <Space direction="vertical" size={16} style={{ width: '100%' }} data-testid="project-list-grouped">
+      {groups.map(({ repo, projects }) => {
+        const syncing = syncingRepo === repo.key
+        const resultText = syncResultLabel(repo.last_sync_result)
+        const failed = Boolean(repo.last_sync_result && repo.last_sync_result !== 'ok')
+
+        return (
+          <Card
+            key={repo.key}
+            size="small"
+            data-testid={`repo-group-${repo.key}`}
+            title={
+              <Space wrap>
+                <Typography.Text strong>{repo.key}</Typography.Text>
+                <Tag>{repo.branch}</Tag>
+                <Typography.Text code data-testid={`repo-sha-${repo.key}`}>
+                  {shortSha(repo.current_sha)}
+                </Typography.Text>
+              </Space>
+            }
+            extra={
+              <Button
+                size="small"
+                icon={<SyncOutlined spin={syncing} />}
+                loading={syncing}
+                disabled={syncing}
+                onClick={() => onSync(repo.key)}
+                aria-label={`同步仓库 ${repo.key}`}
+                data-testid={`sync-repo-${repo.key}`}
+              >
+                同步
+              </Button>
+            }
+          >
+            <Space wrap style={{ marginBottom: 12 }} size={[12, 4]}>
+              <Typography.Text type="secondary">
+                最近同步：{formatTime(repo.last_sync_at)}
+              </Typography.Text>
+              <Typography.Text
+                type={failed ? 'danger' : 'secondary'}
+                data-testid={`repo-sync-result-${repo.key}`}
+              >
+                结果：{resultText}
+              </Typography.Text>
+            </Space>
+
+            {!screens.md ? (
+              <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                {projects.map((project) => (
+                  <Card
+                    key={project.id}
+                    size="small"
+                    data-testid="project-row"
+                    aria-label={`项目 ${project.name}`}
+                    style={project.archived ? { opacity: 0.55 } : undefined} // 清单消失项目 archived 灰显，历史仍可查
+                  >
+                    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
+                        <Button
+                          type="link"
+                          style={{
+                            paddingInline: 0,
+                            fontWeight: 600,
+                            color: project.archived ? undefined : undefined,
+                          }}
+                          onClick={() => onOpen(project)}
+                          aria-label={`打开项目 ${project.name}`}
+                        >
+                          {project.name}
+                        </Button>
+                        {project.archived ? <Tag>已归档</Tag> : null}
+                      </Space>
+                      <Typography.Text type="secondary" code>
+                        {project.id}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        SHA {shortSha(project.commit_sha)}
+                      </Typography.Text>
+                      <Button
+                        size="small"
+                        icon={<FolderOpenOutlined />}
+                        onClick={() => onOpen(project)}
+                        aria-label={`打开工作台 ${project.name}`}
+                      >
+                        工作台
+                      </Button>
+                    </Space>
+                  </Card>
+                ))}
+              </Space>
+            ) : (
+              <RepoProjectsTable
+                projects={projects}
+                loading={loading}
+                onOpen={onOpen}
+              />
+            )}
+          </Card>
+        )
+      })}
     </Space>
   )
 }
 
-export function ProjectListTable({
-  data,
+function RepoProjectsTable({
+  projects,
   loading,
-  deletingId,
   onOpen,
-  onEdit,
-  onDelete,
-}: ProjectListTableProps) {
-  const screens = Grid.useBreakpoint()
-  const [mobilePage, setMobilePage] = useState(1)
-
-  useEffect(() => {
-    const lastPage = Math.max(1, Math.ceil(data.length / PAGE_SIZE))
-    setMobilePage((page) => Math.min(page, lastPage))
-  }, [data.length])
-
+}: {
+  projects: ProjectResponse[]
+  loading?: boolean
+  onOpen: (project: ProjectResponse) => void
+}) {
   const columns: ColumnsType<ProjectResponse> = [
     {
       title: '名称',
@@ -95,133 +162,76 @@ export function ProjectListTable({
       key: 'name',
       ellipsis: true,
       render: (name: string, record) => (
-        <Button
-          type="link"
-          style={{ paddingInline: 0 }}
-          onClick={() => onOpen(record)}
-          aria-label={`打开项目 ${name}`}
-        >
-          {name}
-        </Button>
+        <Space>
+          <Button
+            type="link"
+            style={{
+              paddingInline: 0,
+              opacity: record.archived ? 0.65 : 1,
+            }}
+            onClick={() => onOpen(record)}
+            aria-label={`打开项目 ${name}`}
+          >
+            {name}
+          </Button>
+          {record.archived ? <Tag>已归档</Tag> : null}
+        </Space>
       ),
+    },
+    {
+      title: '项目键',
+      dataIndex: 'project',
+      key: 'project',
+      width: 140,
+      render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
     },
     {
       title: '环境',
-      dataIndex: 'env',
-      key: 'env',
+      dataIndex: 'envs',
+      key: 'envs',
+      width: 160,
+      render: (envs: string[]) =>
+        envs.length ? envs.map((e) => <Tag key={e}>{e}</Tag>) : '—',
+    },
+    {
+      title: '短 SHA',
+      dataIndex: 'commit_sha',
+      key: 'commit_sha',
       width: 100,
-      render: (env: string) => <Typography.Text code>{env}</Typography.Text>,
-    },
-    {
-      title: '资产目录',
-      dataIndex: 'assets_root',
-      key: 'assets_root',
-      ellipsis: true,
-      render: (path: string) => (
-        <Typography.Text type="secondary" style={{ fontFamily: 'ui-monospace, monospace' }}>
-          {path}
-        </Typography.Text>
+      render: (sha: string | null) => (
+        <Typography.Text code>{shortSha(sha)}</Typography.Text>
       ),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      key: 'updated_at',
-      width: 180,
-      render: (value: string) => formatUpdatedAt(value),
     },
     {
       title: '操作',
       key: 'actions',
-      width: 220,
+      width: 100,
       render: (_: unknown, record) => (
-        <ProjectActions
-          project={record}
-          deletingId={deletingId}
-          onOpen={onOpen}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
+        <Button
+          size="small"
+          icon={<FolderOpenOutlined />}
+          onClick={() => onOpen(record)}
+          aria-label={`打开工作台 ${record.name}`}
+        >
+          工作台
+        </Button>
       ),
     },
   ]
 
-  if (!screens.md) {
-    const start = (mobilePage - 1) * PAGE_SIZE
-    const visibleProjects = data.slice(start, start + PAGE_SIZE)
-    return (
-      <div aria-label="项目列表" data-testid="project-list-mobile">
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          {visibleProjects.map((project) => (
-            <Card
-              key={project.id}
-              size="small"
-              data-testid="project-row"
-              aria-label={`项目 ${project.name}`}
-            >
-              <Space direction="vertical" size={10} style={{ width: '100%' }}>
-                <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
-                  <Button
-                    type="link"
-                    style={{ paddingInline: 0, fontWeight: 600, textAlign: 'left' }}
-                    onClick={() => onOpen(project)}
-                    aria-label={`打开项目 ${project.name}`}
-                  >
-                    {project.name}
-                  </Button>
-                  <Tag>{project.env}</Tag>
-                </Space>
-                <div>
-                  <Typography.Text type="secondary">资产目录</Typography.Text>
-                  <Typography.Text
-                    code
-                    style={{ display: 'block', overflowWrap: 'anywhere', whiteSpace: 'normal' }}
-                  >
-                    {project.assets_root}
-                  </Typography.Text>
-                </div>
-                <Typography.Text type="secondary">
-                  更新时间：{formatUpdatedAt(project.updated_at)}
-                </Typography.Text>
-                <ProjectActions
-                  project={project}
-                  deletingId={deletingId}
-                  onOpen={onOpen}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  wrap
-                />
-              </Space>
-            </Card>
-          ))}
-        </Space>
-        <Pagination
-          current={mobilePage}
-          pageSize={PAGE_SIZE}
-          total={data.length}
-          hideOnSinglePage
-          showSizeChanger={false}
-          size="small"
-          style={{ marginTop: 16, justifyContent: 'center' }}
-          onChange={setMobilePage}
-          aria-label="项目列表分页"
-        />
-      </div>
-    )
-  }
-
   return (
     <Table
       rowKey="id"
-      size="middle"
+      size="small"
       columns={columns}
-      dataSource={data}
+      dataSource={projects}
       loading={loading}
-      pagination={{ pageSize: PAGE_SIZE, hideOnSinglePage: true }}
-      locale={{ emptyText: '暂无项目' }}
+      pagination={false}
+      locale={{ emptyText: '该仓库暂无项目' }}
       onRow={(project) => ({
         'data-testid': 'project-row',
         'aria-label': `项目 ${project.name}`,
+        style: project.archived ? { opacity: 0.55 } : undefined,
       })}
     />
   )

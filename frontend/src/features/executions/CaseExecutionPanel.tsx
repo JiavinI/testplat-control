@@ -25,7 +25,7 @@ type LocatedSystemFailure = {
  * Case 执行面板：仅 params={} 运行，不解析 YAML、不覆盖 fail_fast/timeout。
  * 5xx 错误体无 record_id，需按 asset_type=case + asset_id + status=failed 定位历史。
  */
-export function CaseExecutionPanel({ projectId, caseId }: CaseExecutionPanelProps) {
+export function CaseExecutionPanel({ projectId, caseId, env }: CaseExecutionPanelProps) {
   const runMutation = useRunCase(projectId, caseId)
   const [runResult, setRunResult] = useState<CaseRunResponse | null>(null)
   const [submitError, setSubmitError] = useState<unknown>(null)
@@ -38,8 +38,8 @@ export function CaseExecutionPanel({ projectId, caseId }: CaseExecutionPanelProp
     setLocated(null)
     setRunResult(null)
     try {
-      // 只传 params；禁止 fail_fast / timeout 覆盖字段
-      const data = await runMutation.mutateAsync({ params: {} })
+      // 只传 env + params；禁止 fail_fast / timeout 覆盖字段
+      const data = await runMutation.mutateAsync({ env, params: {} })
       setRunResult(data)
     } catch (error) {
       if (error instanceof ApiHttpError && error.status >= 500) {
