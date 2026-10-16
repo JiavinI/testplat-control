@@ -1,3 +1,4 @@
+/** 历史脚本：4.1a 当前门禁不再运行。运行环境下拉只使用数据库环境，见 docs/phase4_1a/integration-gates.md。 */
 /**
  * 真实 Engine 浏览器矩阵（失败 / 422 / 5xx / legacy 不得走 route mock）。
  *

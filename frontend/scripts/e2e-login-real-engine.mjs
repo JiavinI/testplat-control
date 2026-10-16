@@ -1,3 +1,4 @@
+/** 历史脚本：4.1a 当前门禁不再运行。运行环境下拉只使用数据库环境，见 docs/phase4_1a/integration-gates.md。 */
 /**
  * Phase 3.3b 真实 Engine 登录身份展示截图（设计稿 §7 / 手册 Agent 4）。
  *

@@ -1,0 +1,16 @@
+{
+  "shots": [
+    "desktop-1440x900-login.png",
+    "desktop-1440x900-environments.png",
+    "desktop-1440x900-accounts.png",
+    "desktop-1440x900-run-env-select.png",
+    "desktop-1440x900-run-result.png",
+    "desktop-1440x900-history.png",
+    "mobile-390x844-login.png",
+    "mobile-390x844-environments.png",
+    "mobile-390x844-accounts.png",
+    "mobile-390x844-run-env-select.png",
+    "mobile-390x844-run-result.png",
+    "mobile-390x844-history.png"
+  ]
+}

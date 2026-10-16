@@ -147,9 +147,28 @@ def _tokens(issued: list[str] | None = None) -> list[str]:
     return [v for v in src if v.startswith("tok-")]
 
 
+def _establish():
+    root = Path(__file__).resolve().parents[1]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from tests.platform_gate import establish
+
+    return establish
+
+
+def _inherit_httpx():
+    root = Path(__file__).resolve().parents[1]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from tests.platform_gate import inherit_httpx
+
+    return inherit_httpx
+
+
 class Matrix:
     def __init__(self) -> None:
         self.client = httpx.Client(timeout=120)
+        _establish()(self.client, auth_base=BACKEND)
         self.rows: list[dict[str, Any]] = []
         self.projects: dict[str, str] = {}
 
@@ -565,7 +584,8 @@ def main() -> int:
 
         def _one() -> None:
             try:
-                with httpx.Client(timeout=120) as c:
+                # 新客户端不共享 jar，必须显式带上当前平台会话。
+                with _inherit_httpx()(m.client, timeout=120) as c:
                     results.append(c.post(url, json={"params": {}, "env": ENV}))
             except Exception as exc:  # noqa: BLE001
                 errors.append(type(exc).__name__)

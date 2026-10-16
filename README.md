@@ -50,14 +50,20 @@ cd frontend && pnpm e2e:gate
 失败 / 422 / 5xx / legacy **必须**走真实 Engine（`PackageEngineAdapter`），不能只靠前端
 `e2e-gate.mjs` 的 `route.fulfill` mock。Fake 门禁只覆盖 UI 壳与横向溢出。
 
-一键矩阵（本地 target + 短超时 harness + 前端，不访问公网）：
+当前门禁与历史入口见 `docs/phase4_1a/integration-gates.md`。
+
+一键 HTTP 矩阵（本地 target + 短超时 harness；浏览器 Phase 3 步骤已标为历史并跳过）：
 
 ```bash
 ./scripts/run_real_engine_matrix.sh
-# 截图与报告：frontend/screenshots/phase3-real-engine/
 ```
 
-`scripts/phase4_0_matrix.py`、`scripts/phase4_0_e2e_real_assets.py` 以及 auth / login 矩阵脚本目前没有平台注册登录。直接跑会得到未登录，不能当作当前门禁。登录迁移留到集成阶段。
+Phase 4.1a 集成矩阵与截图：
+
+```bash
+uv run python scripts/phase4_1a_matrix.py
+uv run python scripts/phase4_1a_screenshots.py
+```
 
 手动步骤：
 
@@ -66,7 +72,7 @@ cd frontend && pnpm e2e:gate
 3. `uv run uvicorn testplat_control.harness_real_matrix:app --host 127.0.0.1 --port 8000`
    （与 `main:app` 相同真实 Engine；仅将每步骤超时缩短为 0.5s 以便触发 504。）
 4. `cd frontend && pnpm dev`
-5. `cd frontend && pnpm e2e:real-engine`
+5. Phase 3 浏览器脚本 `pnpm e2e:real-engine` 只保留为历史证据，不再作为当前门禁。
 
 API 层证据：`uv run pytest -q tests/integration/test_real_engine_case_flow.py`。
 

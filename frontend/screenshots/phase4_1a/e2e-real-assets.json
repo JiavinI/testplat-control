@@ -1,0 +1,40 @@
+{
+  "assets_src": "/home/ubuntu/testplat-assets",
+  "expected_sha": "f226b4a88b68fd582f717f5f0ff3652c1f56eb7e",
+  "real_gsb_business_pass_required": false,
+  "copy_sha": "f226b4a88b68fd582f717f5f0ff3652c1f56eb7e",
+  "sync": {
+    "ok": true,
+    "commit_sha": "f226b4a88b68fd582f717f5f0ff3652c1f56eb7e",
+    "category": "ok"
+  },
+  "projects": [
+    "main/gsb"
+  ],
+  "api_http": 200,
+  "case_http": 200,
+  "records": [
+    {
+      "http": 200,
+      "operator": "e2eop",
+      "env": "test",
+      "commit_sha": "f226b4a88b68fd582f717f5f0ff3652c1f56eb7e",
+      "config_revision": 2,
+      "status": "failed"
+    },
+    {
+      "http": 200,
+      "operator": "e2eop",
+      "env": "test",
+      "commit_sha": "f226b4a88b68fd582f717f5f0ff3652c1f56eb7e",
+      "config_revision": 2,
+      "status": "failed"
+    }
+  ],
+  "real_gsb_outcome": "metadata_only",
+  "sync_regression": {
+    "old_sha": "f226b4a88b68fd582f717f5f0ff3652c1f56eb7e",
+    "new_sha": "179ce9ab10af62453440f5b640055293857adf7a",
+    "web_unchanged": true
+  }
+}

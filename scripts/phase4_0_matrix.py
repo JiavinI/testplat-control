@@ -58,6 +58,7 @@ def main() -> int:
     from testplat_control.deps import get_engine_port
     from testplat_control.main import app
     from testplat_control.services.manifest import ManifestError, assert_relative_safe, safe_resolve
+    from tests.platform_gate import establish
     from tests.repo_support import (
         DEFAULT_FILES,
         attach_repos_config,
@@ -67,6 +68,8 @@ def main() -> int:
     )
 
     client = TestClient(app)
+    # 同步与执行都要求平台会话。脚本里没有 pytest 的依赖覆盖。
+    establish(client)
     work = Path(tempfile.mkdtemp(prefix="phase4_0_matrix_"))
 
     # ---- §7-1 ----

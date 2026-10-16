@@ -7,12 +7,15 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get("PHASE4_SHOT_OUT", ROOT / "frontend" / "screenshots" / "phase4_0"))
-WORK = Path(os.environ.get("PHASE4_SHOT_WORK", ROOT / ".phase4_shot_work"))
+WORK = Path(
+    os.environ.get("PHASE4_SHOT_WORK", str(Path(tempfile.gettempdir()) / "phase4_0_shot_work"))
+)
 OUT.mkdir(parents=True, exist_ok=True)
 WORK.mkdir(parents=True, exist_ok=True)
 
@@ -73,9 +76,12 @@ def main() -> int:
     log_dir = WORK / "logs"
     log_dir.mkdir(exist_ok=True)
 
+    from cryptography.fernet import Fernet
+
     env = os.environ.copy()
     env["TESTPLAT_REPOS_FILE"] = str(repos_file)
-    env["MATRIX_SQLITE_PATH"] = str(db)
+    env["DATABASE_URL"] = f"sqlite:///{db}"
+    env["TESTPLAT_MASTER_KEY"] = Fernet.generate_key().decode("ascii")
     env["PYTHONUNBUFFERED"] = "1"
     env["GIT_TERMINAL_PROMPT"] = "0"
 
@@ -102,6 +108,8 @@ def main() -> int:
             "pnpm",
             "exec",
             "vite",
+            "--config",
+            str(ROOT / "frontend" / "scripts" / "vite.screenshot.mjs"),
             "--host",
             "127.0.0.1",
             "--port",
@@ -128,14 +136,7 @@ def main() -> int:
         else:
             raise RuntimeError("services_start_timeout")
 
-        # 确保已同步（启动 lifespan 会同步；再点一次）
-        import urllib.request
-
-        req = urllib.request.Request(
-            f"http://127.0.0.1:{backend_port}/repos/main/sync", method="POST"
-        )
-        urllib.request.urlopen(req, timeout=60).read()
-
+        # 启动时 lifespan 已同步。手动同步改由登录后的页面按钮触发。
         shooter = ROOT / "frontend" / "scripts" / "e2e-phase4_0-screenshots.mjs"
         r = subprocess.run(
             ["pnpm", "exec", "node", str(shooter)],
@@ -146,6 +147,8 @@ def main() -> int:
                 "E2E_OUT_DIR": str(OUT),
                 "E2E_REPO": "main",
                 "E2E_PROJECT": "demo",
+                "E2E_USERNAME": "shotop40",
+                "E2E_PASSWORD": "shot-pass-1",
                 "E2E_BACKEND": f"http://127.0.0.1:{backend_port}",
             },
             capture_output=True,
