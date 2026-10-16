@@ -32,6 +32,11 @@ class TestDatabaseInit:
         assert "projects" in tables
         assert "execution_records" in tables
         assert "repos" in tables
+        assert "platform_users" in tables
+        assert "platform_sessions" in tables
+        assert "project_environments" in tables
+        assert "test_accounts" in tables
+        assert "config_changes" in tables
 
 
 class TestSchemaGuard:
@@ -44,8 +49,32 @@ class TestSchemaGuard:
                 "assets_root VARCHAR(500), config_root VARCHAR(500), "
                 "created_at DATETIME, updated_at DATETIME)"
             )
-        with pytest.raises(IncompatibleSchemaError):
+        with pytest.raises(IncompatibleSchemaError) as exc:
             assert_schema_compatible(engine)
+        assert "不会自动清空" in str(exc.value)
+
+    def test_rejects_phase4_exec_without_revision_columns(self, temp_db: str) -> None:
+        engine = get_engine(temp_db)
+        with engine.begin() as conn:
+            conn.exec_driver_sql(
+                "CREATE TABLE repos (key VARCHAR(64) PRIMARY KEY, branch VARCHAR(255))"
+            )
+            conn.exec_driver_sql(
+                "CREATE TABLE projects ("
+                "id VARCHAR(160) PRIMARY KEY, repo VARCHAR(64), project_key VARCHAR(64), "
+                "name VARCHAR(255), envs JSON, default_env VARCHAR(64), archived BOOLEAN, "
+                "commit_sha VARCHAR(40), created_at DATETIME, updated_at DATETIME)"
+            )
+            conn.exec_driver_sql(
+                "CREATE TABLE execution_records ("
+                "id VARCHAR(36) PRIMARY KEY, project_id VARCHAR(160), asset_type VARCHAR(50), "
+                "asset_id VARCHAR(255), status VARCHAR(50), start_time DATETIME, "
+                "end_time DATETIME, duration FLOAT, result_json VARCHAR(65535), "
+                "env VARCHAR(64), repo VARCHAR(64), commit_sha VARCHAR(40), operator VARCHAR(255))"
+            )
+        with pytest.raises(IncompatibleSchemaError) as exc:
+            assert_schema_compatible(engine)
+        assert "显式删除" in str(exc.value)
 
 
 class TestProjectModel:

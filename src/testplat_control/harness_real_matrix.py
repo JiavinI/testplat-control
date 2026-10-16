@@ -22,13 +22,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
-
 import testplat_control.api.cases as cases_api
 import testplat_control.api.run as run_api
 from testplat_control.database import session as db_session
-from testplat_control.database.models import Base
 from testplat_control.main import app
 from testplat_control.services import execution_service
 
@@ -58,14 +54,8 @@ run_api.run_single_api = _run_api_short  # type: ignore[assignment]
 _sqlite_path = os.environ.get("MATRIX_SQLITE_PATH")
 if _sqlite_path:
     # 矩阵专用：所有请求经 get_db -> SessionLocal，改绑同一个 sessionmaker 即全局生效。
-    _file_engine = db_session.prepare_engine(
-        create_engine(
-            f"sqlite:///{_sqlite_path}",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
-    )
-    Base.metadata.create_all(_file_engine)
+    _file_engine = db_session.make_engine(f"sqlite:///{_sqlite_path}")
+    db_session.init_engine_schema(_file_engine)
     db_session.SessionLocal.configure(bind=_file_engine)
 
 __all__ = ["app"]

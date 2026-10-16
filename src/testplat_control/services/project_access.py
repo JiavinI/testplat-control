@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
 
-from testplat_control.database.models import Project, Repo
+from testplat_control.database.models import Project, ProjectEnvironment, Repo
 from testplat_control.services.repo_sync import (
     RepoSyncService,
     materialize_snapshot,
@@ -38,11 +38,35 @@ def get_project(db: Session, repo: str, project: str) -> Project:
     return row
 
 
-def require_env(project: Project, env: str) -> str:
-    """校验运行环境必须在项目 envs 内，否则 422。"""
+def visible_envs(db: Session, project: Project) -> tuple[list[str], str | None]:
+    """响应里的 envs / default_env。
+
+    已有 Web 环境时只返回启用的数据库环境；否则沿用 Git 同步写入的列，
+    这样尚未在 Web 建环境的项目仍可浏览 4.0 模板名。
+    """
+    rows = db.query(ProjectEnvironment).filter(ProjectEnvironment.project_id == project.id).all()
+    if rows:
+        names = sorted(row.env for row in rows if row.enabled)
+        default = (
+            project.default_env if project.default_env in names else (names[0] if names else None)
+        )
+        return names, default
+    return list(project.envs or []), project.default_env
+
+
+def require_env(db: Session, project: Project, env: str) -> str:
+    """校验运行环境。Web 环境存在时以数据库为准（停用则 422）。"""
     if not env or not str(env).strip():
         raise HTTPException(status_code=422, detail="env 为必填项")
     env = str(env).strip()
+    rows = db.query(ProjectEnvironment).filter(ProjectEnvironment.project_id == project.id).all()
+    if rows:
+        match = next((row for row in rows if row.env == env), None)
+        if match is None:
+            raise HTTPException(status_code=422, detail=f"环境不在可选列表中: {env}")
+        if not match.enabled:
+            raise HTTPException(status_code=422, detail=f"环境已停用: {env}")
+        return env
     envs = list(project.envs or [])
     if env not in envs:
         raise HTTPException(status_code=422, detail=f"环境不在可选列表中: {env}")

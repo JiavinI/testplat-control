@@ -1,0 +1,26 @@
+# OpenAPI path 相对 phase4_0 的变更摘要
++ /auth/login  methods=['post']
++ /auth/logout  methods=['post']
++ /auth/me  methods=['get']
++ /auth/register  methods=['post']
++ /repos/{repo}/projects/{project}/environments  methods=['get', 'post']
++ /repos/{repo}/projects/{project}/environments/{env}  methods=['get', 'put']
++ /repos/{repo}/projects/{project}/environments/{env}/accounts  methods=['get', 'post']
++ /repos/{repo}/projects/{project}/environments/{env}/accounts/{name}  methods=['get', 'put']
++ /repos/{repo}/projects/{project}/environments/{env}/accounts/{name}/credentials  methods=['get']
++ /repos/{repo}/projects/{project}/login-profiles  methods=['get']
+
+# 未删除的 phase4_0 路径
+仓库、项目、资产、单 API / Case 运行与执行记录路径保持不变。
+GET /projects/{project_id} 仍在，并标为 deprecated。替代 GET /repos/{repo}/projects/{project}。
+旧的 /projects/{id}/cases 与 /projects/{id}/execution-records 不在当前文档中。
+
+# Schema 要点
++ AuthBody / MeResponse
++ EnvironmentBody / EnvironmentUpdate / EnvironmentResponse
++ AccountBody / AccountUpdate / AccountResponse
++ LoginProfileResponse / LoginProfilesResponse
++ RunRequest / CaseRunRequest: 可选 timeout_seconds（省略与显式 30 区分）
++ RunResponse / CaseRunResponse: operator、config_revision
++ ExecutionRecordDetailResponse: config_revision、account_revisions、config_snapshot
++ ExecutionRecordListResponse: config_revision

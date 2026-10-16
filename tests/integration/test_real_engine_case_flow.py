@@ -368,14 +368,14 @@ def test_real_case_mutations_rejected_precisely(
 
 
 def test_real_case_ignores_fail_fast_and_timeout_overrides(real: dict[str, Any]) -> None:
-    """移除 fail-fast / 覆盖 timeout：多余字段被忽略，仍固定 fail-fast 与 Control 超时。
+    """fail_fast 仍不可由请求关闭；Engine 继续 fail-fast。
 
-    契约：调用方不可覆盖；Pydantic 忽略未知字段，Engine 仍按 fail-fast 执行。
+    显式 timeout_seconds 已改为可覆盖，本用例不再附带该字段。
     """
     # 业务失败路径：即使请求声称 fail_fast=False，后续步骤仍必须 skipped。
     resp = real["client"].post(
         f"{project_api_base(real['project_id'])}/cases/case.demo.assert_failed/run",
-        json={"env": "test", "params": {}, "fail_fast": False, "timeout_seconds": 1},
+        json={"env": "test", "params": {}, "fail_fast": False},
     )
     assert resp.status_code == 200, resp.text
     result = resp.json()["result"]

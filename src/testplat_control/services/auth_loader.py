@@ -2,8 +2,10 @@
 
 边界与不变量
 ------------
-- auth 配置文件入 git、**不含秘密**；秘密只来自 Control 进程的环境变量（D2），
-  变量名必须匹配 ``^TESTPLAT_[A-Z0-9_]+$``，防止借模板读取任意进程环境。
+- 历史 auth 文件入 git、**不含秘密**；该路径的秘密只来自调用方传入的环境映射（默认
+  进程环境，D2），变量名必须匹配 ``^TESTPLAT_[A-Z0-9_]+$``。
+- 平台账号路径用 :func:`build_auth_from_document`：``${secret:字段名}`` 只解析该账号的
+  凭据字典，禁止回退 ``os.environ`` 或 ``TESTPLAT_*``。
 - 文件不存在 → 返回 ``None``（不是空表），Engine 行为与 Phase 3 / v0.2.0 一致（Q2）。
 - 配置本身有错（YAML 非法、schema 不符、``none`` 身份、大小写重复头名、占位符非法、
   ``default_identity`` 指向不存在的身份、headers/login 互斥违反等）→ 直接抛
@@ -32,6 +34,7 @@ import logging
 import os
 import re
 from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -63,8 +66,12 @@ IDENTITY_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 RESERVED_IDENTITY = "none"
 # header 名：RFC 7230 token。
 HEADER_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
-# 变量名白名单（D2）。
+# 变量名白名单（D2）。只用于历史 auth 文件 + 进程环境变量路径。
 SECRET_NAME_RE = re.compile(r"^TESTPLAT_[A-Z0-9_]+$")
+# 平台账号凭据字段名。不是环境变量，解析时不得回退 os.environ。
+CREDENTIAL_FIELD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+# environ：历史夹具；credential：账号凭据字典。
+_SECRET_KIND: ContextVar[str] = ContextVar("testplat_auth_secret_kind", default="environ")
 # 命名值 / 策略名 / 连接名：与 Engine 保守标识符对齐。
 LOGIN_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_\-]{0,63}$")
 # 模板占位符：`${secret:NAME}` / `${login:名字}` / `${login_host}`。
@@ -230,23 +237,32 @@ def _parse_mixed_template(env: str, where: str, template: object) -> _MixedTempl
     )
 
 
-def _check_variable(name: str, environ: Mapping[str, str]) -> tuple[str | None, str | None]:
-    """检查单个变量（Q5：每个变量单独检查白名单与长度）。
+def _check_variable(name: str, source: Mapping[str, str]) -> tuple[str | None, str | None]:
+    """检查单个秘密（Q5：每个名字单独检查）。
+
+    ``environ`` 模式要求 ``TESTPLAT_`` 白名单，来源是调用方传入的环境映射。
+    ``credential`` 模式按字段名查账号凭据字典，不读进程环境。
 
     Returns:
-        ``(原始值, None)`` 或 ``(None, 只含变量名的不可用原因)``。
+        ``(原始值, None)`` 或 ``(None, 只含名字的不可用原因)``。
     """
-    if not SECRET_NAME_RE.fullmatch(name):
-        return None, f"环境变量 {name} 不在 TESTPLAT_ 白名单内"
-    raw = environ.get(name)
+    if _SECRET_KIND.get() == "credential":
+        if not CREDENTIAL_FIELD_RE.fullmatch(name):
+            return None, f"凭据字段 {name} 名称非法"
+        label = f"凭据字段 {name}"
+    else:
+        if not SECRET_NAME_RE.fullmatch(name):
+            return None, f"环境变量 {name} 不在 TESTPLAT_ 白名单内"
+        label = f"环境变量 {name}"
+    raw = source.get(name)
     if raw is None:
-        return None, f"环境变量 {name} 未设置"
+        return None, f"{label} 未设置"
     if raw == "":
-        return None, f"环境变量 {name} 为空"
+        return None, f"{label} 为空"
     if len(raw) < MIN_SECRET_LENGTH:
-        return None, f"环境变量 {name} 长度不足 {MIN_SECRET_LENGTH}"
+        return None, f"{label} 长度不足 {MIN_SECRET_LENGTH}"
     if any(ch in raw for ch in "\r\n\x00"):
-        return None, f"环境变量 {name} 含非法控制字符"
+        return None, f"{label} 含非法控制字符"
     return raw, None
 
 
@@ -1021,8 +1037,8 @@ def load_auth(
         config_root: 项目配置根目录。
         env: 环境名（调用方已由 ``load_project_environment`` 校验非空）。
         environ: 秘密来源；缺省为 ``os.environ``（测试注入假值）。
-        cache_scope: 跨执行缓存作用域（3.3d）；由 ``execution_service`` 传
-            ``f"{project.id}:{project.env}"``；``None`` → 不跨执行缓存。
+        cache_scope: 跨执行缓存作用域（3.3d）。当前由 ``resolve_run_config`` 传入
+            ``{repo}:{project}:{env}``；``None`` → 不跨执行缓存。
             Control 只传作用域，**不做**任何缓存实现。
 
     Returns:
@@ -1051,6 +1067,39 @@ def load_auth(
             log_reason=f"{path}: {type(exc).__name__}",
         ) from None
 
+    token = _SECRET_KIND.set("environ")
+    try:
+        return _load_auth_document(loaded, env, source, cache_scope)
+    finally:
+        _SECRET_KIND.reset(token)
+
+
+def build_auth_from_document(
+    document: Mapping[str, Any],
+    *,
+    env: str,
+    secrets: Mapping[str, str],
+    cache_scope: str | None = None,
+) -> AuthLoadResult:
+    """用内存中的 auth 文档和凭据字典构造身份表。
+
+    ``${secret:字段名}`` 只从 ``secrets`` 解析。不读取 ``os.environ``，也不把
+    字典写回进程环境。历史 ``config/auth/{env}.yaml`` 仍走 :func:`load_auth`。
+    """
+    token = _SECRET_KIND.set("credential")
+    try:
+        return _load_auth_document(document, env, secrets, cache_scope)
+    finally:
+        _SECRET_KIND.reset(token)
+
+
+def _load_auth_document(
+    loaded: Any,
+    env: str,
+    source: Mapping[str, str],
+    cache_scope: str | None,
+) -> AuthLoadResult:
+    """校验并构造身份表。秘密来源由调用方给定，本函数不碰 ``os.environ``。"""
     if not isinstance(loaded, dict):
         raise _schema_error(env, "根节点必须是对象")
     unknown = sorted(str(key) for key in set(loaded) - _ROOT_KEYS)

@@ -135,7 +135,8 @@ class ExecutionRecordListResponse(BaseModel):
     env: str | None = Field(None, description="运行时选择的环境")
     commit_sha: str | None = Field(None, description="执行所用 commit SHA")
     repo: str | None = Field(None, description="仓库键")
-    operator: str | None = Field(None, description="操作人；4.0 恒为 null")
+    operator: str | None = Field(None, description="操作人（平台用户名）")
+    config_revision: int | None = Field(None, description="启动时冻结的环境 revision")
 
     @classmethod
     def from_model(cls, record: Any) -> "ExecutionRecordListResponse":
@@ -151,6 +152,7 @@ class ExecutionRecordListResponse(BaseModel):
             commit_sha=getattr(record, "commit_sha", None),
             repo=getattr(record, "repo", None),
             operator=getattr(record, "operator", None),
+            config_revision=getattr(record, "config_revision", None),
         )
 
     @classmethod
@@ -231,7 +233,14 @@ class ExecutionRecordDetailResponse(BaseModel):
     env: str | None = Field(None, description="运行时选择的环境")
     commit_sha: str | None = Field(None, description="执行所用 commit SHA")
     repo: str | None = Field(None, description="仓库键")
-    operator: str | None = Field(None, description="操作人；4.0 恒为 null")
+    operator: str | None = Field(None, description="操作人（平台用户名）")
+    config_revision: int | None = Field(None, description="启动时冻结的环境 revision")
+    account_revisions: dict[str, int] | None = Field(
+        None, description="本次实际账号名到 revision；不含凭据"
+    )
+    config_snapshot: dict[str, Any] | None = Field(
+        None, description="非秘密配置快照；不回查当前环境补全"
+    )
 
     @classmethod
     def from_model(cls, record: Any) -> "ExecutionRecordDetailResponse":
@@ -259,6 +268,9 @@ class ExecutionRecordDetailResponse(BaseModel):
             commit_sha=getattr(record, "commit_sha", None),
             repo=getattr(record, "repo", None),
             operator=getattr(record, "operator", None),
+            config_revision=getattr(record, "config_revision", None),
+            account_revisions=getattr(record, "account_revisions", None),
+            config_snapshot=getattr(record, "config_snapshot", None),
         )
 
     @classmethod

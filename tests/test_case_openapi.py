@@ -67,3 +67,9 @@ def test_list_records_supports_env_filter(current: dict[str, Any]) -> None:
     }
     assert "env" in params
     assert params["env"]["required"] is False
+
+
+def test_flat_project_detail_is_deprecated(current: dict[str, Any]) -> None:
+    """扁平项目详情只读别名保留，但 OpenAPI 标为 deprecated。"""
+    operation = current["paths"]["/projects/{project_id}"]["get"]
+    assert operation["deprecated"] is True

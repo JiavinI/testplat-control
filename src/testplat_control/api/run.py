@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session
 
+from testplat_control.api.platform_session import require_user
 from testplat_control.api.schemas import ExecutionAuth, parse_execution_auth
 from testplat_control.database.models import ExecutionRecord
 from testplat_control.database.session import get_db
@@ -20,6 +21,7 @@ from testplat_control.parsers.yaml_parser import YamlParser
 from testplat_control.ports.engine import EnginePort
 from testplat_control.services.asset_service import AssetNode, AssetService
 from testplat_control.services.execution_service import run_single_api
+from testplat_control.services.platform_auth import PlatformPrincipal
 from testplat_control.services.project_access import (
     ensure_snapshot_dirs,
     get_project,
@@ -48,7 +50,7 @@ _TYPE_ALIASES: dict[str, ParamType] = {
     "bool": "boolean",
 }
 
-_SPEC_KEYS = {"type", "schema", "required", "description", "desc", "name"}
+_SPEC_KEYS = {"type", "schema", "required", "description", "desc", "name", "default"}
 
 _REQUIRED_MARKERS = ("(required)", "（required）", "(必填)", "（必填）")
 
@@ -70,10 +72,19 @@ class ParamsResponse(BaseModel):
 
 
 class RunRequest(BaseModel):
-    """单次 API 执行请求。"""
+    """单次 API 执行请求。
+
+    ``timeout_seconds`` 省略时不覆盖环境超时；显式 30 与省略不是同一件事。
+    """
 
     env: str = Field(..., min_length=1, description="运行环境（须在项目 envs 内）")
     params: dict[str, Any] = Field(default_factory=dict, description="执行参数")
+    timeout_seconds: float | None = Field(
+        None,
+        gt=0,
+        le=300,
+        description="每步 HTTP 超时（秒）。省略则使用环境或默认 30",
+    )
 
 
 class RunResponse(BaseModel):
@@ -89,6 +100,8 @@ class RunResponse(BaseModel):
         None, description="本次请求使用的身份（Phase 3.3d 九键）；匿名为 null，与 result.auth 相同"
     )
     commit_sha: str | None = Field(None, description="本次执行固定使用的 commit SHA")
+    operator: str | None = Field(None, description="操作人（平台用户名）")
+    config_revision: int | None = Field(None, description="启动时冻结的环境 revision")
 
 
 def build_param_infos(inputs: Any) -> list[ParamInfo]:
@@ -229,8 +242,24 @@ def _matches_type(expected: ParamType, value: Any) -> bool:
     return False
 
 
+def asset_default_params(inputs: Any) -> dict[str, Any]:
+    """从 inputs 的 ``default`` 取出资产默认值。没有默认值时为空。"""
+    found: dict[str, Any] = {}
+    pairs: list[tuple[str, Any]] = []
+    if isinstance(inputs, dict):
+        pairs = [(str(name), spec) for name, spec in inputs.items()]
+    elif isinstance(inputs, list):
+        for entry in inputs:
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str):
+                pairs.append((entry["name"], entry))
+    for name, spec in pairs:
+        if isinstance(spec, dict) and "default" in spec:
+            found[name] = spec["default"]
+    return found
+
+
 def _validate_run_params(form: list[ParamInfo], params: dict[str, Any]) -> None:
-    """按参数表单校验请求参数。
+    """按参数表单校验已经合并后的运行参数。
 
     Args:
         form: 从 YAML 提取的参数表单。
@@ -270,8 +299,8 @@ def _asset_file(assets_root: Path, asset: AssetNode) -> Path:
     return file_path
 
 
-def _load_param_form(assets_root: Path, asset_id: str) -> list[ParamInfo]:
-    """用 AssetService 定位资产，再用 YamlParser 提取 inputs。"""
+def _load_api_document(assets_root: Path, asset_id: str) -> dict[str, Any]:
+    """定位 API YAML 并返回解析结果。错误不含文件原文以外的 YAML 异常文本。"""
     asset = AssetService(assets_root).get_asset(asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -296,7 +325,12 @@ def _load_param_form(assets_root: Path, asset_id: str) -> list[ParamInfo]:
 
     if parsed.get("type") != "api":
         raise HTTPException(status_code=422, detail="Asset is not an API")
+    return api
 
+
+def _load_param_form(assets_root: Path, asset_id: str) -> list[ParamInfo]:
+    """用 AssetService 定位资产，再用 YamlParser 提取 inputs。"""
+    api = _load_api_document(assets_root, asset_id)
     try:
         return build_param_infos(api.get("inputs"))
     except (ValueError, ValidationError) as exc:
@@ -330,6 +364,8 @@ def _run_response(record: ExecutionRecord) -> RunResponse:
             result if isinstance(result, dict) else None, record_id=record.id
         ),
         commit_sha=getattr(record, "commit_sha", None),
+        operator=getattr(record, "operator", None),
+        config_revision=getattr(record, "config_revision", None),
     )
 
 
@@ -357,13 +393,18 @@ async def run_asset(
     request: Request,
     db: Session = Depends(get_db),
     engine: EnginePort = Depends(get_engine_port),
+    user: PlatformPrincipal = Depends(require_user),
 ) -> RunResponse:
     """执行单个 API，并保存执行记录。请求体必填 ``env``。"""
     row = get_project(db, repo, project)
-    env = require_env(row, body.env)
+    env = require_env(db, row, body.env)
     commit_sha, assets_root, config_root = ensure_snapshot_dirs(get_repos_config(request), row)
-    form = _load_param_form(assets_root, asset_id)
-    _validate_run_params(form, body.params)
+    api = _load_api_document(assets_root, asset_id)
+    try:
+        form = build_param_infos(api.get("inputs"))
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    declared_names = {item.name for item in form}
 
     record = await run_single_api(
         db=db,
@@ -375,5 +416,10 @@ async def run_asset(
         commit_sha=commit_sha,
         assets_root=assets_root,
         config_root=config_root,
+        timeout_seconds=body.timeout_seconds,
+        operator=user.username,
+        declared_names=declared_names,
+        asset_defaults=asset_default_params(api.get("inputs")),
+        validate_params=lambda params: _validate_run_params(form, params),
     )
     return _run_response(record)

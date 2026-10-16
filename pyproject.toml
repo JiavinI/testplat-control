@@ -17,6 +17,9 @@ dependencies = [
     # Phase 3.3d：跨执行登录缓存与 401 重登重发需要 Engine 0.5.x（九键 auth / cache_scope）。
     # 具体 commit 由 uv sources 锁定；见文件下方 [tool.uv.sources] 说明。
     "testplat-engine>=0.5.0,<0.6",
+    "pydantic-settings>=2.16.0",
+    "cryptography>=50.0.2",
+    "argon2-cffi>=25.1.0",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +45,7 @@ testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["platform_auth: 不注入默认平台用户，走真实 cookie 会话"]
 
 [tool.ruff]
 line-length = 100
