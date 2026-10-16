@@ -81,7 +81,12 @@ export async function apiRequest<T>(
 
   let response: Response
   try {
-    response = await fetchImpl(url, { ...init, headers })
+    // 会话在 HttpOnly cookie 里。前端不读 token；跨源部署时也要带上 cookie。
+    response = await fetchImpl(url, {
+      ...init,
+      headers,
+      credentials: init.credentials ?? 'include',
+    })
   } catch (cause) {
     throw new ApiNetworkError(cause)
   }

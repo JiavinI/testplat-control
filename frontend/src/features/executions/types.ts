@@ -93,6 +93,10 @@ export interface RunResponse {
   auth?: ExecutionAuth | null
   /** 本次执行固定的 commit；缺省兼容旧响应 */
   commit_sha?: string | null
+  /** 平台操作人；旧响应缺省 */
+  operator?: string | null
+  /** 启动时冻结的环境 revision；没有则不展示 */
+  config_revision?: number | null
 }
 
 export interface ExecutionRecordListItem {
@@ -110,6 +114,7 @@ export interface ExecutionRecordListItem {
   commit_sha?: string | null
   repo?: string | null
   operator?: string | null
+  config_revision?: number | null
 }
 
 export interface ExecutionDisplay {
@@ -137,6 +142,7 @@ export interface ExecutionRecordDetail {
   commit_sha?: string | null
   repo?: string | null
   operator?: string | null
+  config_revision?: number | null
 }
 
 export interface ExecutionListQuery {
@@ -258,6 +264,8 @@ export interface CaseRunResponse {
   duration: number | null
   result: CaseResult
   commit_sha?: string | null
+  operator?: string | null
+  config_revision?: number | null
 }
 
 export interface CaseExecutionRecordDetail {
@@ -275,6 +283,7 @@ export interface CaseExecutionRecordDetail {
   commit_sha?: string | null
   repo?: string | null
   operator?: string | null
+  config_revision?: number | null
 }
 
 export type CaseExecutionPanelProps = {

@@ -32,6 +32,8 @@ import {
   ExecutionHistory,
 } from '@/features/executions'
 import { useCaseAssetDetail } from '@/features/executions/hooks'
+import { ProjectConfigPanel } from '@/features/environments/ProjectConfigPanel'
+import { useEnvironments } from '@/features/environments/hooks'
 import { useProject } from '@/features/projects/hooks'
 import { joinProjectId } from '@/shared/project/ids'
 import { shortSha } from '@/shared/project/display'
@@ -57,17 +59,19 @@ function useIsNarrowViewport(query = '(max-width: 767px)'): boolean {
 /**
  * 项目工作台：组合资产浏览、API/Case 执行与执行历史。
  * api.* 挂动态参数面板；case.* 挂文件元信息 + 运行（步骤只来自运行/历史）。
- * Phase 4.0：环境下拉默认 default_env，选择写入 localStorage；运行必带 env。
+ * 运行环境下拉只使用该项目已启用的数据库环境，不回退 Git 示例环境。
  */
 export function ProjectWorkspacePage() {
   const { repo = '', project: projectKey = '' } = useParams()
   const projectId = repo && projectKey ? joinProjectId(repo, projectKey) : ''
   const projectQuery = useProject(projectId)
+  const environmentQuery = useEnvironments(projectId)
   const isNarrow = useIsNarrowViewport()
 
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>()
   const [assetDrawerOpen, setAssetDrawerOpen] = useState(false)
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null)
+  const [configOpen, setConfigOpen] = useState(false)
 
   // 项目切换时清空选中与抽屉，避免串数据
   useEffect(() => {
@@ -76,19 +80,22 @@ export function ProjectWorkspacePage() {
     setSelectedEnv(null)
   }, [projectId])
 
-  // 项目加载后解析初始环境（localStorage → default_env → envs[0]）
+  // 只在启用的数据库环境里解析初始值。没有启用环境时不沿用 Git envs。
   useEffect(() => {
-    if (!projectQuery.data) {
+    if (!projectQuery.data || !environmentQuery.data) {
       return
     }
+    const enabled = environmentQuery.data
+      .filter((item) => item.enabled)
+      .map((item) => item.env)
     setSelectedEnv(
       resolveInitialEnv(
         projectQuery.data.id,
-        projectQuery.data.envs,
+        enabled,
         projectQuery.data.default_env,
       ),
     )
-  }, [projectQuery.data])
+  }, [projectQuery.data, environmentQuery.data])
 
   const treeQuery = useAssetsTree(projectId)
 
@@ -169,8 +176,13 @@ export function ProjectWorkspacePage() {
     )
   }
 
-  const envOptions = project.envs.map((e) => ({ value: e, label: e }))
-  const canRun = Boolean(selectedEnv)
+  const enabledEnvNames = (environmentQuery.data ?? [])
+    .filter((item) => item.enabled)
+    .map((item) => item.env)
+  const historyEnvNames = (environmentQuery.data ?? []).map((item) => item.env)
+  const envOptions = enabledEnvNames.map((envName) => ({ value: envName, label: envName }))
+  const canRun = Boolean(selectedEnv && enabledEnvNames.includes(selectedEnv))
+  const noEnabledEnv = environmentQuery.isSuccess && enabledEnvNames.length === 0
 
   const browser = (
     <AssetBrowser
@@ -224,7 +236,15 @@ export function ProjectWorkspacePage() {
         )}
       </section>
 
-      {!canRun && (isApi || isCase) ? (
+      {noEnabledEnv && (isApi || isCase) ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="还没有启用的环境，无法运行"
+          data-testid="workspace-env-required"
+        />
+      ) : null}
+      {!noEnabledEnv && !canRun && (isApi || isCase) ? (
         <Alert
           type="warning"
           showIcon
@@ -274,7 +294,7 @@ export function ProjectWorkspacePage() {
         assetId={
           selectedFromTree?.type === 'file' ? selectedFromTree.id : undefined
         }
-        envs={project.envs}
+        envs={historyEnvNames}
       />
     </div>
   )
@@ -320,8 +340,9 @@ export function ProjectWorkspacePage() {
             style={{ minWidth: 140 }}
             value={selectedEnv ?? undefined}
             options={envOptions}
-            placeholder="选择环境"
+            placeholder={environmentQuery.isLoading ? '加载环境…' : '无可用环境'}
             onChange={handleEnvChange}
+            loading={environmentQuery.isLoading}
             disabled={envOptions.length === 0}
             aria-label="运行环境"
             data-testid="workspace-env-select"
@@ -337,6 +358,50 @@ export function ProjectWorkspacePage() {
           </Button>
         ) : null}
       </Space>
+
+      {noEnabledEnv ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="workspace-no-env"
+          message="还没有启用的环境"
+          description="运行环境来自本项目已启用的数据库环境。请先配置环境后再运行。"
+          action={
+            <Button
+              size="small"
+              data-testid="open-env-config"
+              onClick={() => setConfigOpen(true)}
+            >
+              去配置
+            </Button>
+          }
+        />
+      ) : null}
+      {environmentQuery.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="环境列表加载失败"
+          description={
+            <Button
+              size="small"
+              onClick={() => {
+                void environmentQuery.refetch()
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
+      ) : null}
+
+      <ProjectConfigPanel
+        projectId={projectId}
+        open={configOpen}
+        onOpenChange={setConfigOpen}
+      />
 
       <Collapse
         size="small"

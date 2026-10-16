@@ -210,6 +210,27 @@ export function ExecutionHistory({ projectId, assetId, envs = [] }: ExecutionHis
       ),
     },
     {
+      title: '操作人',
+      dataIndex: 'operator',
+      key: 'operator',
+      width: 100,
+      render: (value: string | null | undefined, record) => (
+        <span data-testid={`history-operator-${record.id}`}>{value || '—'}</span>
+      ),
+    },
+    {
+      title: '配置版本',
+      dataIndex: 'config_revision',
+      key: 'config_revision',
+      width: 90,
+      render: (value: number | null | undefined, record) =>
+        typeof value === 'number' ? (
+          <span data-testid={`history-config-revision-${record.id}`}>{value}</span>
+        ) : (
+          '—'
+        ),
+    },
+    {
       title: '操作',
       key: 'actions',
       width: 72,
@@ -347,7 +368,7 @@ export function ExecutionHistory({ projectId, assetId, envs = [] }: ExecutionHis
             columns={columns}
             dataSource={rows}
             pagination={false}
-            scroll={{ x: 640 }}
+            scroll={{ x: 860 }}
           />
           {showPager ? pager : null}
         </>
@@ -434,6 +455,12 @@ function CaseDetailBody({ detail }: { detail: CaseExecutionRecordDetail }) {
         <Descriptions.Item label="Commit">
           <Typography.Text code>{shortSha(detail.commit_sha)}</Typography.Text>
         </Descriptions.Item>
+        <Descriptions.Item label="操作人">
+          {detail.operator || '—'}
+        </Descriptions.Item>
+        {typeof detail.config_revision === 'number' ? (
+          <Descriptions.Item label="配置版本">{detail.config_revision}</Descriptions.Item>
+        ) : null}
       </Descriptions>
 
       {detail.result ? (
@@ -556,6 +583,12 @@ function ApiDetailBody({ detail }: { detail: ExecutionRecordDetail }) {
         <Descriptions.Item label="Commit">
           <Typography.Text code>{shortSha(detail.commit_sha)}</Typography.Text>
         </Descriptions.Item>
+        <Descriptions.Item label="操作人">
+          {detail.operator || '—'}
+        </Descriptions.Item>
+        {typeof detail.config_revision === 'number' ? (
+          <Descriptions.Item label="配置版本">{detail.config_revision}</Descriptions.Item>
+        ) : null}
         {/* API 历史详情：顶层 auth，null（含 3.3 之前的旧记录）即匿名 */}
         <Descriptions.Item label="身份">
           <AuthSummary

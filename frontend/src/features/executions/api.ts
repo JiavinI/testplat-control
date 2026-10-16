@@ -4,6 +4,7 @@ import { ApiParseError } from '@/shared/api/errors'
 import {
   assertArray,
   assertObject,
+  readOptionalNullableInteger,
   requireNullableNumber,
   requireNullableString,
   requireString,
@@ -110,6 +111,11 @@ export function parseRunResponse(payload: unknown): RunResponse {
       'commit_sha' in payload
         ? requireNullableString(payload, 'commit_sha', 'RunResponse')
         : null,
+    operator:
+      'operator' in payload
+        ? requireNullableString(payload, 'operator', 'RunResponse')
+        : null,
+    config_revision: readOptionalNullableInteger(payload, 'config_revision', 'RunResponse'),
   }
 }
 
@@ -138,6 +144,9 @@ function parseListItem(payload: unknown, index: number): ExecutionRecordListItem
   }
   if ('operator' in payload) {
     item.operator = requireNullableString(payload, 'operator', label)
+  }
+  if ('config_revision' in payload) {
+    item.config_revision = readOptionalNullableInteger(payload, 'config_revision', label)
   }
   return item
 }
@@ -187,6 +196,11 @@ export function parseRecordDetail(payload: unknown): ExecutionRecordDetail {
       'operator' in payload
         ? requireNullableString(payload, 'operator', 'ExecutionRecordDetail')
         : null,
+    config_revision: readOptionalNullableInteger(
+      payload,
+      'config_revision',
+      'ExecutionRecordDetail',
+    ),
   }
 }
 

@@ -1,8 +1,10 @@
-import { Alert, Button, Card, Divider, Space, Typography } from 'antd'
+import { Alert, Button, Card, Descriptions, Divider, Space, Typography } from 'antd'
 import { PlayCircleOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { ApiHttpError, ApiParseError } from '@/shared/api/errors'
+import { formatRunFailure } from './accountFailure'
 import { formatErrorMessage } from '@/shared/ui/errorMessage'
+import { shortSha } from '@/shared/project/display'
 import {
   getCaseExecutionRecord,
   listExecutionRecords,
@@ -124,7 +126,7 @@ export function CaseExecutionPanel({ projectId, caseId, env }: CaseExecutionPane
           }
           description={
             <div>
-              <div>{formatErrorMessage(submitError)}</div>
+              <div data-testid="case-run-failure">{formatRunFailure(submitError, env)}</div>
               {submitError instanceof ApiHttpError && submitError.status >= 500 ? (
                 <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
                   错误体不含 record_id；正在/已按 asset_type=case、本 Case ID、status=failed
@@ -169,6 +171,21 @@ export function CaseExecutionPanel({ projectId, caseId, env }: CaseExecutionPane
           <Typography.Title level={5} style={{ marginTop: 0 }}>
             执行结果
           </Typography.Title>
+          <Descriptions
+            size="small"
+            column={2}
+            style={{ marginBottom: 12 }}
+            data-testid="case-run-trace"
+          >
+            <Descriptions.Item label="操作人">{runResult.operator || '—'}</Descriptions.Item>
+            <Descriptions.Item label="环境">{env}</Descriptions.Item>
+            <Descriptions.Item label="Commit">
+              <Typography.Text code>{shortSha(runResult.commit_sha)}</Typography.Text>
+            </Descriptions.Item>
+            {typeof runResult.config_revision === 'number' ? (
+              <Descriptions.Item label="配置版本">{runResult.config_revision}</Descriptions.Item>
+            ) : null}
+          </Descriptions>
           <CaseResultView result={runResult.result} recordId={runResult.record_id} />
         </div>
       ) : null}

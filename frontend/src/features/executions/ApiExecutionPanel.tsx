@@ -7,7 +7,7 @@ import {
   fieldErrorsFromDetail,
 } from '@/shared/api/errors'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
-import { formatErrorMessage } from '@/shared/ui/errorMessage'
+import { formatRunFailure } from './accountFailure'
 import { useAssetParams, useRunAsset } from './hooks'
 import { ParamForm } from './ParamForm'
 import { ExecutionResultCard } from './ExecutionResultCard'
@@ -132,7 +132,7 @@ function ApiExecutionPanelReady({
           role="alert"
           style={{ marginTop: 12 }}
           message="执行失败"
-          description={formatErrorMessage(submitError)}
+          description={formatRunFailure(submitError, env)}
         />
       ) : null}
 
@@ -146,7 +146,7 @@ function ApiExecutionPanelReady({
           <Typography.Title level={5} style={{ marginTop: 0 }}>
             执行结果
           </Typography.Title>
-          <ExecutionResultCard result={runResult} />
+          <ExecutionResultCard result={runResult} env={env} />
         </div>
       ) : null}
     </Card>

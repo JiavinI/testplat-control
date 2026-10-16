@@ -1,6 +1,6 @@
 # testplat-control 前端
 
-React + TypeScript + Ant Design 控制台。当前覆盖：项目 CRUD、只读资产浏览、单 API 执行、执行历史与详情。
+React + TypeScript + Ant Design 控制台。当前覆盖：平台注册登录、项目环境与测试账号、只读资产浏览、按数据库环境运行、执行历史。
 
 ## 技术栈
 
@@ -39,7 +39,9 @@ node scripts/e2e-gate.mjs
 
 - `src/app/`：应用壳、路由、QueryClient、主题
 - `src/shared/`：API client、错误模型、运行时结构校验、DTO、通用 UI
-- `src/features/projects/`：项目 API / hooks / 表单与表格
+- `src/features/auth/`：平台注册、登录、注销与未登录引导
+- `src/features/projects/`：项目 API / hooks / 表格
+- `src/features/environments/`：环境与测试账号（revision、凭据查看）
 - `src/features/assets/`：资产树浏览与详情
 - `src/features/executions/`：参数表单、单次执行、执行历史
 - `src/pages/`：项目列表页与项目工作台页

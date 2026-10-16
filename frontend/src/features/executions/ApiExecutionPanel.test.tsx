@@ -106,6 +106,38 @@ describe('ApiExecutionPanel', () => {
     15_000,
   )
 
+  it('账号缺失时提示账号名和当前环境', async () => {
+    const user = userEvent.setup({ delay: null })
+    getAssetParams.mockResolvedValue(emptyParams)
+    runAsset.mockRejectedValue(new ApiHttpError(422, '身份不存在: gsb', ''))
+    renderPanel('main/demo', 'api.common.health_check', 'pre')
+    await user.click(await screen.findByRole('button', { name: '执行 API' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '账号 gsb 在环境 pre 缺失或不可用',
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('身份不存在: gsb')
+  })
+
+  it('执行结果展示操作人、环境、短 SHA 和配置版本', async () => {
+    const user = userEvent.setup({ delay: null })
+    getAssetParams.mockResolvedValue(emptyParams)
+    runAsset.mockResolvedValue({
+      record_id: 'r-meta',
+      status: 'success',
+      duration: 0.01,
+      operator: 'alice',
+      config_revision: 3,
+      commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
+      result: { status: 'success', request: {}, response: {}, error: null },
+    } satisfies RunResponse)
+    renderPanel('main/demo', 'api.common.health_check', 'test')
+    await user.click(await screen.findByRole('button', { name: '执行 API' }))
+    expect(await screen.findByTestId('run-result-operator')).toHaveTextContent('alice')
+    expect(screen.getByTestId('run-result-env')).toHaveTextContent('test')
+    expect(screen.getByTestId('run-result-commit-sha')).toHaveTextContent('abcdef0')
+    expect(screen.getByTestId('run-result-config-revision')).toHaveTextContent('3')
+  })
+
   it('422 展示 FastAPI detail，不进入结果区', async () => {
     const user = userEvent.setup({ delay: null })
     getAssetParams.mockResolvedValue(mixedParams)
