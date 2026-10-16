@@ -6,7 +6,7 @@
 
 | 仓库 | 分支 | 本地提交 / 范围 |
 | --- | --- | --- |
-| Control | `codex/local-engine-delivery` | `5b37e74` 保存此前账号、请求内容覆盖、四菜单、接口工作区及测试隔离；后续提交提供本地入口、依赖诊断和数据库配置边界 |
+| Control | `codex/local-engine-delivery` | `5b37e74` 保存此前账号、请求内容覆盖、四菜单、接口工作区及测试隔离；`d691b2e` 提供本地入口、依赖诊断和数据库配置边界 |
 | Engine | `codex/local-engine-delivery` | `bcef2e4` 保存凭据 / 脱敏 / 登录缓存秘密收集及请求覆盖；`eb591d8` 将本地候选标为 0.5.1，元数据、导出版本及 lock 一致 |
 | Assets | `codex/gsb-b2-auth` | `b4ade2b`、`3765345`、`fd93f86` 三个已有提交保持原样，工作区干净 |
 
@@ -52,6 +52,28 @@ Control 测试在导入应用前强制内存库；文件库测试和独立脚本
 历史 Git 加载入口保留，但必须显式设置 `TESTPLAT_LEGACY_GIT_CONFIG=true`，且该项目完全没有数据库环境行。已有任何数据库环境行的项目不允许回退，直接调用配置解析服务也遵循这一规则。正常开发启动不要设置此开关。
 
 pytest 通过 `legacy_git_config` 标记逐项启用历史模式，其余测试强制关闭；不是整套测试全局启用兼容。历史 Phase 4.0 独立矩阵在脚本中显式声明兼容模式。现代 Web 门禁先创建数据库环境和账号，再运行接口。
+
+## 干净克隆验证结果（2026-10-17）
+
+验证输入全部来自提交，无未提交源码、预览私有配置或既有虚拟环境：
+
+- Control：`d691b2e6e7c4af100fd21e28661d7ac9e5e25d4d`。
+- Engine：`eb591d8879ec793f928500e5d7436648ef735309`（0.5.1）。
+- Assets：`fd93f865e8bc84ce17dcd8e12b83e5717f60ab51`。
+
+| 验证 | 结果 |
+| --- | --- |
+| `bash scripts/dev.sh check` | 导入来源是本次干净 Engine 克隆，契约及 runtime 通过 |
+| `bash scripts/dev.sh pytest -q` | **387 passed**，90.85 秒；包括正常 Web、显式历史兼容和子进程库隔离 |
+| `bash scripts/verify-local-engine.sh` | Engine 0.5.1 wheel 导入及启动诊断通过，**44 passed** |
+| Engine `uv run --isolated --locked --group dev pytest -q` | **429 passed** |
+| Assets `scripts/validate.py`（通过 Control dev 入口） | 接口、场景结构、登录流程、环境模板静态校验全部通过 |
+| 仅用旧远程锁定运行 `ensure_engine_compatible()` | 按预期拒绝，明确缺少 `request_override`，没有导入应用 / 打开数据库 |
+| 本轮修改 Python 的 ruff check / format check | 通过；Engine 版本相关文件 ruff check 通过 |
+
+Control 的 13 条 warning 是既有的 Starlette/httpx、ORM 类收集与 `datetime.utcnow()` 弃用提示，没有失败项。本轮未改前端代码，未重跑前端门禁；此前界面证据仍见工作区验收文档。临时克隆与 wheel 验证结束后清理，原预览数据库与用户报告的校验值保持不变。
+
+这些结果证明已提交源码可通过明确的本地开发方式重现请求内容覆盖、登录与缓存行为。Assets 静态通过、假服务通过均不代表搜索商品或完整 GSB 场景的真实业务验收。
 
 ## 后续远程交付（待授权）
 
