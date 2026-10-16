@@ -99,13 +99,16 @@ describe('executions api (Phase 4.0)', () => {
           env: 'test',
           commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
           repo: 'main',
-          operator: null,
+          operator: 'alice',
+          config_revision: 4,
         },
       ]),
     )
     const rows = await listExecutionRecords(PID, {}, { baseUrl: '', fetchImpl })
     expect(rows[0].env).toBe('test')
     expect(rows[0].commit_sha?.slice(0, 7)).toBe('abcdef0')
+    expect(rows[0].operator).toBe('alice')
+    expect(rows[0].config_revision).toBe(4)
   })
 
   it('getExecutionRecord 404 抛 ApiHttpError', async () => {

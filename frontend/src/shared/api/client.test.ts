@@ -112,6 +112,7 @@ describe('apiRequest', () => {
 
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
     expect(init.method).toBe('POST')
+    expect(init.credentials).toBe('include')
     expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
     expect(init.body).toBe(
       JSON.stringify({ name: 'demo', assets_root: '/a', config_root: '/c' }),

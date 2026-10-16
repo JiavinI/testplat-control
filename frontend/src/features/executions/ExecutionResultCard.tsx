@@ -15,6 +15,8 @@ import type { CaseStepRequest, RunResponse } from './types'
 
 interface ExecutionResultCardProps {
   result: RunResponse
+  /** 本次运行所选环境。响应体本身不带回 env。 */
+  env?: string | null
 }
 
 function formatDurationSeconds(seconds: number | null): string {
@@ -68,7 +70,7 @@ function asRequestSnapshot(value: unknown): CaseStepRequest | null {
   }
 }
 
-export function ExecutionResultCard({ result }: ExecutionResultCardProps) {
+export function ExecutionResultCard({ result, env }: ExecutionResultCardProps) {
   const payload =
     result.result && typeof result.result === 'object'
       ? (result.result as Record<string, unknown>)
@@ -108,11 +110,24 @@ export function ExecutionResultCard({ result }: ExecutionResultCardProps) {
         <Descriptions.Item label="耗时">
           {formatDurationSeconds(result.duration)}
         </Descriptions.Item>
+        <Descriptions.Item label="操作人">
+          <span data-testid="run-result-operator">{result.operator || '—'}</span>
+        </Descriptions.Item>
+        <Descriptions.Item label="环境">
+          <Typography.Text code data-testid="run-result-env">
+            {env || '—'}
+          </Typography.Text>
+        </Descriptions.Item>
         <Descriptions.Item label="Commit">
           <Typography.Text code data-testid="run-result-commit-sha">
             {shortSha(result.commit_sha)}
           </Typography.Text>
         </Descriptions.Item>
+        {typeof result.config_revision === 'number' ? (
+          <Descriptions.Item label="配置版本">
+            <span data-testid="run-result-config-revision">{result.config_revision}</span>
+          </Descriptions.Item>
+        ) : null}
         {/* 单 API：auth 为 null 只表示匿名执行 */}
         <Descriptions.Item label="身份" span={2}>
           <AuthSummary

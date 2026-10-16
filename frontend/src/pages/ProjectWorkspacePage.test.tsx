@@ -148,6 +148,20 @@ const getAssetParams = vi.fn()
 const runAsset = vi.fn()
 const listExecutionRecords = vi.fn()
 const getExecutionRecord = vi.fn()
+const listEnvironments = vi.fn()
+const listAccounts = vi.fn()
+
+function dbEnv(env: string, enabled = true) {
+  return {
+    env,
+    enabled,
+    api_hosts: { gsb: 'http://127.0.0.1:9' },
+    timeout_seconds: null,
+    case_params: {},
+    revision: 1,
+    updated_by: 'alice',
+  }
+}
 
 vi.mock('@/features/projects/api', () => ({
   getProject: (...args: unknown[]) => getProject(...args),
@@ -157,6 +171,19 @@ vi.mock('@/features/projects/api', () => ({
 vi.mock('@/features/assets/api', () => ({
   getAssetsTree: (...args: unknown[]) => getAssetsTree(...args),
   getAssetDetails: (...args: unknown[]) => getAssetDetails(...args),
+}))
+
+vi.mock('@/features/environments/api', () => ({
+  listEnvironments: (...args: unknown[]) => listEnvironments(...args),
+  listAccounts: (...args: unknown[]) => listAccounts(...args),
+  listLoginProfiles: vi.fn().mockResolvedValue({ commit_sha: 'abc', profiles: [] }),
+  createEnvironment: vi.fn(),
+  updateEnvironment: vi.fn(),
+  getEnvironment: vi.fn(),
+  createAccount: vi.fn(),
+  updateAccount: vi.fn(),
+  getAccount: vi.fn(),
+  getAccountCredentials: vi.fn(),
 }))
 
 vi.mock('@/features/executions/api', () => ({
@@ -208,8 +235,12 @@ beforeEach(() => {
   runAsset.mockReset()
   listExecutionRecords.mockReset()
   getExecutionRecord.mockReset()
+  listEnvironments.mockReset()
+  listAccounts.mockReset()
 
   getProject.mockResolvedValue(project)
+  listEnvironments.mockResolvedValue([dbEnv('test'), dbEnv('staging')])
+  listAccounts.mockResolvedValue([])
   getAssetsTree.mockResolvedValue(tree)
   getAssetDetails.mockResolvedValue(loginDetails)
   getAssetParams.mockResolvedValue(loginParams)
@@ -421,6 +452,63 @@ describe('ProjectWorkspacePage 集成', () => {
         }),
       )
     })
+  }, 45_000)
+
+  it('停用的数据库环境不出现在运行下拉', async () => {
+    const user = userEvent.setup({ delay: null })
+    listEnvironments.mockResolvedValue([
+      dbEnv('test', true),
+      dbEnv('old', false),
+    ])
+    renderWorkspace()
+    const envSelect = await screen.findByTestId('workspace-env-select')
+    await user.click(within(envSelect).getByRole('combobox'))
+    expect(screen.getAllByTitle('test').length).toBeGreaterThan(0)
+    expect(screen.queryByTitle('old')).not.toBeInTheDocument()
+  })
+
+  it('没有启用环境时提示去配置，运行不使用 Git 环境', async () => {
+    const user = userEvent.setup({ delay: null })
+    listEnvironments.mockResolvedValue([])
+    renderWorkspace()
+    expect(await screen.findByTestId('workspace-no-env')).toHaveTextContent('数据库环境')
+    expect(screen.getByRole('combobox', { name: '运行环境' })).toBeDisabled()
+    await user.click(screen.getByTestId('open-env-config'))
+    expect(await screen.findByTestId('env-create-open')).toBeInTheDocument()
+    expect(screen.queryByTitle('test')).not.toBeInTheDocument()
+  })
+
+  it('环境默认值允许必填留空，切到无默认值的环境后恢复必填', async () => {
+    const user = userEvent.setup({ delay: null })
+    window.localStorage.clear()
+    listEnvironments.mockResolvedValue([
+      { ...dbEnv('test'), case_params: { password: 'web-default' } },
+      dbEnv('staging'),
+    ])
+    renderWorkspace()
+    await screen.findByTestId('asset-browser')
+    await clickTreeNode(user, 'api')
+    await clickTreeNode(user, 'api.user')
+    await clickTreeNode(user, 'api.user.login')
+    const password = await screen.findByLabelText('password')
+    expect(password).toHaveAttribute('placeholder', '留空使用环境默认值')
+    expect(password).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => {
+      expect(runAsset).toHaveBeenCalledWith('main/demo', 'api.user.login', {
+        env: 'test',
+        params: {},
+      })
+    })
+    expect(JSON.stringify(runAsset.mock.calls[0][2])).not.toContain('web-default')
+
+    const envSelect = screen.getByTestId('workspace-env-select')
+    await user.click(within(envSelect).getByRole('combobox'))
+    await user.click(await screen.findByTitle('staging'))
+    expect(await screen.findByLabelText('password')).toHaveAttribute('placeholder', '必填')
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    expect(await screen.findByText('请填写该参数')).toBeInTheDocument()
+    expect(runAsset).toHaveBeenCalledTimes(1)
   }, 45_000)
 
   it('摘要不再展示 assets_root / config_root', async () => {

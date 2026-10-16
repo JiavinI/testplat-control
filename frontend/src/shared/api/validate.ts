@@ -92,6 +92,22 @@ export function requireInteger(
   return value
 }
 
+/** 缺省或 null 视为没有该版本号。错误文案不附带原对象，避免把凭据带进异常。 */
+export function readOptionalNullableInteger(
+  obj: Record<string, unknown>,
+  key: string,
+  label: string,
+): number | null {
+  if (!(key in obj) || obj[key] === undefined || obj[key] === null) {
+    return null
+  }
+  const value = obj[key]
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    throw new ApiParseError(`${label}.${key} 应为整数或 null`, '[已省略]')
+  }
+  return value
+}
+
 function summarize(value: unknown): string {
   try {
     return JSON.stringify(value)?.slice(0, 200) ?? String(value)

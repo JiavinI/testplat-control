@@ -310,6 +310,8 @@ describe('ExecutionHistory', () => {
         id: 'r-env',
         env: 'staging',
         commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
+        operator: 'alice',
+        config_revision: 4,
       }),
     ])
     renderHistory('main/demo')
@@ -317,6 +319,8 @@ describe('ExecutionHistory', () => {
     await screen.findByText('r-env')
     expect(screen.getByText('staging')).toBeInTheDocument()
     expect(screen.getByText('abcdef0')).toBeInTheDocument()
+    expect(screen.getByTestId('history-operator-r-env')).toHaveTextContent('alice')
+    expect(screen.getByTestId('history-config-revision-r-env')).toHaveTextContent('4')
 
     const envFilter = screen.getByTestId('filter-env')
     await user.click(within(envFilter).getByRole('combobox'))
@@ -359,6 +363,8 @@ describe('ExecutionHistory', () => {
       auth: null,
       env: 'test',
       commit_sha: 'abcdef0123456789abcdef0123456789abcdef01',
+      operator: 'alice',
+      config_revision: 2,
     })
     renderHistory()
     await screen.findByText('r-detail')
@@ -366,5 +372,7 @@ describe('ExecutionHistory', () => {
     const detail = await screen.findByTestId('execution-detail')
     expect(within(detail).getByText('test')).toBeInTheDocument()
     expect(within(detail).getByText('abcdef0')).toBeInTheDocument()
+    expect(within(detail).getByText('alice')).toBeInTheDocument()
+    expect(within(detail).getByText('2')).toBeInTheDocument()
   })
 })

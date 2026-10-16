@@ -1,10 +1,17 @@
-import { Layout, Typography } from 'antd'
+import { App, Button, Layout, Space, Typography } from 'antd'
 import { Outlet } from 'react-router-dom'
+import { useLogout, useMe } from '@/features/auth/hooks'
+import { formatErrorMessage } from '@/shared/ui/errorMessage'
 
 const { Header, Content } = Layout
 
 /** P2 品牌编辑感壳：浅色产品顶栏 + 石色内容区，鼠尾草绿品牌色 */
 export function AppLayout() {
+  const { message } = App.useApp()
+  const me = useMe()
+  const logout = useLogout()
+  const operator = me.data?.username
+
   return (
     <Layout className="tp-shell" style={{ minHeight: '100vh' }}>
       <Header
@@ -41,6 +48,27 @@ export function AppLayout() {
         >
           接口测试平台
         </Typography.Text>
+        <div style={{ marginLeft: 'auto' }}>
+          {operator ? (
+            <Space size={12}>
+              <Typography.Text data-testid="current-operator">
+                当前操作人 {operator}
+              </Typography.Text>
+              <Button
+                size="small"
+                data-testid="logout-button"
+                loading={logout.isPending}
+                onClick={() => {
+                  void logout.mutateAsync().catch((error: unknown) => {
+                    message.error(formatErrorMessage(error))
+                  })
+                }}
+              >
+                注销
+              </Button>
+            </Space>
+          ) : null}
+        </div>
       </Header>
       <Content
         className="tp-shell__content"
