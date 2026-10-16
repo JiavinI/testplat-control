@@ -124,9 +124,9 @@ export function ProjectListTable({
                         size="small"
                         icon={<FolderOpenOutlined />}
                         onClick={() => onOpen(project)}
-                        aria-label={`打开工作台 ${project.name}`}
+                        aria-label={`打开配置 ${project.name}`}
                       >
-                        工作台
+                        项目配置
                       </Button>
                     </Space>
                   </Card>
@@ -211,9 +211,9 @@ function RepoProjectsTable({
           size="small"
           icon={<FolderOpenOutlined />}
           onClick={() => onOpen(record)}
-          aria-label={`打开工作台 ${record.name}`}
+          aria-label={`打开配置 ${record.name}`}
         >
-          工作台
+          项目配置
         </Button>
       ),
     },

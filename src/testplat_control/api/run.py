@@ -79,6 +79,9 @@ class RunRequest(BaseModel):
 
     env: str = Field(..., min_length=1, description="运行环境（须在项目 envs 内）")
     params: dict[str, Any] = Field(default_factory=dict, description="执行参数")
+    request_override: dict[str, Any] | None = Field(
+        None, description="临时请求覆盖，仅支持 body；整体替换，不写回 Assets、不渲染占位符"
+    )
     timeout_seconds: float | None = Field(
         None,
         gt=0,
@@ -405,6 +408,11 @@ async def run_asset(
     except (ValueError, ValidationError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     declared_names = {item.name for item in form}
+    if body.request_override is not None:
+        if set(body.request_override) != {"body"}:
+            raise HTTPException(status_code=422, detail="request_override 必须且只能包含 body")
+        # 实际请求体已完整提供，原模板输入无需必填；显式参数仍校验名称和类型。
+        form = [item.model_copy(update={"required": False}) for item in form]
 
     record = await run_single_api(
         db=db,
@@ -421,5 +429,6 @@ async def run_asset(
         declared_names=declared_names,
         asset_defaults=asset_default_params(api.get("inputs")),
         validate_params=lambda params: _validate_run_params(form, params),
+        request_override=body.request_override,
     )
     return _run_response(record)

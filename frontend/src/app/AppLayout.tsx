@@ -1,5 +1,7 @@
 import { App, Button, Layout, Space, Typography } from 'antd'
-import { Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { ApiOutlined, DesktopOutlined, ExperimentOutlined, SettingOutlined } from '@ant-design/icons'
+import { SECTIONS, sectionPath, type WorkspaceSection } from '@/shared/project/sections'
 import { useLogout, useMe } from '@/features/auth/hooks'
 import { formatErrorMessage } from '@/shared/ui/errorMessage'
 
@@ -11,6 +13,15 @@ export function AppLayout() {
   const me = useMe()
   const logout = useLogout()
   const operator = me.data?.username
+  const location = useLocation()
+  const segments = location.pathname.split('/').filter(Boolean)
+  const projectSuffix = segments.length === 3 ? `/${segments[1]}/${segments[2]}` : ''
+  const navigation: { section: WorkspaceSection; icon: React.ReactNode }[] = [
+    { section: 'apis', icon: <ApiOutlined /> },
+    { section: 'pages', icon: <DesktopOutlined /> },
+    { section: 'scenarios', icon: <ExperimentOutlined /> },
+    { section: 'configuration', icon: <SettingOutlined /> },
+  ]
 
   return (
     <Layout className="tp-shell" style={{ minHeight: '100vh' }}>
@@ -46,7 +57,7 @@ export function AppLayout() {
             letterSpacing: 0.2,
           }}
         >
-          接口测试平台
+          自动化测试平台
         </Typography.Text>
         <div style={{ marginLeft: 'auto' }}>
           {operator ? (
@@ -70,32 +81,49 @@ export function AppLayout() {
           ) : null}
         </div>
       </Header>
-      <Content
-        className="tp-shell__content"
-        style={{
-          padding: 20,
-          background: '#fafaf9',
-          overflowX: 'hidden',
-          maxWidth: '100vw',
-        }}
-      >
-        <div
-          className="tp-shell__panel"
+      <div className="tp-shell__body">
+        {operator ? (
+          <nav className="tp-primary-nav" aria-label="功能菜单">
+            {navigation.map(({ section, icon }) => (
+              <NavLink
+                aria-label={SECTIONS[section].label}
+                key={section}
+                to={`${sectionPath(section)}${projectSuffix}`}
+                className={({ isActive }) => `tp-primary-nav__item${isActive ? ' is-active' : ''}`}
+              >
+                {icon}
+                <span>{SECTIONS[section].label}</span>
+              </NavLink>
+            ))}
+          </nav>
+        ) : null}
+        <Content
+          className="tp-shell__content"
           style={{
-            background: '#ffffff',
             padding: 20,
-            borderRadius: 16,
-            border: '1px solid #e7e5e4',
-            boxShadow:
-              '0 1px 2px rgba(28, 25, 23, 0.03), 0 4px 12px rgba(28, 25, 23, 0.04)',
-            minHeight: 'calc(100vh - 96px)',
-            maxWidth: '100%',
+            background: '#fafaf9',
             overflowX: 'hidden',
+            minWidth: 0,
           }}
         >
-          <Outlet />
-        </div>
-      </Content>
+          <div
+            className="tp-shell__panel"
+            style={{
+              background: '#ffffff',
+              padding: 20,
+              borderRadius: 16,
+              border: '1px solid #e7e5e4',
+              boxShadow:
+                '0 1px 2px rgba(28, 25, 23, 0.03), 0 4px 12px rgba(28, 25, 23, 0.04)',
+              minHeight: 'calc(100vh - 96px)',
+              maxWidth: '100%',
+              overflowX: 'hidden',
+            }}
+          >
+            <Outlet />
+          </div>
+        </Content>
+      </div>
     </Layout>
   )
 }

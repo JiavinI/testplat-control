@@ -1,46 +1,24 @@
-import { Collapse, Tabs } from 'antd'
+import type { ReactNode } from 'react'
+import { Tabs } from 'antd'
 import { AccountSection } from './AccountSection'
 import { EnvironmentSection } from './EnvironmentSection'
 
-/** 项目详情里的环境与测试账号入口。运行页通过「去配置」打开这一块。 */
-export function ProjectConfigPanel({
-  projectId,
-  open,
-  onOpenChange,
-}: {
+/** 配置菜单中的项目级配置；离开页签时销毁凭据和编辑草稿。 */
+export function ProjectConfigPanel({ projectId, projectSettings, activeTab, onTabChange }: {
   projectId: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  projectSettings?: ReactNode
+  activeTab?: string
+  onTabChange?: (tab: string) => void
 }) {
   return (
-    <Collapse
-      style={{ marginBottom: 12 }}
-      activeKey={open ? ['config'] : []}
-      onChange={(keys) => {
-        const list = Array.isArray(keys) ? keys : [keys]
-        onOpenChange(list.includes('config'))
-      }}
+    <Tabs
+      activeKey={activeTab}
+      onChange={onTabChange}
+      destroyOnHidden
       items={[
-        {
-          key: 'config',
-          label: '环境与账号',
-          children: (
-            <Tabs
-              items={[
-                {
-                  key: 'environments',
-                  label: '环境管理',
-                  children: <EnvironmentSection key={projectId} projectId={projectId} />,
-                },
-                {
-                  key: 'accounts',
-                  label: '测试账号',
-                  children: <AccountSection key={projectId} projectId={projectId} />,
-                },
-              ]}
-            />
-          ),
-        },
+        ...(projectSettings ? [{ key: 'project', label: '项目配置', children: projectSettings }] : []),
+        { key: 'environments', label: '环境管理', children: <EnvironmentSection key={projectId} projectId={projectId} /> },
+        { key: 'accounts', label: '测试账号', children: <AccountSection key={projectId} projectId={projectId} /> },
       ]}
     />
   )

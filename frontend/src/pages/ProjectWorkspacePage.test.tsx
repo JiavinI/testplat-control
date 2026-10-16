@@ -86,7 +86,7 @@ const loginDetails: AssetDetails = {
   name: 'login.yaml',
   type: 'file',
   path: 'api/user/login.yaml',
-  metadata: { method: 'POST', url: '/login', desc: '登录' },
+  metadata: { name: '登录接口', method: 'POST', host: 'gsb', url: '/login', auth: 'gsb.b2.primary', request: { type: 'json', body: {} } },
 }
 
 const loginParams: ParamsResponse = {
@@ -210,6 +210,7 @@ function renderWorkspace(repo = 'main', projectKey = 'demo') {
                 path="/projects/:repo/:project"
                 element={<ProjectWorkspacePage />}
               />
+              <Route path="/configuration/:repo/:project" element={<div data-testid="config-route">config</div>} />
               <Route path="/projects" element={<div data-testid="list-route">list</div>} />
             </Routes>
           </MemoryRouter>
@@ -256,14 +257,12 @@ afterEach(() => {
 describe('ProjectWorkspacePage 集成', () => {
   it('进工作台 → 选 API → 填参 → 运行 → 历史 → 详情', async () => {
     const user = userEvent.setup({ delay: null })
-    listExecutionRecords
-      .mockResolvedValueOnce([])
-      .mockResolvedValue([{ ...historyItem }])
+    listExecutionRecords.mockResolvedValue([{ ...historyItem }])
 
     renderWorkspace()
 
     expect(await screen.findByTestId('project-workspace')).toBeInTheDocument()
-    expect(await screen.findByText('fixture-demo')).toBeInTheDocument()
+    expect(await screen.findByTestId('project-workspace')).toBeInTheDocument()
     expect(await screen.findByTestId('asset-browser')).toHaveAttribute(
       'data-layout',
       'tree',
@@ -276,8 +275,8 @@ describe('ProjectWorkspacePage 集成', () => {
     await clickTreeNode(user, 'api.user.login')
 
     expect(await screen.findByTestId('api-execution-panel')).toBeInTheDocument()
-    expect(await screen.findByTestId('asset-detail-panel')).toHaveTextContent(
-      '可运行',
+    expect(await screen.findByTestId('api-info-panel')).toHaveTextContent(
+      'gsb.b2.primary',
     )
     await screen.findByLabelText('password')
 
@@ -296,10 +295,11 @@ describe('ProjectWorkspacePage 集成', () => {
         params: { username: 'alice', password: 'secret' },
       })
     })
-    expect(await screen.findByTestId('execution-result')).toHaveTextContent(
+    expect(await screen.findByTestId('api-run-response')).toHaveTextContent(
       'success',
     )
 
+    await user.click(screen.getByText('执行历史', { exact: true }))
     await waitFor(() => {
       expect(listExecutionRecords).toHaveBeenCalled()
     })
@@ -312,25 +312,15 @@ describe('ProjectWorkspacePage 集成', () => {
     expect(screen.getByTestId('execution-detail')).toHaveTextContent('rec-1')
   }, 45_000)
 
-  it('非 api 文件不显示执行面板，展示能力边界说明', async () => {
-    const user = userEvent.setup({ delay: null })
-    getAssetDetails.mockResolvedValue({
-      id: 'docs',
-      name: 'readme.md',
-      type: 'file',
-      path: 'readme.md',
-      metadata: { kind: 'doc' },
-    })
-
+  it('接口管理只展示 API，不混入文档和场景，也不包含配置编辑入口', async () => {
     renderWorkspace()
     await screen.findByTestId('asset-browser')
-    await clickTreeNode(user, 'docs')
-
-    expect(await screen.findByTestId('workspace-capability-note')).toHaveTextContent(
-      /api\.\* 与 case\.\*/,
-    )
-    expect(screen.queryByTestId('api-execution-panel')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '执行 API' })).not.toBeInTheDocument()
+    expect(document.querySelector('[data-asset-id="docs"]')).toBeNull()
+    expect(document.querySelector('[data-asset-id="scenarios"]')).toBeNull()
+    expect(screen.queryByText('环境与账号')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('执行历史', { exact: true }))
+    await waitFor(() => expect(listExecutionRecords).toHaveBeenCalledWith('main/demo', expect.objectContaining({ asset_type: 'api' })))
+    expect(screen.getByRole('combobox', { name: '按资产类型筛选' })).toBeDisabled()
   })
 
   it('项目切换清空选中，不串执行面板', async () => {
@@ -412,7 +402,7 @@ describe('ProjectWorkspacePage 集成', () => {
       </ConfigProvider>,
     )
 
-    expect(await screen.findByText('other')).toBeInTheDocument()
+    expect(await screen.findByTestId('project-workspace')).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.queryByTestId('api-execution-panel')).not.toBeInTheDocument()
     })
@@ -473,8 +463,9 @@ describe('ProjectWorkspacePage 集成', () => {
     renderWorkspace()
     expect(await screen.findByTestId('workspace-no-env')).toHaveTextContent('数据库环境')
     expect(screen.getByRole('combobox', { name: '运行环境' })).toBeDisabled()
+    expect(screen.getByTestId('open-env-config').closest('a')).toHaveAttribute('href', '/configuration/main/demo?tab=environments')
     await user.click(screen.getByTestId('open-env-config'))
-    expect(await screen.findByTestId('env-create-open')).toBeInTheDocument()
+    expect(await screen.findByTestId('config-route')).toBeInTheDocument()
     expect(screen.queryByTitle('test')).not.toBeInTheDocument()
   })
 
@@ -511,13 +502,55 @@ describe('ProjectWorkspacePage 集成', () => {
     expect(runAsset).toHaveBeenCalledTimes(1)
   }, 45_000)
 
-  it('摘要不再展示 assets_root / config_root', async () => {
+  it('运行工作台不再混入项目配置摘要', async () => {
     renderWorkspace()
-    await screen.findByText('fixture-demo')
-    // 展开摘要
-    const summary = screen.getByText('项目摘要')
-    await userEvent.setup({ delay: null }).click(summary)
+    await screen.findByTestId('project-workspace')
+    expect(screen.queryByText('项目摘要')).not.toBeInTheDocument()
     expect(screen.queryByText('资产目录')).not.toBeInTheDocument()
     expect(screen.queryByText('配置目录')).not.toBeInTheDocument()
   })
+})
+
+
+it('按环境展示完整 URL；切换环境和接口清空临时草稿与结果', async () => {
+  const user = userEvent.setup({ delay: null })
+  window.localStorage.clear()
+  listEnvironments.mockResolvedValue([
+    { ...dbEnv('test'), api_hosts: { gsb: 'https://test.example/base/' } },
+    { ...dbEnv('staging'), api_hosts: { gsb: 'https://stage.example' } },
+  ])
+  renderWorkspace()
+  await screen.findByTestId('asset-browser')
+  await clickTreeNode(user, 'api.user')
+  await clickTreeNode(user, 'api.user.login')
+  expect(await screen.findByTestId('api-full-url')).toHaveTextContent('https://test.example/base/login')
+  await user.click(await screen.findByText('编辑完整请求内容'))
+  fireEvent.change(screen.getByLabelText('临时请求内容'), { target: { value: '{"draft":1}' } })
+  await user.click(screen.getByRole('button', { name: '执行 API' }))
+  await screen.findByTestId('api-run-response')
+  await user.click(within(screen.getByTestId('workspace-env-select')).getByRole('combobox'))
+  await user.click(await screen.findByTitle('staging'))
+  expect(await screen.findByTestId('api-full-url')).toHaveTextContent('https://stage.example/login')
+  expect(screen.queryByLabelText('临时请求内容')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('api-run-response')).not.toBeInTheDocument()
+  await user.click(screen.getByText('编辑完整请求内容'))
+  expect(screen.getByLabelText('临时请求内容')).toHaveValue('{}')
+  fireEvent.change(screen.getByLabelText('临时请求内容'), { target: { value: '{"second":2}' } })
+  await clickTreeNode(user, 'api.common')
+  await clickTreeNode(user, 'api.common.health_check')
+  await screen.findByTestId('api-execution-panel')
+  expect(screen.queryByLabelText('临时请求内容')).not.toBeInTheDocument()
+})
+
+it('缺少接口 host 映射时提示配置并阻止执行', async () => {
+  const user = userEvent.setup({ delay: null })
+  listEnvironments.mockResolvedValue([{ ...dbEnv('test'), api_hosts: {} }])
+  renderWorkspace()
+  await screen.findByTestId('asset-browser')
+  await clickTreeNode(user, 'api.user')
+  await clickTreeNode(user, 'api.user.login')
+  expect(await screen.findByTestId('api-info-panel')).toHaveTextContent('未配置服务地址：gsb')
+  expect(await screen.findByRole('button', { name: '执行 API' })).toBeDisabled()
+  expect(screen.getByText('配置环境').closest('a')).toHaveAttribute('href', '/configuration/main/demo?tab=environments')
+  expect(runAsset).not.toHaveBeenCalled()
 })

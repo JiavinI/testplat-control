@@ -2,6 +2,14 @@
 
 本文件只说明当前怎么跑、哪些入口已经退出。历史版本文档保持原样。
 
+## 功能导航（2026-10-16）
+
+默认入口调整为「接口管理」，项目在功能内部选择。四个入口分别是 `/apis`、`/pages`、`/scenarios`、`/configuration`，可附加 `/{repo}/{project}` 直接定位项目。旧 `/projects/{repo}/{project}` 跳转到接口管理，旧项目列表不再作为首页。
+
+「配置」下的项目配置、环境和测试账号通过页签访问；`?tab=environments`、`?tab=accounts` 可直接打开。配置文件只读展示 Git 快照，环境和账号沿用数据库维护；Page 当前只提供资产浏览。仓库同步移到 `/configuration/repositories`。
+
+`frontend/scripts/e2e-feature-navigation.mjs` 验证功能隔离、配置页签、窄屏抽屉和页面错误。通过 `E2E_STORAGE_STATE` 指定已有平台会话，或使用 `E2E_USERNAME` / `E2E_PASSWORD` 登录；不会自行注册、创建环境或修改账号。`E2E_RUN_API=1` 可额外运行 `E2E_API_ID`（默认 `api.gsb.account.balance`）。截图和报告默认放在 `/tmp/testplat-feature-navigation`。
+
 ## 当前门禁
 
 这些入口要么已经改成正常注册 / 登录，要么本来就不依赖平台会话覆盖。
@@ -48,7 +56,7 @@
 
 ## 开发代理
 
-`frontend/vite.config.ts` 的 `/api` 代理 `changeOrigin` 为 false，转发时保留浏览器的 Host。后端 `assert_same_origin` 不改：带了 Origin 的变更请求必须和 Host 对应的站点一致；没有 Origin 的脚本客户端仍可调用。截图直接启动这份默认配置（`pnpm exec vite`，不再另写代理），并用 `VITE_DEV_PROXY_TARGET` 指向临时后端。
+`frontend/vite.config.ts` 的 `^/api(?:/|$)` 代理（只匹配 `/api` 与 `/api/…`，避免拦截 `/apis` 页面） `changeOrigin` 为 false，转发时保留浏览器的 Host。后端 `assert_same_origin` 不改：带了 Origin 的变更请求必须和 Host 对应的站点一致；没有 Origin 的脚本客户端仍可调用。截图直接启动这份默认配置（`pnpm exec vite`，不再另写代理），并用 `VITE_DEV_PROXY_TARGET` 指向临时后端。
 
 `uv run python scripts/phase4_1a_vite_login_check.py` 用默认 `npm run dev` 走注册、登录、保存环境和注销。报告在 `frontend/screenshots/phase4_1a/vite-login-check.json`，只记状态码。
 
@@ -71,3 +79,9 @@ A12 的重启子进程会再次登录，得到父进程看不到的新会话。�
 ## 已知偏差
 
 真实 GSB 业务成功不是自动门禁。传输失败或超时可以留下执行记录，记录里要有 operator、env、commit、config_revision。不要把 `live_http=200` 写成业务通过。
+
+## 接口工作区（2026-10-16）
+
+接口详情、完整环境 URL、请求内容临时编辑和响应优先展示见 [本轮验收](../api-workspace-2026-10-16.md)。`node frontend/scripts/e2e-api-workspace.mjs` 只做浏览器隔离 mock，不触碰数据库；真实余额的本轮证据来自独立临时数据库，不能把 mock 响应当成业务验收。
+
+`bash scripts/verify-local-engine.sh` 构建本地 Engine wheel，在隔离环境安装并执行 19 项假服务集成。Control 仍锁旧远程 Engine，发布顺序及门禁见 [依赖交付方案](../local-engine-delivery-2026-10-16.md)。搜索商品与完整场景仍未完成真实验收。

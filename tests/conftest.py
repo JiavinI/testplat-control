@@ -9,11 +9,17 @@ Engine 通过正式/editable 包依赖安装；不再注入 sys.path 桩。
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
-from testplat_control.api.platform_session import require_user
-from testplat_control.main import app
-from testplat_control.services.platform_auth import PlatformPrincipal
+# 必须在导入应用前覆盖 .env 中的数据库配置，防止测试夹具写入本机预览库。
+# 文件库持久化与并发测试由各自 fixture / 子进程显式创建临时库。
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
+from testplat_control.api.platform_session import require_user  # noqa: E402
+from testplat_control.main import app  # noqa: E402
+from testplat_control.services.platform_auth import PlatformPrincipal  # noqa: E402
 
 _TEST_PRINCIPAL = PlatformPrincipal(id="test-user", username="tester")
 

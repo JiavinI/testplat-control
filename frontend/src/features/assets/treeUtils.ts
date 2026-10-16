@@ -1,3 +1,4 @@
+import type { AssetSection } from '@/shared/project/sections'
 import type { AssetNode } from './types'
 
 /** 当前仅 api.* 文件具备 params/run 契约（目录与其它文件不可运行） */
@@ -14,6 +15,7 @@ function matchesQuery(node: AssetNode, query: string): boolean {
   const q = query.toLowerCase()
   return (
     node.name.toLowerCase().includes(q) ||
+    (typeof node.metadata?.name === 'string' && node.metadata.name.toLowerCase().includes(q)) ||
     node.path.toLowerCase().includes(q) ||
     node.id.toLowerCase().includes(q)
   )
@@ -90,4 +92,20 @@ export function collectDirectoryKeys(node: AssetNode): string[] {
   }
   walk(node)
   return keys
+}
+
+/** 按实际资产目录划分功能，保留分类目录和空目录，不改写资产 ID。 */
+export function treeForSection(tree: AssetNode, section: AssetSection): AssetNode {
+  const roots: Record<AssetSection, string[]> = {
+    apis: ['api'],
+    pages: ['pages'],
+    scenarios: ['scenarios', 'flows'],
+    configuration: ['config'],
+  }
+  return {
+    ...tree,
+    children: (tree.children ?? []).filter((node) =>
+      roots[section].includes(node.path.replace(/\\/g, '/').replace(/^\.\//, '').split('/')[0]),
+    ),
+  }
 }

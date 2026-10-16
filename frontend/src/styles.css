@@ -334,3 +334,52 @@ h4.tp-page-title {
 .tp-request-snapshot {
   max-width: 100%;
 }
+
+/* 功能导航与工作区分离，项目选择是功能内部的上下文。 */
+.tp-shell__body { display: flex; flex: 1; min-width: 0; }
+.tp-primary-nav {
+  width: 168px; flex: 0 0 168px; padding: 20px 12px;
+  border-right: 1px solid #e7e5e4; background: #fff;
+}
+.tp-primary-nav__item {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  margin-bottom: 6px; border-radius: 10px; color: #57534e; text-decoration: none;
+}
+.tp-primary-nav__item:hover, .tp-primary-nav__item.is-active { color: #4f5f4e; background: #eef2ec; }
+.tp-primary-nav__item.is-active { font-weight: 600; }
+.tp-feature-heading {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
+}
+@media (max-width: 767px) {
+  .tp-shell__body { flex-direction: column; }
+  .tp-primary-nav {
+    display: flex; width: 100%; flex: none; padding: 8px; gap: 4px;
+    overflow-x: auto; border-right: 0; border-bottom: 1px solid #e7e5e4;
+  }
+  .tp-primary-nav__item { white-space: nowrap; padding: 10px; margin-bottom: 0; }
+  .tp-shell__content { padding: 10px !important; }
+  .tp-shell__panel { padding: 12px !important; }
+}
+
+@media (max-width: 767px) {
+  .tp-shell__header { padding-inline: 12px !important; gap: 8px !important; }
+  .tp-shell__brand { flex-shrink: 0; white-space: nowrap; font-size: 16px !important; }
+  .tp-shell__header > .ant-typography:nth-child(2) { display: none; }
+  [data-testid="current-operator"] {
+    max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tp-primary-nav__item { flex: 1; justify-content: center; font-size: 13px; padding: 10px 6px; }
+  .tp-primary-nav__item .anticon { display: none; }
+}
+
+/* 接口工作区：完整 URL 和响应跟随当前环境。 */
+.tp-api-url {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  background: #fafaf9;
+}

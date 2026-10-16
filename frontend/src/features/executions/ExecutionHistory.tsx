@@ -84,7 +84,7 @@ function isCaseAssetId(assetId: string): boolean {
  * 项目执行历史：筛选、分页（无 total，条数 < limit 判末页）、详情抽屉。
  * Case 记录走类型化详情端点；旧 API 记录仍走通用详情，不回退。
  */
-export function ExecutionHistory({ projectId, assetId, envs = [] }: ExecutionHistoryProps) {
+export function ExecutionHistory({ projectId, assetId, envs = [], assetTypeScope }: ExecutionHistoryProps) {
   const [status, setStatus] = useState<string>('')
   const [assetType, setAssetType] = useState<string>('')
   const [envFilter, setEnvFilter] = useState<string>('')
@@ -100,19 +100,21 @@ export function ExecutionHistory({ projectId, assetId, envs = [] }: ExecutionHis
     setSelectedAssetId(null)
   }, [projectId, assetId, status, assetType, envFilter, orderBy])
 
+  const effectiveAssetType = assetTypeScope ?? assetType
+
   const query = useMemo(
     () => ({
       skip: page * DEFAULT_LIMIT,
       limit: DEFAULT_LIMIT,
       status: status || undefined,
       asset_id: assetId || undefined,
-      asset_type: (assetType === 'api' || assetType === 'case'
-        ? assetType
+      asset_type: (effectiveAssetType === 'api' || effectiveAssetType === 'case'
+        ? effectiveAssetType
         : undefined) as 'api' | 'case' | undefined,
       env: envFilter || undefined,
       order_by: orderBy,
     }),
-    [page, status, assetId, assetType, envFilter, orderBy],
+    [page, status, assetId, effectiveAssetType, envFilter, orderBy],
   )
 
   const listQuery = useExecutionRecords(projectId, query)
@@ -312,7 +314,8 @@ export function ExecutionHistory({ projectId, assetId, envs = [] }: ExecutionHis
         />
         <Select
           style={{ width: 140 }}
-          value={assetType}
+          value={effectiveAssetType}
+          disabled={Boolean(assetTypeScope)}
           options={ASSET_TYPE_OPTIONS}
           onChange={(value) => setAssetType(value)}
           aria-label="按资产类型筛选"

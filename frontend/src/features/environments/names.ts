@@ -1,5 +1,5 @@
 export const ENV_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
-export const ACCOUNT_NAME_RE = /^[a-z][a-z0-9_]{0,63}$/
+export const ACCOUNT_NAME_RE = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/
 const HOST_NAME_RE = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/
 
 export function validateEnvName(env: string): string | null {
@@ -10,13 +10,18 @@ export function validateEnvName(env: string): string | null {
 }
 
 export function validateAccountName(name: string): string | null {
-  if (!ACCOUNT_NAME_RE.test(name)) {
-    return '账号名需匹配 ^[a-z][a-z0-9_]*$'
+  if (name.length > 64 || !ACCOUNT_NAME_RE.test(name)) {
+    return '引用需由点分隔的变量名组成，最长 64 字符，例如 gsb.b2.primary'
   }
   if (name === 'none') {
-    return 'none 是保留账号名'
+    return 'none 是保留引用名'
   }
   return null
+}
+
+export function splitAccountReference(name: string): { group: string; reference: string } {
+  const segments = name.split('.')
+  return { group: segments.slice(0, -1).join('.'), reference: segments.at(-1) ?? name }
 }
 
 export interface HostRow {
@@ -97,16 +102,6 @@ export function parseTimeoutText(
     return { error: '超时需在 (0, 300] 秒内；留空表示使用默认 30 秒' }
   }
   return { value }
-}
-
-export function validateCredentialValue(value: string): string | null {
-  if (value.length < 8) {
-    return '凭据字段长度不足 8'
-  }
-  if (/[\r\n\0]/.test(value)) {
-    return '凭据字段含非法控制字符'
-  }
-  return null
 }
 
 export function sameCredentials(

@@ -20,7 +20,8 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // 前缀 /api 转发到后端并剥掉前缀。浏览器只跟 Vite 同源，不直连后端，因此没有 CORS。
         // changeOrigin 必须保持 false：后端用 Host 做 Origin 校验，改写 Host 会让登录和注册返回 403。
-        '/api': {
+        // 精确匹配 API 前缀，避免把 /apis 等前端页面也转发给后端。
+        '^/api(?:/|$)': {
           target: proxyTarget,
           changeOrigin: false,
           rewrite: (p) => p.replace(/^\/api/, ''),

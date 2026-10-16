@@ -3,16 +3,13 @@ import {
   Alert,
   Button,
   Collapse,
-  Descriptions,
   Drawer,
   Select,
   Space,
   Typography,
 } from 'antd'
 import {
-  ArrowLeftOutlined,
   FolderOpenOutlined,
-  UnorderedListOutlined,
 } from '@ant-design/icons'
 import { Link, useParams } from 'react-router-dom'
 import {
@@ -31,12 +28,14 @@ import {
   CaseMetaPanel,
   ExecutionHistory,
 } from '@/features/executions'
+import { ApiInfoPanel } from '@/features/assets/ApiInfoPanel'
 import { useCaseAssetDetail } from '@/features/executions/hooks'
-import { ProjectConfigPanel } from '@/features/environments/ProjectConfigPanel'
 import { useEnvironments } from '@/features/environments/hooks'
 import { useProject } from '@/features/projects/hooks'
 import { joinProjectId } from '@/shared/project/ids'
 import { shortSha } from '@/shared/project/display'
+import { SECTIONS, sectionPath, type WorkspaceSection } from '@/shared/project/sections'
+import { treeForSection } from '@/features/assets/treeUtils'
 import {
   resolveInitialEnv,
   writePreferredEnv,
@@ -61,24 +60,23 @@ function useIsNarrowViewport(query = '(max-width: 767px)'): boolean {
  * api.* 挂动态参数面板；case.* 挂文件元信息 + 运行（步骤只来自运行/历史）。
  * 运行环境下拉只使用该项目已启用的数据库环境，不回退 Git 示例环境。
  */
-export function ProjectWorkspacePage() {
+export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<WorkspaceSection, 'configuration'> }) {
   const { repo = '', project: projectKey = '' } = useParams()
   const projectId = repo && projectKey ? joinProjectId(repo, projectKey) : ''
   const projectQuery = useProject(projectId)
-  const environmentQuery = useEnvironments(projectId)
+  const environmentQuery = useEnvironments(section === 'pages' ? '' : projectId)
   const isNarrow = useIsNarrowViewport()
 
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>()
   const [assetDrawerOpen, setAssetDrawerOpen] = useState(false)
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null)
-  const [configOpen, setConfigOpen] = useState(false)
 
   // 项目切换时清空选中与抽屉，避免串数据
   useEffect(() => {
     setSelectedAssetId(undefined)
     setAssetDrawerOpen(false)
     setSelectedEnv(null)
-  }, [projectId])
+  }, [projectId, section])
 
   // 只在启用的数据库环境里解析初始值。没有启用环境时不沿用 Git envs。
   useEffect(() => {
@@ -99,12 +97,14 @@ export function ProjectWorkspacePage() {
 
   const treeQuery = useAssetsTree(projectId)
 
+  const scopedTree = useMemo(() => treeQuery.data ? treeForSection(treeQuery.data, section) : null, [treeQuery.data, section])
+
   const selectedFromTree = useMemo(() => {
-    if (!treeQuery.data || !selectedAssetId) {
+    if (!scopedTree || !selectedAssetId) {
       return null
     }
-    return findAssetById(treeQuery.data, selectedAssetId)
-  }, [treeQuery.data, selectedAssetId])
+    return findAssetById(scopedTree, selectedAssetId)
+  }, [scopedTree, selectedAssetId])
 
   const isCase =
     selectedFromTree !== null && isRunnableCaseAsset(selectedFromTree)
@@ -150,8 +150,8 @@ export function ProjectWorkspacePage() {
     return (
       <div>
         <Space style={{ marginBottom: 16 }}>
-          <Link to="/projects">
-            <Button icon={<ArrowLeftOutlined />}>返回项目列表</Button>
+          <Link to={sectionPath(section)}>
+            <Button>选择项目</Button>
           </Link>
         </Space>
         <ErrorState
@@ -183,6 +183,13 @@ export function ProjectWorkspacePage() {
   const envOptions = enabledEnvNames.map((envName) => ({ value: envName, label: envName }))
   const canRun = Boolean(selectedEnv && enabledEnvNames.includes(selectedEnv))
   const noEnabledEnv = environmentQuery.isSuccess && enabledEnvNames.length === 0
+  const apiDetails = detailsQuery.data ?? selectedFromTree
+  const apiMetadata = apiDetails?.metadata
+  const requestDefinition = apiMetadata?.request && typeof apiMetadata.request === 'object'
+    && !Array.isArray(apiMetadata.request) ? apiMetadata.request as Record<string, unknown> : undefined
+  const activeEnvironment = environmentQuery.data?.find((item) => item.env === selectedEnv && item.enabled)
+  const missingApiHost = isApi && typeof apiMetadata?.host === 'string'
+    && !activeEnvironment?.api_hosts[apiMetadata.host]
 
   const browser = (
     <AssetBrowser
@@ -190,6 +197,7 @@ export function ProjectWorkspacePage() {
       selectedAssetId={selectedFromTree?.id}
       onSelectAsset={handleSelectAsset}
       layout="tree"
+      section={section}
     />
   )
 
@@ -223,6 +231,8 @@ export function ProjectWorkspacePage() {
               void caseDetailQuery.refetch()
             }}
           />
+        ) : isApi && apiDetails && !detailsQuery.isError && (!detailsQuery.isLoading || detailsQuery.data) ? (
+          <ApiInfoPanel asset={apiDetails} environment={activeEnvironment} projectId={projectId} />
         ) : (
           <AssetDetailPanel
             selectedFromTree={selectedFromTree}
@@ -253,19 +263,21 @@ export function ProjectWorkspacePage() {
         />
       ) : null}
 
-      {isApi && selectedFromTree && selectedEnv ? (
+      {isApi && selectedFromTree && selectedEnv && canRun && !detailsQuery.isLoading && !detailsQuery.isError ? (
         <ApiExecutionPanel
           key={`${projectId}:${selectedFromTree.id}:${selectedEnv}`}
           projectId={projectId}
           assetId={selectedFromTree.id}
           env={selectedEnv}
+          requestDefinition={requestDefinition}
+          runDisabled={Boolean(missingApiHost)}
           caseParams={
             environmentQuery.data?.find((item) => item.env === selectedEnv)?.case_params
           }
         />
       ) : null}
 
-      {isCase && selectedFromTree && selectedEnv ? (
+      {isCase && selectedFromTree && selectedEnv && canRun ? (
         <CaseExecutionPanel
           key={`${projectId}:case:${selectedFromTree.id}:${selectedEnv}`}
           projectId={projectId}
@@ -282,23 +294,29 @@ export function ProjectWorkspacePage() {
         >
           {selectedFromTree.type === 'directory'
             ? '目录仅供浏览，不提供参数或运行。'
-            : '当前仅 api.* 与 case.* 文件支持运行；本资产无执行面板。'}
+            : section === 'pages' ? 'Page 定义可查看，页面执行能力尚未接入。' : '该文件供浏览引用，无独立执行面板。'}
         </Typography.Paragraph>
       ) : null}
 
       {!selectedFromTree ? (
         <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-          从左侧选择资产。选中 api.* 可填参执行；选中 case.* 可查看文件元信息并运行。
+          从左侧选择{SECTIONS[section].label}资产。
         </Typography.Paragraph>
       ) : null}
 
-      <ExecutionHistory
-        projectId={projectId}
-        assetId={
-          selectedFromTree?.type === 'file' ? selectedFromTree.id : undefined
-        }
+      {section === 'apis' ? <Collapse size="small" items={[{
+        key: `${projectId}:${selectedFromTree?.id ?? 'all'}`, label: '执行历史',
+        children: <ExecutionHistory
+          key={`${projectId}:${selectedFromTree?.id ?? 'all'}`}
+          assetTypeScope="api" projectId={projectId}
+          assetId={selectedFromTree?.type === 'file' ? selectedFromTree.id : undefined}
+          envs={historyEnvNames}
+        />,
+      }]} /> : section === 'scenarios' ? <ExecutionHistory
+        key={`${projectId}:${section}`} assetTypeScope="case" projectId={projectId}
+        assetId={selectedFromTree?.type === 'file' ? selectedFromTree.id : undefined}
         envs={historyEnvNames}
-      />
+      /> : null}
     </div>
   )
 
@@ -308,38 +326,15 @@ export function ProjectWorkspacePage() {
       style={{ maxWidth: '100%', overflowX: 'hidden' }}
     >
       <Space
-        style={{ width: '100%', justifyContent: 'space-between', marginBottom: 12 }}
+        style={{ width: '100%', justifyContent: 'flex-end', marginBottom: 12 }}
         align="start"
         wrap
       >
         <Space align="center" wrap>
-          <Link to="/projects">
-            <Button icon={<ArrowLeftOutlined />} aria-label="返回项目列表">
-              返回
-            </Button>
-          </Link>
-          <Typography.Title
-            level={3}
-            className="tp-page-title"
-            style={{
-              margin: 0,
-              maxWidth: isNarrow ? 180 : 480,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              opacity: project.archived ? 0.55 : 1,
-            }}
-            title={project.name}
-          >
-            {project.name}
-          </Typography.Title>
-          <Typography.Text type="secondary" code>
-            {project.id}
-          </Typography.Text>
           <Typography.Text code data-testid="workspace-commit-sha">
             {shortSha(project.commit_sha)}
           </Typography.Text>
-          <Select
+          {section !== 'pages' ? <Select
             style={{ minWidth: 140 }}
             value={selectedEnv ?? undefined}
             options={envOptions}
@@ -349,7 +344,7 @@ export function ProjectWorkspacePage() {
             disabled={envOptions.length === 0}
             aria-label="运行环境"
             data-testid="workspace-env-select"
-          />
+          /> : null}
         </Space>
         {isNarrow ? (
           <Button
@@ -362,7 +357,7 @@ export function ProjectWorkspacePage() {
         ) : null}
       </Space>
 
-      {noEnabledEnv ? (
+      {noEnabledEnv && section !== 'pages' ? (
         <Alert
           type="warning"
           showIcon
@@ -371,13 +366,9 @@ export function ProjectWorkspacePage() {
           message="还没有启用的环境"
           description="运行环境来自本项目已启用的数据库环境。请先配置环境后再运行。"
           action={
-            <Button
-              size="small"
-              data-testid="open-env-config"
-              onClick={() => setConfigOpen(true)}
-            >
-              去配置
-            </Button>
+            <Link to={`${sectionPath('configuration', projectId)}?tab=environments`}>
+              <Button size="small" data-testid="open-env-config">去配置</Button>
+            </Link>
           }
         />
       ) : null}
@@ -399,63 +390,6 @@ export function ProjectWorkspacePage() {
           }
         />
       ) : null}
-
-      <ProjectConfigPanel
-        projectId={projectId}
-        open={configOpen}
-        onOpenChange={setConfigOpen}
-      />
-
-      <Collapse
-        size="small"
-        style={{ marginBottom: 12 }}
-        items={[
-          {
-            key: 'summary',
-            label: (
-              <Space size={8}>
-                <UnorderedListOutlined />
-                <span>项目摘要</span>
-              </Space>
-            ),
-            children: (
-              <Descriptions size="small" column={{ xs: 1, sm: 2 }}>
-                <Descriptions.Item label="项目 ID">
-                  <Typography.Text
-                    copyable={{ text: project.id }}
-                    code
-                    style={{ wordBreak: 'break-all' }}
-                  >
-                    {project.id}
-                  </Typography.Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="仓库">{project.repo}</Descriptions.Item>
-                <Descriptions.Item label="项目键">{project.project}</Descriptions.Item>
-                <Descriptions.Item label="默认环境">
-                  {project.default_env ?? '—'}
-                </Descriptions.Item>
-                <Descriptions.Item label="可选环境">
-                  {project.envs.length ? project.envs.join(', ') : '—'}
-                </Descriptions.Item>
-                <Descriptions.Item label="Commit">
-                  <Typography.Text code>
-                    {shortSha(project.commit_sha)}
-                  </Typography.Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="归档">
-                  {project.archived ? '是' : '否'}
-                </Descriptions.Item>
-                <Descriptions.Item label="创建时间">
-                  {project.created_at}
-                </Descriptions.Item>
-                <Descriptions.Item label="更新时间">
-                  {project.updated_at}
-                </Descriptions.Item>
-              </Descriptions>
-            ),
-          },
-        ]}
-      />
 
       <div
         style={{
@@ -490,7 +424,7 @@ export function ProjectWorkspacePage() {
       </div>
 
       <Drawer
-        title="资产浏览"
+        title={`${SECTIONS[section].label}资产`}
         placement="left"
         width={Math.min(360, typeof window !== 'undefined' ? window.innerWidth - 24 : 360)}
         open={isNarrow && assetDrawerOpen}

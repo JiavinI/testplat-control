@@ -44,11 +44,12 @@ function renderPanel(
   assetId = 'api.demo.mixed',
   env = 'test',
   caseParams?: Record<string, unknown>,
+  requestDefinition?: Record<string, unknown>,
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
-  const view = render(panelTree(client, { projectId, assetId, env, caseParams }))
+  const view = render(panelTree(client, { projectId, assetId, env, caseParams, requestDefinition }))
   return { ...view, client }
 }
 
@@ -59,6 +60,7 @@ function panelTree(
     assetId: string
     env: string
     caseParams?: Record<string, unknown>
+    requestDefinition?: Record<string, unknown>
   },
 ) {
   return (
@@ -70,6 +72,7 @@ function panelTree(
             assetId={props.assetId}
             env={props.env}
             caseParams={props.caseParams}
+            requestDefinition={props.requestDefinition}
           />
         </QueryClientProvider>
       </AntApp>
@@ -124,7 +127,7 @@ describe('ApiExecutionPanel', () => {
     })
     expect(runAsset.mock.calls[0][2].params).not.toHaveProperty('nickname')
     expect(runAsset.mock.calls[0][2].params).not.toHaveProperty('age')
-    expect(await screen.findByTestId('execution-result')).toHaveTextContent('success')
+    expect(await screen.findByTestId('api-run-response')).toHaveTextContent('success')
     },
     15_000,
   )
@@ -155,6 +158,7 @@ describe('ApiExecutionPanel', () => {
     } satisfies RunResponse)
     renderPanel('main/demo', 'api.common.health_check', 'test')
     await user.click(await screen.findByRole('button', { name: '执行 API' }))
+    await user.click(await screen.findByText('运行详情与登录过程'))
     expect(await screen.findByTestId('run-result-operator')).toHaveTextContent('alice')
     expect(screen.getByTestId('run-result-env')).toHaveTextContent('test')
     expect(screen.getByTestId('run-result-commit-sha')).toHaveTextContent('abcdef0')
@@ -176,7 +180,7 @@ describe('ApiExecutionPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       "missing required param 'username'",
     )
-    expect(screen.queryByTestId('execution-result')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('api-run-response')).not.toBeInTheDocument()
   })
 
   it('HTTP 200 + failed 展示结果，并刷新历史 query', async () => {
@@ -199,10 +203,11 @@ describe('ApiExecutionPanel', () => {
     await screen.findByTestId('params-empty')
     fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
 
-    const result = await screen.findByTestId('execution-result')
+    const result = await screen.findByTestId('api-run-response')
     expect(result).toHaveTextContent('failed')
     expect(result).toHaveTextContent('assertion failed')
-    expect(result).toHaveTextContent('r-fail')
+    fireEvent.click(screen.getByText('运行详情与登录过程'))
+    expect(await screen.findByTestId('execution-result')).toHaveTextContent('r-fail')
 
     await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith(
@@ -227,7 +232,7 @@ describe('ApiExecutionPanel', () => {
 
     await screen.findByTestId('params-empty')
     fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
-    await screen.findByTestId('execution-result')
+    await screen.findByTestId('api-run-response')
 
     await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith(
@@ -265,7 +270,7 @@ describe('ApiExecutionPanel', () => {
       duration: 0.01,
       result: {},
     })
-    await screen.findByTestId('execution-result')
+    await screen.findByTestId('api-run-response')
   })
 
   it('切换资产清空参数、错误与结果', async () => {
@@ -293,7 +298,7 @@ describe('ApiExecutionPanel', () => {
 
     expect(await screen.findByTestId('params-empty')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('execution-result')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('api-run-response')).not.toBeInTheDocument()
     expect(screen.queryByDisplayValue('stale')).not.toBeInTheDocument()
   })
 
@@ -406,5 +411,97 @@ describe('ApiExecutionPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Asset not found')
     await user.click(screen.getByRole('button', { name: '重试' }))
     expect(await screen.findByTestId('params-empty')).toBeInTheDocument()
+  })
+})
+
+describe('完整临时请求内容', () => {
+  it('允许增加、删除字段并发送整个 body，不要求填写模板参数', async () => {
+    getAssetParams.mockResolvedValue(mixedParams)
+    runAsset.mockResolvedValue({ record_id: 'temporary', status: 'success', duration: 0.1, result: {} })
+    renderPanel('main/demo', 'api.demo.mixed', 'test', undefined, {
+      type: 'json', body: { username: '${username}', old: 'delete me' },
+    })
+    await screen.findByTestId('api-execution-panel')
+    fireEvent.click(screen.getByText('编辑完整请求内容'))
+    const body = { added: 9, nested: { active: false }, items: [null], literal: '${username}' }
+    fireEvent.change(screen.getByLabelText('临时请求内容'), { target: { value: JSON.stringify(body) } })
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => expect(runAsset).toHaveBeenCalledWith(
+      'main/demo', 'api.demo.mixed', { env: 'test', params: {}, request_override: { body } },
+    ))
+  })
+
+  it('JSON 语法有误时不发送，恢复后可以切回 YAML 模板', async () => {
+    getAssetParams.mockResolvedValue(emptyParams)
+    renderPanel('main/demo', 'api.common.health_check', 'test', undefined, { type: 'json', body: {} })
+    await screen.findByTestId('api-execution-panel')
+    fireEvent.click(screen.getByText('编辑完整请求内容'))
+    fireEvent.change(screen.getByLabelText('临时请求内容'), { target: { value: '{broken' } })
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('临时请求内容不是合法 JSON')
+    expect(runAsset).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('从 YAML 恢复'))
+    expect(screen.getByLabelText('临时请求内容')).toHaveValue('{}')
+    fireEvent.click(screen.getByText('使用 YAML 模板'))
+    expect(screen.queryByLabelText('临时请求内容')).not.toBeInTheDocument()
+  })
+})
+
+
+describe('协议与响应展示', () => {
+  it('Query 拦截嵌套对象，允许增删标量并保留空值和 false', async () => {
+    getAssetParams.mockResolvedValue(keywordParams)
+    runAsset.mockResolvedValue({ record_id: 'query', status: 'success', duration: 0.1,
+      result: { response: { status_code: 200, body: { errorCode: '0' } } } })
+    renderPanel('main/demo', 'api.demo.search', 'test', undefined, {
+      type: 'query', body: { keywords: '${product_keyword}' },
+    })
+    expect(await screen.findByLabelText('请求模板')).toHaveTextContent('keywords')
+    fireEvent.click(screen.getByText('编辑完整请求内容'))
+    setInput(screen.getByLabelText('临时请求内容'), '{"nested": {"x": 1}}')
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('一层标量键值对象')
+    expect(runAsset).not.toHaveBeenCalled()
+    const body = { keywords: '鞋 & 包', active: false, count: 2, empty: null }
+    setInput(screen.getByLabelText('临时请求内容'), JSON.stringify(body))
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => expect(runAsset).toHaveBeenCalledWith('main/demo', 'api.demo.search', {
+      env: 'test', params: {}, request_override: { body },
+    }))
+    expect(await screen.findByLabelText('响应内容')).toHaveTextContent('errorCode')
+    expect(screen.queryByTestId('execution-result')).not.toBeInTheDocument()
+  })
+
+  it('JSON 模板 null 恢复后仍为 null，Raw 按原始字符串发送', async () => {
+    getAssetParams.mockResolvedValue(emptyParams)
+    runAsset.mockResolvedValue({ record_id: 'null', status: 'success', duration: 0, result: {} })
+    const { rerender, client } = renderPanel('main/demo', 'api.demo.null', 'test', undefined, { type: 'json', body: null })
+    await screen.findByTestId('api-execution-panel')
+    fireEvent.click(screen.getByText('编辑完整请求内容'))
+    expect(screen.getByLabelText('临时请求内容')).toHaveValue('null')
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => expect(runAsset).toHaveBeenCalledWith('main/demo', 'api.demo.null', {
+      env: 'test', params: {}, request_override: { body: null },
+    }))
+    rerender(panelTree(client, { projectId: 'main/demo', assetId: 'api.demo.raw', env: 'test', requestDefinition: { type: 'raw', body: 'text' } }))
+    await screen.findByTestId('api-execution-panel')
+    fireEvent.click(screen.getByText('编辑完整请求内容'))
+    setInput(screen.getByLabelText('临时请求内容'), 'literal ${value}\nraw')
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => expect(runAsset).toHaveBeenLastCalledWith('main/demo', 'api.demo.raw', {
+      env: 'test', params: {}, request_override: { body: 'literal ${value}\nraw' },
+    }))
+  })
+
+  it('HTTP 200 业务失败不展示为通过，默认展示响应体', async () => {
+    getAssetParams.mockResolvedValue(emptyParams)
+    runAsset.mockResolvedValue({ record_id: 'business-fail', status: 'failed', duration: 0.02,
+      result: { response: { status_code: 200, body: { errorCode: '7' } }, error: { message: '业务码断言失败' } } })
+    renderPanel()
+    fireEvent.click(await screen.findByRole('button', { name: '执行 API' }))
+    expect(await screen.findByTestId('api-business-result')).toHaveTextContent('执行未通过')
+    expect(screen.getByTestId('api-run-response')).toHaveTextContent('HTTP 200')
+    expect(screen.getByLabelText('响应内容')).toHaveTextContent('"7"')
+    expect(screen.queryByText('业务判定通过')).not.toBeInTheDocument()
   })
 })

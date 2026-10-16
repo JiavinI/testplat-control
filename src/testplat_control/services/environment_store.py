@@ -16,6 +16,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from testplat_control.database.models import ConfigChange, ProjectEnvironment, TestAccount
+from testplat_control.services.account_reference import ACCOUNT_REFERENCE_RE
 from testplat_control.services.crypto import (
     MasterKeyError,
     decrypt_credentials,
@@ -23,14 +24,13 @@ from testplat_control.services.crypto import (
 )
 
 ENV_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
-ACCOUNT_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+ACCOUNT_NAME_RE = ACCOUNT_REFERENCE_RE
 HOST_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
 PROFILE_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 CREDENTIAL_FIELD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 RESERVED_ACCOUNT = "none"
 CREDENTIAL_NOTE = "已修改"
 CONFLICT = "配置版本冲突，请刷新后再保存"
-MIN_SECRET = 8
 
 
 def _now() -> datetime:
@@ -46,8 +46,8 @@ def validate_env_name(env: str) -> str:
 
 
 def validate_account_name(name: str) -> str:
-    if not isinstance(name, str) or not ACCOUNT_NAME_RE.fullmatch(name):
-        raise HTTPException(status_code=422, detail="账号名需匹配 ^[a-z][a-z0-9_]*$")
+    if not isinstance(name, str) or len(name) > 64 or not ACCOUNT_NAME_RE.fullmatch(name):
+        raise HTTPException(status_code=422, detail="引用需由点分隔的变量名组成，最长 64 字符")
     if name == RESERVED_ACCOUNT:
         raise HTTPException(status_code=422, detail="none 是保留账号名")
     return name
@@ -103,18 +103,14 @@ def validate_timeout(value: object) -> float | None:
 
 
 def validate_credentials(value: object) -> dict[str, str]:
-    if not isinstance(value, dict) or not value:
-        raise HTTPException(status_code=422, detail="credentials 必须是非空对象")
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=422, detail="credentials 必须是对象")
     out: dict[str, str] = {}
     for key, item in value.items():
         if not isinstance(key, str) or not CREDENTIAL_FIELD_RE.fullmatch(key):
             raise HTTPException(status_code=422, detail="凭据字段名非法")
         if not isinstance(item, str):
             raise HTTPException(status_code=422, detail="凭据字段必须是字符串")
-        if len(item) < MIN_SECRET:
-            raise HTTPException(status_code=422, detail="凭据字段长度不足 8")
-        if any(ch in item for ch in "\r\n\x00"):
-            raise HTTPException(status_code=422, detail="凭据字段含非法控制字符")
         out[key] = item
     return out
 

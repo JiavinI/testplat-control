@@ -70,7 +70,7 @@ try {
   await page.getByTestId('project-workspace').waitFor({ timeout: 20000 })
   const manager = page.getByTestId('environment-manager')
   if (!(await manager.isVisible().catch(() => false))) {
-    await page.getByText('环境与账号', { exact: true }).click()
+    await page.goto(`${BASE}/configuration/${REPO}/${PROJECT}?tab=environments`, { waitUntil: 'networkidle' })
   }
   await manager.waitFor({ timeout: 20000 })
   await page.getByTestId('env-create-open').click()

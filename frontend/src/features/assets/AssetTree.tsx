@@ -1,5 +1,5 @@
 import { FileOutlined, FolderOpenOutlined, FolderOutlined } from '@ant-design/icons'
-import { Input, Tree, Typography } from 'antd'
+import { Input, Tag, Tree, Typography } from 'antd'
 import type { DataNode } from 'antd/es/tree'
 import { useMemo } from 'react'
 import type { AssetNode } from './types'
@@ -19,11 +19,13 @@ function buildTreeData(node: AssetNode): DataNode {
   const isDir = node.type === 'directory'
   const title = (
     <span data-asset-id={node.id} data-asset-type={node.type}>
+      {!isDir && node.id.startsWith('api.') && typeof node.metadata?.method === 'string'
+        ? <Tag color={node.metadata.method === 'GET' ? 'green' : 'blue'} style={{ fontSize: 10, marginInlineEnd: 4 }}>{node.metadata.method}</Tag> : null}
       <Typography.Text
         ellipsis={{ tooltip: `${node.name} (${node.id})` }}
         style={{ maxWidth: 240 }}
       >
-        {node.name}
+        {node.id.startsWith('api.') && typeof node.metadata?.name === 'string' ? node.metadata.name : node.name}
       </Typography.Text>
     </span>
   )

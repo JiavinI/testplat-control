@@ -82,6 +82,7 @@ export interface RunRequest {
   /** 必填：须在项目 envs 内，否则后端 422 */
   env: string
   params: Record<string, string | number | boolean>
+  request_override?: { body: unknown }
 }
 
 export interface RunResponse {
@@ -167,9 +168,12 @@ export type ApiExecutionPanelProps = {
    * 已有默认值时必填项可以留空，空白不写入本次请求，显式输入仍然优先。
    */
   caseParams?: Record<string, unknown>
+  requestDefinition?: Record<string, unknown>
+  runDisabled?: boolean
 }
 
 export type ExecutionHistoryProps = {
+  assetTypeScope?: 'api' | 'case'
   projectId: string
   assetId?: string
   /** 项目可选环境，供历史筛选下拉 */

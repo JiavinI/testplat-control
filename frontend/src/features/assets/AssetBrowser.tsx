@@ -6,10 +6,12 @@ import { AssetDetailPanel } from './AssetDetailPanel'
 import { AssetTree } from './AssetTree'
 import { useAssetDetails, useAssetsTree } from './hooks'
 import type { AssetNode } from './types'
+import { SECTIONS, type AssetSection } from '@/shared/project/sections'
 import {
   collectDirectoryKeys,
   filterTreeKeepingAncestors,
   findAssetById,
+  treeForSection,
 } from './treeUtils'
 
 export type AssetBrowserProps = {
@@ -18,6 +20,7 @@ export type AssetBrowserProps = {
   onSelectAsset: (asset: AssetNode) => void
   /** full：树+详情；tree：仅树，供工作台左侧/抽屉挂载 */
   layout?: 'full' | 'tree'
+  section?: AssetSection
 }
 
 /**
@@ -29,8 +32,12 @@ export function AssetBrowser({
   selectedAssetId,
   onSelectAsset,
   layout = 'full',
+  section,
 }: AssetBrowserProps) {
   const treeQuery = useAssetsTree(projectId)
+  const scopedTree = useMemo(() => treeQuery.data
+    ? section ? treeForSection(treeQuery.data, section) : treeQuery.data
+    : null, [treeQuery.data, section])
   const [filterQuery, setFilterQuery] = useState('')
   const [expandedKeys, setExpandedKeys] = useState<string[]>([])
   const [expandedInitializedFor, setExpandedInitializedFor] = useState<string | null>(
@@ -42,17 +49,17 @@ export function AssetBrowser({
     setFilterQuery('')
     setExpandedKeys([])
     setExpandedInitializedFor(null)
-  }, [projectId])
+  }, [projectId, section])
 
   const filteredTree = useMemo(() => {
-    if (!treeQuery.data) {
+    if (!scopedTree) {
       return null
     }
-    return filterTreeKeepingAncestors(treeQuery.data, filterQuery)
-  }, [treeQuery.data, filterQuery])
+    return filterTreeKeepingAncestors(scopedTree, filterQuery)
+  }, [scopedTree, filterQuery])
 
   useEffect(() => {
-    if (!treeQuery.data) {
+    if (!scopedTree) {
       return
     }
     if (filterQuery.trim()) {
@@ -63,14 +70,14 @@ export function AssetBrowser({
     }
     // 无过滤时仅在首次加载该项目树时默认展开第一层目录
     if (expandedInitializedFor !== projectId) {
-      const firstLevel = (treeQuery.data.children ?? [])
+      const firstLevel = (scopedTree.children ?? [])
         .filter((n) => n.type === 'directory')
         .map((n) => n.id)
       setExpandedKeys(firstLevel)
       setExpandedInitializedFor(projectId)
     }
   }, [
-    treeQuery.data,
+    scopedTree,
     filterQuery,
     filteredTree,
     projectId,
@@ -78,12 +85,12 @@ export function AssetBrowser({
   ])
 
   const selectedFromTree = useMemo(() => {
-    if (!treeQuery.data || !selectedAssetId) {
+    if (!scopedTree || !selectedAssetId) {
       return null
     }
     // 新项目树尚未包含该 id 时视为未选中，防止串数据显示旧详情
-    return findAssetById(treeQuery.data, selectedAssetId)
-  }, [treeQuery.data, selectedAssetId])
+    return findAssetById(scopedTree, selectedAssetId)
+  }, [scopedTree, selectedAssetId])
 
   // 仅 full 布局且选中文件时拉取详情；tree 布局由工作台中央区负责
   const shouldFetchDetails = Boolean(
@@ -117,7 +124,7 @@ export function AssetBrowser({
     )
   }
 
-  if (!treeQuery.data) {
+  if (!scopedTree) {
     return (
       <ErrorState
         error={new Error('资产树为空响应')}
@@ -128,9 +135,9 @@ export function AssetBrowser({
     )
   }
 
-  const hasAnyChild = (treeQuery.data.children ?? []).length > 0
+  const hasAnyChild = (scopedTree.children ?? []).length > 0
   if (!hasAnyChild) {
-    return <EmptyState description="该项目资产目录为空，无可展示节点" />
+    return <EmptyState description={section ? `该项目暂无${SECTIONS[section].label}资产` : '该项目资产目录为空，无可展示节点'} />
   }
 
   if (filterQuery.trim() && !filteredTree) {
@@ -152,12 +159,12 @@ export function AssetBrowser({
     )
   }
 
-  const treeForDisplay = filteredTree ?? treeQuery.data
+  const treeForDisplay = filteredTree ?? scopedTree
 
   const treeCard = (
     <Card
       size="small"
-      title="资产树"
+      title={section ? `${SECTIONS[section].label}资产` : '资产树'}
       style={
         layout === 'tree'
           ? { width: '100%' }
@@ -173,7 +180,7 @@ export function AssetBrowser({
         onExpandedKeysChange={setExpandedKeys}
         selectedAssetId={selectedFromTree?.id}
         onSelectAsset={onSelectAsset}
-        findNode={(id) => findAssetById(treeQuery.data, id)}
+        findNode={(id) => scopedTree ? findAssetById(scopedTree, id) : null}
       />
     </Card>
   )

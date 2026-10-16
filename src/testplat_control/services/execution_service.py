@@ -252,6 +252,7 @@ async def run_single_api(
     declared_names: set[str] | None = None,
     asset_defaults: dict[str, Any] | None = None,
     validate_params: Callable[[dict[str, Any]], None] | None = None,
+    request_override: dict[str, Any] | None = None,
 ) -> ExecutionRecord:
     """编排一次单 API 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。
 
@@ -284,6 +285,7 @@ async def run_single_api(
                 params=resolved.params,
                 timeout_seconds=resolved.timeout_seconds,
                 auth=auth,
+                **({"request_override": request_override} if request_override is not None else {}),
             )
         except (TypeError, ValueError) as exc:
             _log_request_build_error(project_id=project_id, asset_id=asset_id, exc=exc)

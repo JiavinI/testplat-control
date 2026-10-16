@@ -39,8 +39,8 @@ export interface TestAccount {
 
 export interface AccountBody {
   account_name: string
-  display_name: string | null
-  business_role: string | null
+  display_name?: string | null
+  business_role?: string | null
   login_profile: string
   credentials: Record<string, string>
   enabled: boolean
