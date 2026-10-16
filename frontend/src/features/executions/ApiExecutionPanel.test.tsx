@@ -34,24 +34,47 @@ const emptyParams: ParamsResponse = {
   params: [],
 }
 
+const keywordParams: ParamsResponse = {
+  asset_id: 'api.demo.search',
+  params: [{ name: 'product_keyword', type: 'string', required: true, description: null }],
+}
+
 function renderPanel(
   projectId = 'main/demo',
   assetId = 'api.demo.mixed',
   env = 'test',
+  caseParams?: Record<string, unknown>,
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
-  const view = render(
+  const view = render(panelTree(client, { projectId, assetId, env, caseParams }))
+  return { ...view, client }
+}
+
+function panelTree(
+  client: QueryClient,
+  props: {
+    projectId: string
+    assetId: string
+    env: string
+    caseParams?: Record<string, unknown>
+  },
+) {
+  return (
     <ConfigProvider theme={{ token: { motion: false } }}>
       <AntApp>
         <QueryClientProvider client={client}>
-          <ApiExecutionPanel projectId={projectId} assetId={assetId} env={env} />
+          <ApiExecutionPanel
+            projectId={props.projectId}
+            assetId={props.assetId}
+            env={props.env}
+            caseParams={props.caseParams}
+          />
         </QueryClientProvider>
       </AntApp>
-    </ConfigProvider>,
+    </ConfigProvider>
   )
-  return { ...view, client }
 }
 
 function setInput(element: HTMLElement, value: string) {
@@ -283,6 +306,94 @@ describe('ApiExecutionPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/网络错误/)
+  })
+
+  it('有环境默认值时必填可留空，切换环境或默认值后空白仍不写进请求，显式输入优先', async () => {
+    const user = userEvent.setup({ delay: null })
+    getAssetParams.mockResolvedValue(keywordParams)
+    runAsset.mockResolvedValue({
+      record_id: 'r-default',
+      status: 'success',
+      duration: 0.01,
+      result: { status: 'success', request: {}, response: {}, error: null },
+    } satisfies RunResponse)
+
+    const { rerender, client } = renderPanel('main/demo', 'api.demo.search', 'pre', {
+      product_keyword: 'web-default',
+    })
+    const field = await screen.findByLabelText('product_keyword')
+    expect(field).toHaveAttribute('placeholder', '留空使用环境默认值')
+    expect(field).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => {
+      expect(runAsset).toHaveBeenCalledTimes(1)
+    })
+    expect(runAsset.mock.calls[0][2]).toEqual({ env: 'pre', params: {} })
+    expect(runAsset.mock.calls[0][2].params).not.toHaveProperty('product_keyword')
+
+    rerender(
+      panelTree(client, {
+        projectId: 'main/demo',
+        assetId: 'api.demo.search',
+        env: 'pre',
+        caseParams: { product_keyword: 'updated-default' },
+      }),
+    )
+    expect(screen.getByLabelText('product_keyword')).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => {
+      expect(runAsset).toHaveBeenCalledTimes(2)
+    })
+    expect(runAsset.mock.calls[1][2]).toEqual({ env: 'pre', params: {} })
+    expect(JSON.stringify(runAsset.mock.calls[1][2])).not.toContain('web-default')
+    expect(JSON.stringify(runAsset.mock.calls[1][2])).not.toContain('updated-default')
+
+    fireEvent.change(screen.getByLabelText('product_keyword'), {
+      target: { value: 'explicit-keyword' },
+    })
+    rerender(
+      panelTree(client, {
+        projectId: 'main/demo',
+        assetId: 'api.demo.search',
+        env: 'pre',
+        caseParams: { product_keyword: 'newer-default' },
+      }),
+    )
+    expect(screen.getByLabelText('product_keyword')).toHaveValue('explicit-keyword')
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => {
+      expect(runAsset).toHaveBeenCalledTimes(3)
+    })
+    expect(runAsset.mock.calls[2][2]).toEqual({
+      env: 'pre',
+      params: { product_keyword: 'explicit-keyword' },
+    })
+
+    rerender(
+      panelTree(client, {
+        projectId: 'main/demo',
+        assetId: 'api.demo.search',
+        env: 'staging',
+        caseParams: {},
+      }),
+    )
+    expect(screen.getByLabelText('product_keyword')).toHaveAttribute('placeholder', '必填')
+    fireEvent.change(screen.getByLabelText('product_keyword'), { target: { value: '' } })
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    expect(await screen.findByText('请填写该参数')).toBeInTheDocument()
+    expect(runAsset).toHaveBeenCalledTimes(3)
+
+    rerender(
+      panelTree(client, {
+        projectId: 'main/demo',
+        assetId: 'api.demo.search',
+        env: 'staging',
+        caseParams: { product_keyword: '   ' },
+      }),
+    )
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    expect(await screen.findByText('请填写该参数')).toBeInTheDocument()
+    expect(runAsset).toHaveBeenCalledTimes(3)
   })
 
   it('参数加载 404 可重试', async () => {

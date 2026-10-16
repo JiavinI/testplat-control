@@ -1,9 +1,11 @@
 import { Alert, Button, Input, Modal, Space, Switch, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatErrorMessage } from '@/shared/ui/errorMessage'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
+import { useUnauthorizedGuard } from '@/features/auth/hooks'
 import { getEnvironment } from './api'
+import { isCurrentEditTarget, nextEditTarget, type EditTarget } from './editSession'
 import {
   useCreateEnvironment,
   useEnvironments,
@@ -63,6 +65,8 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
   const listQuery = useEnvironments(projectId)
   const createMutation = useCreateEnvironment(projectId)
   const updateMutation = useUpdateEnvironment(projectId)
+  const discardUnauthorized = useUnauthorizedGuard()
+  const targetRef = useRef<EditTarget | null>(null)
   const [draft, setDraft] = useState<EnvDraft | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [conflict, setConflict] = useState(false)
@@ -70,8 +74,38 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
   const [listError, setListError] = useState<string | null>(null)
   const saving = createMutation.isPending || updateMutation.isPending
 
+  const begin = (envName: string | null) => {
+    const next = nextEditTarget(targetRef.current, {
+      projectId,
+      env: envName ?? '',
+      accountName: null,
+    })
+    targetRef.current = next
+    return next
+  }
+
+  const close = () => {
+    begin(null)
+    setDraft(null)
+    setConflict(false)
+    setRefreshing(false)
+  }
+
+  useEffect(() => {
+    targetRef.current = nextEditTarget(targetRef.current, {
+      projectId,
+      env: '',
+      accountName: null,
+    })
+    setDraft(null)
+    setFormError(null)
+    setConflict(false)
+    setRefreshing(false)
+  }, [projectId])
+
   const save = async () => {
-    if (!draft) {
+    const session = targetRef.current
+    if (!draft || !session || session.projectId !== projectId) {
       return
     }
     setFormError(null)
@@ -117,9 +151,18 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
           body: { revision: draft.revision, ...body },
         })
       }
-      setDraft(null)
-      setConflict(false)
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
+      close()
     } catch (error) {
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
+      if (discardUnauthorized(error)) {
+        close()
+        return
+      }
       if (isRevisionConflict(error)) {
         setConflict(true)
         setFormError(REVISION_CONFLICT_MESSAGE)
@@ -130,19 +173,32 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
   }
 
   const refresh = async () => {
-    if (!draft || draft.mode !== 'edit') {
+    const session = targetRef.current
+    if (!draft || draft.mode !== 'edit' || !session || session.env !== draft.env) {
       return
     }
     setRefreshing(true)
     try {
-      const fresh = await getEnvironment(projectId, draft.env)
+      const fresh = await getEnvironment(session.projectId, session.env)
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
       setDraft(draftFromEnvironment(fresh))
       setConflict(false)
       setFormError(null)
     } catch (error) {
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
+      if (discardUnauthorized(error)) {
+        close()
+        return
+      }
       setFormError(formatErrorMessage(error))
     } finally {
-      setRefreshing(false)
+      if (isCurrentEditTarget(targetRef.current, session)) {
+        setRefreshing(false)
+      }
     }
   }
 
@@ -208,6 +264,7 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
             size="small"
             data-testid={`env-edit-${row.env}`}
             onClick={() => {
+              begin(row.env)
               setFormError(null)
               setConflict(false)
               setDraft(draftFromEnvironment(row))
@@ -236,6 +293,7 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
           type="primary"
           data-testid="env-create-open"
           onClick={() => {
+            begin(null)
             setFormError(null)
             setConflict(false)
             setDraft(blankDraft())
@@ -265,19 +323,11 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
       <Modal
         title={draft?.mode === 'edit' ? `编辑环境 ${draft.env}` : '新增环境'}
         open={draft !== null}
-        onCancel={() => {
-          setDraft(null)
-          setConflict(false)
-        }}
+        onCancel={close}
         destroyOnClose
         footer={
           <Space>
-            <Button
-              onClick={() => {
-                setDraft(null)
-                setConflict(false)
-              }}
-            >
+            <Button data-testid="env-cancel" onClick={close}>
               取消
             </Button>
             <Button

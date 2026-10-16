@@ -259,6 +259,9 @@ export function ProjectWorkspacePage() {
           projectId={projectId}
           assetId={selectedFromTree.id}
           env={selectedEnv}
+          caseParams={
+            environmentQuery.data?.find((item) => item.env === selectedEnv)?.case_params
+          }
         />
       ) : null}
 

@@ -30,12 +30,12 @@ export function ProjectConfigPanel({
                 {
                   key: 'environments',
                   label: '环境管理',
-                  children: <EnvironmentSection projectId={projectId} />,
+                  children: <EnvironmentSection key={projectId} projectId={projectId} />,
                 },
                 {
                   key: 'accounts',
                   label: '测试账号',
-                  children: <AccountSection projectId={projectId} />,
+                  children: <AccountSection key={projectId} projectId={projectId} />,
                 },
               ]}
             />

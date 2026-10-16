@@ -478,6 +478,39 @@ describe('ProjectWorkspacePage 集成', () => {
     expect(screen.queryByTitle('test')).not.toBeInTheDocument()
   })
 
+  it('环境默认值允许必填留空，切到无默认值的环境后恢复必填', async () => {
+    const user = userEvent.setup({ delay: null })
+    window.localStorage.clear()
+    listEnvironments.mockResolvedValue([
+      { ...dbEnv('test'), case_params: { password: 'web-default' } },
+      dbEnv('staging'),
+    ])
+    renderWorkspace()
+    await screen.findByTestId('asset-browser')
+    await clickTreeNode(user, 'api')
+    await clickTreeNode(user, 'api.user')
+    await clickTreeNode(user, 'api.user.login')
+    const password = await screen.findByLabelText('password')
+    expect(password).toHaveAttribute('placeholder', '留空使用环境默认值')
+    expect(password).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => {
+      expect(runAsset).toHaveBeenCalledWith('main/demo', 'api.user.login', {
+        env: 'test',
+        params: {},
+      })
+    })
+    expect(JSON.stringify(runAsset.mock.calls[0][2])).not.toContain('web-default')
+
+    const envSelect = screen.getByTestId('workspace-env-select')
+    await user.click(within(envSelect).getByRole('combobox'))
+    await user.click(await screen.findByTitle('staging'))
+    expect(await screen.findByLabelText('password')).toHaveAttribute('placeholder', '必填')
+    await user.click(screen.getByRole('button', { name: '执行 API' }))
+    expect(await screen.findByText('请填写该参数')).toBeInTheDocument()
+    expect(runAsset).toHaveBeenCalledTimes(1)
+  }, 45_000)
+
   it('摘要不再展示 assets_root / config_root', async () => {
     renderWorkspace()
     await screen.findByText('fixture-demo')

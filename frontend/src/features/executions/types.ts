@@ -162,6 +162,11 @@ export type ApiExecutionPanelProps = {
   assetId: string
   /** 运行必填 env；由工作台环境下拉传入 */
   env: string
+  /**
+   * 当前环境的 case_params。
+   * 已有默认值时必填项可以留空，空白不写入本次请求，显式输入仍然优先。
+   */
+  caseParams?: Record<string, unknown>
 }
 
 export type ExecutionHistoryProps = {

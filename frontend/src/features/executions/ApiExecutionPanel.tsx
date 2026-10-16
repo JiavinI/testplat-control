@@ -18,7 +18,12 @@ import type { ApiExecutionPanelProps, RunResponse } from './types'
  * 单 API 执行面板：动态参数表单 + 执行 + 结果。
  * 父级用 key 绑定 projectId:assetId，切换资产时整树重挂载以清空状态。
  */
-export function ApiExecutionPanel({ projectId, assetId, env }: ApiExecutionPanelProps) {
+export function ApiExecutionPanel({
+  projectId,
+  assetId,
+  env,
+  caseParams,
+}: ApiExecutionPanelProps) {
   const paramsQuery = useAssetParams(projectId, assetId)
 
   if (paramsQuery.isLoading) {
@@ -42,6 +47,7 @@ export function ApiExecutionPanel({ projectId, assetId, env }: ApiExecutionPanel
       projectId={projectId}
       assetId={assetId}
       env={env}
+      caseParams={caseParams}
       params={paramsQuery.data?.params ?? []}
     />
   )
@@ -51,8 +57,11 @@ function ApiExecutionPanelReady({
   projectId,
   assetId,
   env,
+  caseParams,
   params,
-}: ApiExecutionPanelProps & { params: NonNullable<ReturnType<typeof useAssetParams>['data']>['params'] }) {
+}: ApiExecutionPanelProps & {
+  params: NonNullable<ReturnType<typeof useAssetParams>['data']>['params']
+}) {
   // Form 实例仅在已挂载 ParamForm 的子树中创建，避免 useForm disconnected 警告
   const [form] = Form.useForm<Record<string, unknown>>()
   const [runResult, setRunResult] = useState<RunResponse | null>(null)
@@ -107,7 +116,7 @@ function ApiExecutionPanelReady({
       }
       data-testid="api-execution-panel"
     >
-      <ParamForm form={form} params={params} disabled={submitting} />
+      <ParamForm form={form} params={params} disabled={submitting} caseParams={caseParams} />
 
       <Space style={{ marginTop: 8 }}>
         <Button

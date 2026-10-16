@@ -31,6 +31,18 @@ export function dropSessionOnUnauthorized(
   clearAuthenticatedCache(client)
 }
 
+/** 不经过 Query 的请求（查看凭据、冲突刷新）也要清会话。返回 true 表示已经按 401 处理。 */
+export function useUnauthorizedGuard(): (error: unknown) => boolean {
+  const client = useQueryClient()
+  return (error: unknown) => {
+    if (!isUnauthenticated(error)) {
+      return false
+    }
+    dropSessionOnUnauthorized(client, error, 'config')
+    return true
+  }
+}
+
 export function useMe(): UseQueryResult<MeResponse | null, Error> {
   return useQuery({
     queryKey: authKeys.me,

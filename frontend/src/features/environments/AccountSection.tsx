@@ -10,10 +10,12 @@ import {
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatErrorMessage } from '@/shared/ui/errorMessage'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
+import { useUnauthorizedGuard } from '@/features/auth/hooks'
 import { getAccount } from './api'
+import { isCurrentEditTarget, nextEditTarget, type EditTarget } from './editSession'
 import {
   fetchAccountCredentials,
   useAccounts,
@@ -93,7 +95,7 @@ export function AccountSection({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     setEditorOpen(false)
-  }, [env])
+  }, [projectId, env])
 
   if (environments.isLoading) {
     return <LoadingState tip="加载环境…" />
@@ -133,7 +135,7 @@ export function AccountSection({ projectId }: { projectId: string }) {
       </Space>
       {env ? (
         <AccountTable
-          key={env}
+          key={`${projectId}:${env}`}
           projectId={projectId}
           env={env}
           accounts={accounts}
@@ -174,6 +176,8 @@ function AccountTable({
 }) {
   const createMutation = useCreateAccount(projectId, env)
   const updateMutation = useUpdateAccount(projectId, env)
+  const discardUnauthorized = useUnauthorizedGuard()
+  const targetRef = useRef<EditTarget | null>(null)
   const [draft, setDraft] = useState<AccountDraft | null>(null)
   const [revealed, setRevealed] = useState<Record<string, string> | null>(null)
   const [credentialDraft, setCredentialDraft] = useState<Record<string, string>>({})
@@ -184,76 +188,143 @@ function AccountTable({
   const [listError, setListError] = useState<string | null>(null)
   const saving = createMutation.isPending || updateMutation.isPending
 
-  const openCreate = () => {
-    setDraft(blankAccount())
+  const begin = (accountName: string | null) => {
+    const next = nextEditTarget(targetRef.current, { projectId, env, accountName })
+    targetRef.current = next
+    return next
+  }
+
+  const clearSecrets = () => {
     setRevealed(null)
     setCredentialDraft({})
+  }
+
+  useEffect(() => {
+    targetRef.current = nextEditTarget(targetRef.current, {
+      projectId,
+      env,
+      accountName: null,
+    })
+    setDraft(null)
+    setRevealed(null)
+    setCredentialDraft({})
+    setFormError(null)
+    setConflict(false)
+  }, [projectId, env])
+
+  const openCreate = () => {
+    begin(null)
+    setDraft(blankAccount())
+    clearSecrets()
     setFormError(null)
     setConflict(false)
     onEditorOpen(true)
   }
 
   const openEdit = (row: TestAccount) => {
+    begin(row.account_name)
     setDraft(draftFromAccount(row))
-    setRevealed(null)
-    setCredentialDraft({})
+    clearSecrets()
     setFormError(null)
     setConflict(false)
     onEditorOpen(true)
   }
 
   const close = () => {
+    begin(null)
     setDraft(null)
-    setRevealed(null)
-    setCredentialDraft({})
+    clearSecrets()
     setConflict(false)
+    setRevealing(false)
+    setRefreshing(false)
     onEditorOpen(false)
+  }
+
+  const abandonEditor = () => {
+    setRevealing(false)
+    setRefreshing(false)
+    close()
   }
 
   const profileFields =
     profiles.find((item) => item.name === draft?.login_profile)?.credential_fields ?? []
 
   const reveal = async () => {
-    if (!draft || draft.mode !== 'edit') {
+    const session = targetRef.current
+    if (!draft || draft.mode !== 'edit' || !session || session.accountName !== draft.account_name) {
       return
     }
     setRevealing(true)
     setFormError(null)
     try {
-      const data = await fetchAccountCredentials(projectId, env, draft.account_name)
+      const data = await fetchAccountCredentials(session.projectId, session.env, session.accountName)
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
       setRevealed(data.credentials)
       setCredentialDraft({ ...data.credentials })
     } catch (error) {
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
+      if (discardUnauthorized(error)) {
+        abandonEditor()
+        return
+      }
       setFormError(formatErrorMessage(error))
     } finally {
-      setRevealing(false)
+      if (isCurrentEditTarget(targetRef.current, session)) {
+        setRevealing(false)
+      }
     }
   }
 
   const refresh = async () => {
-    if (!draft || draft.mode !== 'edit') {
+    const session = targetRef.current
+    if (!draft || draft.mode !== 'edit' || !session || session.accountName !== draft.account_name) {
       return
     }
+    const revealedNow = revealed !== null
     setRefreshing(true)
     try {
-      const fresh = await getAccount(projectId, env, draft.account_name)
+      const fresh = await getAccount(session.projectId, session.env, session.accountName)
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
       setDraft(draftFromAccount(fresh))
-      if (revealed) {
-        const data = await fetchAccountCredentials(projectId, env, draft.account_name)
+      if (revealedNow) {
+        const data = await fetchAccountCredentials(
+          session.projectId,
+          session.env,
+          session.accountName,
+        )
+        if (!isCurrentEditTarget(targetRef.current, session)) {
+          return
+        }
         setRevealed(data.credentials)
         setCredentialDraft({ ...data.credentials })
       }
       setConflict(false)
       setFormError(null)
     } catch (error) {
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
+      if (discardUnauthorized(error)) {
+        abandonEditor()
+        return
+      }
       setFormError(formatErrorMessage(error))
     } finally {
-      setRefreshing(false)
+      if (isCurrentEditTarget(targetRef.current, session)) {
+        setRefreshing(false)
+      }
     }
   }
 
   const save = async () => {
-    if (!draft) {
+    const session = targetRef.current
+    if (!draft || !session) {
       return
     }
     setFormError(null)
@@ -313,8 +384,18 @@ function AccountTable({
           },
         })
       }
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
       close()
     } catch (error) {
+      if (!isCurrentEditTarget(targetRef.current, session)) {
+        return
+      }
+      if (discardUnauthorized(error)) {
+        abandonEditor()
+        return
+      }
       if (isRevisionConflict(error)) {
         setConflict(true)
         setFormError(REVISION_CONFLICT_MESSAGE)
@@ -436,7 +517,9 @@ function AccountTable({
         destroyOnClose
         footer={
           <Space>
-            <Button onClick={close}>取消</Button>
+            <Button data-testid="account-cancel" onClick={close}>
+              取消
+            </Button>
             <Button
               type="primary"
               loading={saving}
