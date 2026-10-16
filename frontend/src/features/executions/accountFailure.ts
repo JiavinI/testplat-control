@@ -1,9 +1,10 @@
 import { formatErrorMessage } from '@/shared/ui/errorMessage'
 
+/** 只认「账号缺失 / 停用 / 流程缺失」。普通「身份不可用」（例如环境变量）保持原文。 */
 const ACCOUNT_PATTERNS = [
   /身份不存在:\s*([a-z][a-z0-9_]*)/,
-  /身份\s+([a-z][a-z0-9_]*)\s+不可用/,
-  /账号\s+([a-z][a-z0-9_]*)/,
+  /账号\s+([a-z][a-z0-9_]*)\s+在环境/,
+  /账号\s+([a-z][a-z0-9_]*)\s+的登录流程/,
 ]
 
 /** 从预检文案里取出账号名。匹配不到就返回 null，调用方保留原文。 */

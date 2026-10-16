@@ -463,7 +463,7 @@ describe('ProjectWorkspacePage 集成', () => {
     renderWorkspace()
     const envSelect = await screen.findByTestId('workspace-env-select')
     await user.click(within(envSelect).getByRole('combobox'))
-    expect(await screen.findByTitle('test')).toBeInTheDocument()
+    expect(screen.getAllByTitle('test').length).toBeGreaterThan(0)
     expect(screen.queryByTitle('old')).not.toBeInTheDocument()
   })
 

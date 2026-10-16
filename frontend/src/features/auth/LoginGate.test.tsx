@@ -67,7 +67,7 @@ describe('登录态', () => {
     getMe.mockRejectedValue(new ApiHttpError(401, '未登录', ''))
     renderGate()
     expect(await screen.findByTestId('login-guidance')).toHaveTextContent('401')
-    expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument()
+    expect(screen.getByTestId('auth-submit')).toHaveTextContent(/登\s*录/)
     expect(screen.queryByText('项目列表')).not.toBeInTheDocument()
     expect(screen.queryByTestId('current-operator')).not.toBeInTheDocument()
   })

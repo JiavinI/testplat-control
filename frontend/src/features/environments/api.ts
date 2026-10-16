@@ -57,7 +57,11 @@ function readJsonObject(
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new ApiParseError(`${label}.${key} 应为对象`, OMITTED)
   }
-  return value
+  const result: Record<string, unknown> = {}
+  for (const [field, item] of Object.entries(value)) {
+    result[field] = item
+  }
+  return result
 }
 
 function readTimeout(obj: Record<string, unknown>, label: string): number | null {
