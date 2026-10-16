@@ -80,6 +80,7 @@ def test_create_engine_with_plugins_uses_same_resolver(
     assert calls == [("fake_login",)]
 
 
+@pytest.mark.legacy_git_config
 def test_whitelisted_plugin_not_installed_is_503_without_record(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

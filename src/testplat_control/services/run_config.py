@@ -5,7 +5,7 @@ AuthTable、有效超时与参数，以及可持久化的非秘密摘要。
 
 已有 Web 环境时：api_hosts 与账号只来自数据库；``${secret:字段名}`` 按账号凭据
 字典解析，不读 ``TESTPLAT_*``，也不把凭据写进 ``os.environ``。
-尚无 Web 环境时：仍走 Git 环境文件与历史 auth 文件，供 4.0 夹具继续运行。
+正常 Web 缺少数据库环境时拒绝运行；仅显式兼容模式允许无 Web 环境的旧项目读取 Git。
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from testplat_engine import AuthTable, UnavailableAuth
 
+from testplat_control.config import settings
 from testplat_control.database.models import Project, ProjectEnvironment, TestAccount
 from testplat_control.services.auth_loader import (
     AuthLoadResult,
@@ -196,6 +197,16 @@ def resolve_run_config(
     """冻结同一环境版本下的账号、参数和摘要。调用方读完后结束会话事务。"""
     web = _load_consistent_web(db, project.id, env)
     if web is None:
+        has_web = (
+            db.query(ProjectEnvironment.id)
+            .filter(ProjectEnvironment.project_id == project.id)
+            .first()
+            is not None
+        )
+        if not settings.testplat_legacy_git_config or has_web:
+            raise HTTPException(
+                status_code=422, detail=f"数据库环境未配置: {env}，请到配置中创建并启用"
+            )
         return _legacy(
             project,
             env,
@@ -270,7 +281,7 @@ def _legacy(
     declared_names: set[str] | None = None,
     asset_defaults: dict[str, Any] | None = None,
 ) -> ResolvedRunConfig:
-    """没有 Web 环境行时沿用 Git 文件。平台账号路径不会进入这里。"""
+    """仅显式兼容且项目完全没有数据库环境时读取 Git。"""
     from testplat_engine import EngineError
 
     try:

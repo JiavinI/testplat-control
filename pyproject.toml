@@ -45,7 +45,10 @@ testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-markers = ["platform_auth: 不注入默认平台用户，走真实 cookie 会话"]
+markers = [
+    "platform_auth: 不注入默认平台用户，走真实 cookie 会话",
+    "legacy_git_config: 显式验证历史 Git 环境及 auth 兼容路径",
+]
 
 [tool.ruff]
 line-length = 100

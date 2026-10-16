@@ -40,6 +40,20 @@ def test_ensure_engine_compatible_succeeds_for_installed_0_5() -> None:
     assert version.startswith("0.5")
 
 
+def test_ensure_engine_compatible_rejects_old_request_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """旧远程 0.5.0 虽满足版本范围，但不能静默丢失请求覆盖。"""
+    import testplat_engine as eng
+
+    class LegacyRequest:
+        pass
+
+    monkeypatch.setattr(eng, "ApiExecutionRequest", LegacyRequest)
+    with pytest.raises(EngineBootstrapError, match="request_override.*scripts/dev.sh"):
+        ensure_engine_compatible()
+
+
 def test_ensure_engine_compatible_rejects_0_4(monkeypatch: pytest.MonkeyPatch) -> None:
     """Phase 3.3d 起 0.4.x 不再兼容：缺少跨执行缓存与九键 auth。"""
     monkeypatch.setattr("testplat_control.engine_bootstrap.version", lambda _dist: "0.4.0")

@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
 
+from testplat_control.config import settings
 from testplat_control.database.models import Project, ProjectEnvironment, Repo
 from testplat_control.services.repo_sync import (
     RepoSyncService,
@@ -41,8 +42,7 @@ def get_project(db: Session, repo: str, project: str) -> Project:
 def visible_envs(db: Session, project: Project) -> tuple[list[str], str | None]:
     """响应里的 envs / default_env。
 
-    已有 Web 环境时只返回启用的数据库环境；否则沿用 Git 同步写入的列，
-    这样尚未在 Web 建环境的项目仍可浏览 4.0 模板名。
+    默认只返回数据库环境。显式兼容模式且项目没有数据库环境时才展示 Git 模板名。
     """
     rows = db.query(ProjectEnvironment).filter(ProjectEnvironment.project_id == project.id).all()
     if rows:
@@ -51,7 +51,9 @@ def visible_envs(db: Session, project: Project) -> tuple[list[str], str | None]:
             project.default_env if project.default_env in names else (names[0] if names else None)
         )
         return names, default
-    return list(project.envs or []), project.default_env
+    if settings.testplat_legacy_git_config:
+        return list(project.envs or []), project.default_env
+    return [], None
 
 
 def require_env(db: Session, project: Project, env: str) -> str:
@@ -67,6 +69,8 @@ def require_env(db: Session, project: Project, env: str) -> str:
         if not match.enabled:
             raise HTTPException(status_code=422, detail=f"环境已停用: {env}")
         return env
+    if not settings.testplat_legacy_git_config:
+        raise HTTPException(status_code=422, detail="请先在配置中创建并启用项目环境")
     envs = list(project.envs or [])
     if env not in envs:
         raise HTTPException(status_code=422, detail=f"环境不在可选列表中: {env}")

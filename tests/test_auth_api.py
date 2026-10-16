@@ -39,6 +39,9 @@ from tests.auth_support import (
 )
 from tests.case_support import create_project, project_api_base, write_assets, write_env
 
+# 历史 Git 配置兼容测试；生产默认关闭。
+pytestmark = pytest.mark.legacy_git_config
+
 client = TestClient(app)
 API_ID = "api.demo.create"
 CASE_ID = "case.demo.create_then_get"

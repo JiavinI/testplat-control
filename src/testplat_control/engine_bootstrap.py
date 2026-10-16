@@ -208,6 +208,12 @@ def ensure_engine_compatible(login_plugins: Sequence[str] = ()) -> str:
             + f"。当前版本 {check_version}。"
         )
 
+    if "request_override" not in inspect.signature(eng.ApiExecutionRequest).parameters:
+        raise EngineBootstrapError(
+            "当前 testplat-engine 缺少 request_override 契约，不能提供已验证的请求内容覆盖。"
+            "本地开发请使用 bash scripts/dev.sh；远程交付需先发布 Engine 扩展再更新依赖锁定。"
+        )
+
     runtime = create_engine_with_plugins(login_plugins)
 
     execute = getattr(runtime, "execute", None)

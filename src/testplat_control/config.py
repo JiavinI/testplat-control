@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     testplat_master_key: str | None = None
     # 部署在 HTTPS 时设为 true，会话 cookie 才带 Secure。
     testplat_cookie_secure: bool = False
+    # 仅供历史 Git 环境/auth 调用方；正常 Web 必须配置数据库环境。
+    testplat_legacy_git_config: bool = False
 
     @field_validator("database_url", mode="before")
     @classmethod

@@ -593,6 +593,11 @@ def test_r3_merges_before_required_check(
     ctx = bootstrap_synced_project(client, tmp_path, files, repo_key="mergep", project_key="demo")
     base = ctx["base"]
 
+    initial = client.post(
+        f"{base}/environments",
+        json={"env": "test", "api_hosts": {"local": "http://10.0.0.5"}},
+    )
+    assert initial.status_code == 201
     missing_email = client.post(
         f"{base}/assets/api.user.create/run",
         json={"env": "test", "params": {}},
@@ -601,15 +606,14 @@ def test_r3_merges_before_required_check(
     assert "email" in missing_email.json()["detail"]
     assert fake.calls == []
 
-    created = client.post(
-        f"{base}/environments",
+    created = client.put(
+        f"{base}/environments/test",
         json={
-            "env": "test",
-            "api_hosts": {"local": "http://10.0.0.5"},
+            "revision": initial.json()["revision"],
             "case_params": {"username": "from-env", "email": "env@b.c"},
         },
     )
-    assert created.status_code == 201, created.text
+    assert created.status_code == 200, created.text
     filled = client.post(
         f"{base}/assets/api.user.create/run",
         json={"env": "test", "params": {}},

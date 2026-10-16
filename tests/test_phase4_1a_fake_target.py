@@ -586,6 +586,29 @@ def test_projects_isolate_accounts_and_hosts(world: dict) -> None:
     assert FALLBACK not in json.dumps(business.capture.snapshot())
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_missing_web_host_does_not_use_git(
+    world: dict,
+    monkeypatch: pytest.MonkeyPatch,
+    legacy: bool,
+) -> None:
+    """即使 Git 有可用 host，Web 环境缺少 host 也必须在联网前失败。"""
+    monkeypatch.setattr(settings, "testplat_legacy_git_config", legacy)
+    client, base = world["client"], world["ctx"]["base"]
+    response = client.post(f"{base}/environments", json={"env": "test", "api_hosts": {}})
+    assert response.status_code == 201
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("已有 Web 环境不可读取 Git 配置")
+
+    monkeypatch.setattr("testplat_control.services.run_config.load_auth", forbidden)
+    monkeypatch.setattr("testplat_control.services.run_config.load_project_environment", forbidden)
+    blocked = client.post(f"{base}/assets/api.gsb.anon/run", json={"env": "test"})
+    assert blocked.status_code == 422
+    assert world["login"].capture.snapshot() == []
+    assert world["business"].capture.snapshot() == []
+
+
 def test_unreferenced_incomplete_account_does_not_block(world: dict) -> None:
     """A9：未引用且未配全的账号不阻断匿名接口；被引用的缺失/停用在发请求前失败。"""
     client: TestClient = world["client"]

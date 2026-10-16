@@ -34,6 +34,9 @@ from tests.auth_support import (
 )
 from tests.case_support import create_project, project_api_base
 
+# 历史 Git 配置兼容测试；生产默认关闭。
+pytestmark = pytest.mark.legacy_git_config
+
 RECEIVED: list[dict[str, str]] = []
 
 

@@ -56,6 +56,8 @@ def main() -> int:
     work = Path(tempfile.mkdtemp(prefix="phase4_0_matrix_"))
     os.environ["DATABASE_URL"] = f"sqlite:///{work / 'control.db'}"
     os.environ.pop("TESTPLAT_REPOS_FILE", None)
+    # 历史矩阵专门验证 Git 环境兼容；正常 Web 默认关闭。
+    os.environ["TESTPLAT_LEGACY_GIT_CONFIG"] = "true"
     from fastapi.testclient import TestClient
 
     from testplat_control.adapters.fake_engine import FakeEngineAdapter

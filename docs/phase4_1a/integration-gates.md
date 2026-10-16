@@ -10,24 +10,28 @@
 
 `frontend/scripts/e2e-feature-navigation.mjs` 验证功能隔离、配置页签、窄屏抽屉和页面错误。通过 `E2E_STORAGE_STATE` 指定已有平台会话，或使用 `E2E_USERNAME` / `E2E_PASSWORD` 登录；不会自行注册、创建环境或修改账号。`E2E_RUN_API=1` 可额外运行 `E2E_API_ID`（默认 `api.gsb.account.balance`）。截图和报告默认放在 `/tmp/testplat-feature-navigation`。
 
+## 当前依赖入口（2026-10-17）
+
+当前使用 `bash scripts/dev.sh check` 验证相邻 Engine 0.5.1 本地候选；远程锁定仍为旧 0.5.0，直接启动会因缺少请求覆盖契约而失败。下表 Python / pytest 门禁统一使用显式本地入口；完整交付边界见 [本地交付说明](../local-engine-delivery-2026-10-16.md)。
+
 ## 当前门禁
 
 这些入口要么已经改成正常注册 / 登录，要么本来就不依赖平台会话覆盖。
 
 | 入口 | 作用 |
 |---|---|
-| `uv run ruff check .` / `uv run ruff format --check .` | 风格 |
-| `uv run pytest` | 单元与集成测试。pytest 仍会注入平台用户；这不能代替下面的独立脚本 |
+| `bash scripts/dev.sh ruff check .` / `bash scripts/dev.sh ruff format --check .` | 风格 |
+| `bash scripts/dev.sh pytest` | 单元与集成测试。pytest 仍会注入平台用户；这不能代替下面的独立脚本 |
 | `cd frontend && npm run lint` / `npm test -- --run` / `npm run build` | 前端 |
-| `uv run python scripts/phase4_1a_matrix.py` | 设计稿 §8.1 A1–A13。本地假服务证明 host、入参、凭据进入请求。真实 GSB 返回 502/504 仍算编排通过，不把业务成功写成必过 |
-| `uv run python scripts/phase4_0_e2e_real_assets.py` | 用资产仓 `f226b4a` 建 `test` / `pre`、账号 `gsb`、`login_profile=gsb_login`，再同步回归 |
-| `uv run python scripts/phase4_0_matrix.py` | Phase 4.0 HTTP 矩阵。截图前会登录并写入数据库环境。`PHASE4_SKIP_SCREENSHOTS=1` 只跳过截图 |
-| `uv run python scripts/phase4_1a_screenshots.py` | 390 与 1440：登录、环境、账号、运行选环境、历史中的操作人与配置版本 |
+| `bash scripts/dev.sh python scripts/phase4_1a_matrix.py` | 设计稿 §8.1 A1–A13。本地假服务证明 host、入参、凭据进入请求。真实 GSB 返回 502/504 仍算编排通过，不把业务成功写成必过 |
+| `bash scripts/dev.sh python scripts/phase4_0_e2e_real_assets.py` | 用资产仓 `f226b4a` 建 `test` / `pre`、账号 `gsb`、`login_profile=gsb_login`，再同步回归 |
+| `bash scripts/dev.sh python scripts/phase4_0_matrix.py` | Phase 4.0 HTTP 矩阵。截图前会登录并写入数据库环境。`PHASE4_SKIP_SCREENSHOTS=1` 只跳过截图 |
+| `bash scripts/dev.sh python scripts/phase4_1a_screenshots.py` | 390 与 1440：登录、环境、账号、运行选环境、历史中的操作人与配置版本 |
 | `scripts/auth_real_engine_matrix.py` | 3.3a HTTP。脚本内注册或登录 |
 | `scripts/login_real_engine_matrix.py` | 3.3b HTTP。同上 |
 | `scripts/login_vcode_real_engine_matrix.py` | 3.3c HTTP。需要本机 Redis |
 | `scripts/login_cache_real_engine_matrix.py` | 3.3d HTTP。并发客户端显式复制 cookie，不共享 CookieJar |
-| `./scripts/run_real_engine_matrix.sh` | 串起上面四段 HTTP 矩阵。浏览器步骤跳过，见下一节 |
+| `./scripts/run_real_engine_matrix.sh` | 历史包装入口，仍使用旧安装命令；本轮不作门禁，独立 HTTP 脚本可通过 `dev.sh python` 执行 |
 
 独立脚本的会话在 `tests/platform_gate.py`：`establish` 注册，用户名已存在则登录；`inherit_cookies` / `inherit_httpx` 按 domain 和 path 复制 `testplat_session`。
 
@@ -50,15 +54,15 @@
 
 正常使用以数据库为准。项目只要有任意一行 Web 环境，运行就使用数据库里的 host、账号和启停，Git 同步不覆盖这些行。
 
-项目还没有任何 Web 环境行时，运行仍读取 Git 环境文件和历史 `config/auth/{env}.yaml`。这是唯一的兼容层：有没有 Web 行可以直接查库，不是按请求临时猜测。`auth_loader` 继续负责 profile 校验和 `SecretStr` 构造，本批不删除。
+默认模式下，没有数据库环境行就拒绝运行；只有显式设置 `TESTPLAT_LEGACY_GIT_CONFIG=true`，且项目完全没有数据库环境行时，才允许读取历史 Git 环境与 `config/auth/{env}.yaml`。已有数据库环境的项目不得因缺失、停用配置而回退。`auth_loader` 的旧入口保留，pytest 用 `legacy_git_config` 标记逐项启用兼容测试；历史 Phase 4.0 矩阵在脚本内明确开启。
 
-4.1a 矩阵在创建 Web 环境后断言请求使用数据库凭据，不读取 `TESTPLAT_GSB_*`。后续批次应把「无 Web 行则读 Git」改成显式兼容开关，或在确认没有调用方之后删除该分支。
+4.1a 矩阵在创建 Web 环境后断言请求使用数据库凭据，不读取 `TESTPLAT_GSB_*`。本轮已把「无 Web 行则读 Git」改为显式兼容开关，并对默认路径及兼容路径分别回归。
 
 ## 开发代理
 
 `frontend/vite.config.ts` 的 `^/api(?:/|$)` 代理（只匹配 `/api` 与 `/api/…`，避免拦截 `/apis` 页面） `changeOrigin` 为 false，转发时保留浏览器的 Host。后端 `assert_same_origin` 不改：带了 Origin 的变更请求必须和 Host 对应的站点一致；没有 Origin 的脚本客户端仍可调用。截图直接启动这份默认配置（`pnpm exec vite`，不再另写代理），并用 `VITE_DEV_PROXY_TARGET` 指向临时后端。
 
-`uv run python scripts/phase4_1a_vite_login_check.py` 用默认 `npm run dev` 走注册、登录、保存环境和注销。报告在 `frontend/screenshots/phase4_1a/vite-login-check.json`，只记状态码。
+`bash scripts/dev.sh python scripts/phase4_1a_vite_login_check.py` 用默认 `npm run dev` 走注册、登录、保存环境和注销。报告在 `frontend/screenshots/phase4_1a/vite-login-check.json`，只记状态码。
 
 ## 脚本数据库隔离
 
@@ -84,4 +88,4 @@ A12 的重启子进程会再次登录，得到父进程看不到的新会话。�
 
 接口详情、完整环境 URL、请求内容临时编辑和响应优先展示见 [本轮验收](../api-workspace-2026-10-16.md)。`node frontend/scripts/e2e-api-workspace.mjs` 只做浏览器隔离 mock，不触碰数据库；真实余额的本轮证据来自独立临时数据库，不能把 mock 响应当成业务验收。
 
-`bash scripts/verify-local-engine.sh` 构建本地 Engine wheel，在隔离环境安装并执行 19 项假服务集成。Control 仍锁旧远程 Engine，发布顺序及门禁见 [依赖交付方案](../local-engine-delivery-2026-10-16.md)。搜索商品与完整场景仍未完成真实验收。
+`bash scripts/verify-local-engine.sh` 构建本地 Engine wheel，在隔离环境安装并执行假服务集成、默认配置边界、启动诊断及兼容契约测试。Control 仍锁旧远程 Engine，发布顺序及门禁见 [依赖交付方案](../local-engine-delivery-2026-10-16.md)。搜索商品与完整场景仍未完成真实验收。

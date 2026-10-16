@@ -12,6 +12,7 @@ from testplat_control.database.session import SessionLocal
 from testplat_control.services.run_config import resolve_run_config
 
 
+@pytest.mark.legacy_git_config
 def test_legacy_resolve_passes_repo_project_env_as_cache_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

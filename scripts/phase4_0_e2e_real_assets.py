@@ -137,7 +137,8 @@ def main() -> int:
         report["projects"] = [item["id"] for item in projects]
         assert any(item["id"] == "main/gsb" for item in projects), projects
         before_web = client.get("/repos/main/projects/gsb").json()
-        assert "test" in (before_web.get("envs") or [])
+        assert before_web.get("envs") == []
+        assert before_web.get("default_env") is None
         profiles = client.get("/repos/main/projects/gsb/login-profiles")
         assert profiles.status_code == 200, profiles.status_code
         names = [item["name"] for item in profiles.json()["profiles"]]
