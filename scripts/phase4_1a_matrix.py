@@ -7,6 +7,9 @@
 用法（Control 仓库根）::
 
     uv run python scripts/phase4_1a_matrix.py
+
+``PHASE4_1A_INJECT_LEAK=1`` 把已签发的业务 token 和最新会话写进被监听日志，LEAK 必须失败。
+默认关闭，不进入正常运行路径。
 """
 
 from __future__ import annotations
@@ -39,6 +42,9 @@ USER_B = "buyer-user-b"
 FALLBACK = "should-not-fallback-99"
 USER_ID = "user-id-9"
 SECRETS = [PLATFORM_PASSWORD, PASS_A, PASS_B, NEW_PASS, FALLBACK]
+PASSWORD_SECRETS = (PLATFORM_PASSWORD, PASS_A, PASS_B, NEW_PASS, FALLBACK)
+ISSUED_BUSINESS_TOKENS: list[str] = []
+SESSION_COOKIES: list[str] = []
 
 
 def token_for(password: str) -> str:
@@ -143,6 +149,62 @@ def remember(*values: str) -> None:
             SECRETS.append(value)
 
 
+def note_business_token(value: str) -> None:
+    if value and value not in ISSUED_BUSINESS_TOKENS:
+        ISSUED_BUSINESS_TOKENS.append(value)
+        remember(value)
+
+
+def note_session(value: str | None) -> None:
+    if value and value not in SESSION_COOKIES:
+        SESSION_COOKIES.append(value)
+        remember(value)
+
+
+def scan_secret_carriers(
+    *,
+    logs: str,
+    sqlite_blob: bytes,
+    traffic: list[tuple[str, int, str]],
+) -> None:
+    """响应正文、日志和 SQLite 不得含密码、主密钥、业务 token 或会话 cookie。
+
+    凭据接口可以回显账号密码，但仍不得出现 token 或会话。断言文案不含秘密本身。
+    """
+    passwords = [item for item in PASSWORD_SECRETS if item]
+    sensitive: list[str] = []
+    for item in (*ISSUED_BUSINESS_TOKENS, *SESSION_COOKIES, *SECRETS):
+        if item and item not in passwords and item not in sensitive:
+            sensitive.append(item)
+    for secret in (*passwords, *sensitive):
+        if secret in logs:
+            raise AssertionError("log")
+        if secret.encode() in sqlite_blob:
+            raise AssertionError("sqlite")
+    for url, _status, text in traffic:
+        for secret in sensitive:
+            if secret in text:
+                raise AssertionError("response")
+        if url.endswith("/credentials"):
+            continue
+        for secret in passwords:
+            if secret in text:
+                raise AssertionError("response")
+
+
+def inject_leak_markers() -> None:
+    """测试钩子：把实际派发的业务 token 和最新会话写进 testplat_engine 日志。"""
+    if os.environ.get("PHASE4_1A_INJECT_LEAK") != "1":
+        return
+    if not ISSUED_BUSINESS_TOKENS:
+        note_business_token(token_for(PASS_A))
+    if not SESSION_COOKIES:
+        return
+    logger = logging.getLogger("testplat_engine")
+    logger.info("%s", ISSUED_BUSINESS_TOKENS[0])
+    logger.info("%s", SESSION_COOKIES[-1])
+
+
 class Capture:
     def __init__(self) -> None:
         self.events: list[dict[str, Any]] = []
@@ -185,6 +247,7 @@ class Handler(BaseHTTPRequestHandler):
         )
         if parsed.path == "/site/login":
             issued = token_for(query.get("password", ""))
+            note_business_token(issued)
             self._json(200, {"code": 0, "data": {"hash": issued, "userId": USER_ID}})
             return
         if parsed.path == "/slow":
@@ -548,9 +611,8 @@ def main() -> int:
     biz_a = start_server(Capture())
     biz_b = start_server(Capture())
     raw = TestClient(app)
-    establish(raw, username=PLATFORM_USER, password=PLATFORM_PASSWORD)
-    token = raw.cookies.get("testplat_session")
-    remember(str(token or ""))
+    token = establish(raw, username=PLATFORM_USER, password=PLATFORM_PASSWORD)
+    note_session(token)
     client = Trace(raw)
     ctx = bootstrap_synced_project(
         raw, work / "git", project_files(), repo_key="mx", project_key="demo"
@@ -605,6 +667,9 @@ def main() -> int:
                 json={"username": PLATFORM_USER, "password": PLATFORM_PASSWORD},
             )
             assert again.status_code == 200
+            new_token = raw.cookies.get("testplat_session")
+            assert isinstance(new_token, str) and new_token != token, "relogin_session"
+            note_session(new_token)
             created = create_env(base, "lab", biz_a.base, login.base, timeout_seconds=2)
             assert created["updated_by"] == PLATFORM_USER
             state["lab_revision"] = created["revision"]
@@ -946,9 +1011,8 @@ def main() -> int:
             payload = json.loads(line[-1]) if line else {"ok": False, "status": proc.returncode}
             assert payload.get("ok") is True, payload
             blob = db_path.read_bytes()
-            assert token.encode() not in blob
-            assert master.encode() not in blob
-            assert PASS_A.encode() not in blob
+            for secret in (token, master, PASS_A, *SESSION_COOKIES, *ISSUED_BUSINESS_TOKENS):
+                assert secret.encode() not in blob, "sqlite"
             return "restart decrypts; sqlite has no plaintext"
 
         def a13() -> str:
@@ -1125,22 +1189,19 @@ def main() -> int:
             creds = client.get(f"{base}/environments/pre/accounts/gsb/credentials")
             assert creds.status_code == 200
             assert "no-store" in creds.headers.get("cache-control", "")
+            inject_leak_markers()
             blob_logs = "\n".join(logs)
-            blob_db = db_path.read_bytes()
-            banned = [PASS_A, PASS_B, NEW_PASS, PLATFORM_PASSWORD, FALLBACK, master, str(token)]
-            for secret in banned:
-                assert secret not in blob_logs, "log"
-                assert secret.encode() not in blob_db, "sqlite"
-            for url, _status, text in client.traffic:
-                if url.endswith("/credentials"):
-                    assert master not in text
-                    assert str(token) not in text
-                    continue
-                for secret in banned:
-                    assert secret not in text, url
+            scan_secret_carriers(
+                logs=blob_logs,
+                sqlite_blob=db_path.read_bytes(),
+                traffic=client.traffic,
+            )
             joined = blob_logs + "\n".join(text for _url, _status, text in client.traffic)
             assert "Traceback" not in joined
-            return f"responses logs sqlite clean; live_http={state.get('live_http')}"
+            return (
+                f"responses logs sqlite clean; tokens={len(ISSUED_BUSINESS_TOKENS)} "
+                f"sessions={len(SESSION_COOKIES)}; live_http={state.get('live_http')}"
+            )
 
         _check("REAL", real_assets)
         _check("LEAK", leak)

@@ -2,6 +2,7 @@
 
 目标服务不可达时允许 transport / timeout，但执行记录须含 operator、env、commit、config_revision。
 不把真实 GSB 业务成功当作通过条件。资产仓用临时副本，不改原仓。
+导入 Control 之前换成独立的临时数据库，主密钥只用于该库。
 """
 
 from __future__ import annotations
@@ -72,6 +73,10 @@ def _template_hosts(repo: Path) -> dict[str, str]:
         (repo / "projects/gsb/config/envs/test.yaml").read_text(encoding="utf-8")
     )
     hosts = payload.get("api_hosts") or {}
+    # 隔离回归可把地址换成不可达回环，避免打到公网。默认仍用资产模板。
+    override = os.environ.get("PHASE4_E2E_HOST_OVERRIDE", "").strip()
+    if override:
+        return {str(key): override for key in hosts}
     return {str(key): str(value) for key, value in hosts.items()}
 
 
@@ -91,25 +96,27 @@ def _record_meta(client, record_id: str) -> dict:
 
 
 def main() -> int:
-    assets_src = _assets_src()
-    # 主密钥必须在导入 Control 之前写入，进程不会自动生成。
+    # Settings 在导入时读取环境变量。必须先换到独立库，再生成只属于该库的主密钥。
+    work = Path(tempfile.mkdtemp(prefix="phase4_e2e_assets_"))
+    os.environ["DATABASE_URL"] = f"sqlite:///{work / 'control.db'}"
     os.environ["TESTPLAT_MASTER_KEY"] = Fernet.generate_key().decode("ascii")
     os.environ.pop("TESTPLAT_REPOS_FILE", None)
-    sys.path.insert(0, str(ROOT / "src"))
-    sys.path.insert(0, str(ROOT))
-    from fastapi.testclient import TestClient
-
-    from testplat_control.main import app
-    from tests.platform_gate import establish
-    from tests.repo_support import attach_repos_config, commit_all, sync_repo
-
-    work = Path(tempfile.mkdtemp(prefix="phase4_e2e_assets_"))
     report: dict = {
-        "assets_src": str(assets_src),
         "expected_sha": EXPECTED_SHA,
         "real_gsb_business_pass_required": False,
+        "database_isolated": True,
     }
     try:
+        assets_src = _assets_src()
+        report["assets_src"] = str(assets_src)
+        sys.path.insert(0, str(ROOT / "src"))
+        sys.path.insert(0, str(ROOT))
+        from fastapi.testclient import TestClient
+
+        from testplat_control.main import app
+        from tests.platform_gate import establish
+        from tests.repo_support import attach_repos_config, commit_all, sync_repo
+
         if not assets_src.is_dir():
             raise RuntimeError("assets_checkout_missing")
         repo_path, url = clone_assets_copy(work, assets_src)

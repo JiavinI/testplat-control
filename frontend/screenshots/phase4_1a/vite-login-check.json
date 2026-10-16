@@ -1,0 +1,13 @@
+{
+  "vite_entry": "npm run dev",
+  "config": "frontend/vite.config.ts",
+  "change_origin": false,
+  "direct_register": 200,
+  "default_vite_login": 200,
+  "mismatched_origin": 403,
+  "browser_register": 200,
+  "browser_login": 200,
+  "browser_config_save": 201,
+  "browser_logout": 204,
+  "ok": true
+}

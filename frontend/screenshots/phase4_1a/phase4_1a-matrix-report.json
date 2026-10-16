@@ -41,7 +41,7 @@
     {
       "item": "A8",
       "status": "PASS",
-      "evidence": "web kept; commit 2986c88"
+      "evidence": "web kept; commit a8594aa"
     },
     {
       "item": "A9",
@@ -76,7 +76,7 @@
     {
       "item": "LEAK",
       "status": "PASS",
-      "evidence": "responses logs sqlite clean; live_http=200"
+      "evidence": "responses logs sqlite clean; tokens=3 sessions=2; live_http=200"
     }
   ],
   "passed": 15,

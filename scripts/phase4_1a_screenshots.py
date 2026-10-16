@@ -122,6 +122,7 @@ def main() -> int:
         stdout=(log_dir / "backend.log").open("w"),
         stderr=subprocess.STDOUT,
     )
+    # 与默认 npm run dev 相同，使用 frontend/vite.config.ts（changeOrigin 为 false）。
     front_env = env.copy()
     front_env["VITE_DEV_PROXY_TARGET"] = f"http://127.0.0.1:{backend_port}"
     frontend = subprocess.Popen(
@@ -129,8 +130,6 @@ def main() -> int:
             "pnpm",
             "exec",
             "vite",
-            "--config",
-            str(ROOT / "frontend" / "scripts" / "vite.screenshot.mjs"),
             "--host",
             "127.0.0.1",
             "--port",

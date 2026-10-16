@@ -46,6 +46,26 @@
 
 4.1a 矩阵在创建 Web 环境后断言请求使用数据库凭据，不读取 `TESTPLAT_GSB_*`。后续批次应把「无 Web 行则读 Git」改成显式兼容开关，或在确认没有调用方之后删除该分支。
 
+## 开发代理
+
+`frontend/vite.config.ts` 的 `/api` 代理 `changeOrigin` 为 false，转发时保留浏览器的 Host。后端 `assert_same_origin` 不改：带了 Origin 的变更请求必须和 Host 对应的站点一致；没有 Origin 的脚本客户端仍可调用。截图直接启动这份默认配置（`pnpm exec vite`，不再另写代理），并用 `VITE_DEV_PROXY_TARGET` 指向临时后端。
+
+`uv run python scripts/phase4_1a_vite_login_check.py` 用默认 `npm run dev` 走注册、登录、保存环境和注销。报告在 `frontend/screenshots/phase4_1a/vite-login-check.json`，只记状态码。
+
+## 脚本数据库隔离
+
+`scripts/phase4_0_e2e_real_assets.py` 在导入 Control 之前创建临时 SQLite，并设置 `DATABASE_URL` 与只属于该库的 `TESTPLAT_MASTER_KEY`。调用者传入的文件库和原密钥不会被这把临时密钥覆盖。`PHASE4_E2E_HOST_OVERRIDE` 可把模板地址换成不可达回环，只给隔离回归用；默认仍读资产模板。
+
+`scripts/phase4_0_matrix.py` 同样在导入前把 `DATABASE_URL` 指到临时文件，避免注册用户写入调用者的库。它不更换主密钥。
+
+`scripts/phase4_1a_matrix.py` 原本就先设置临时库再生成主密钥。截图脚本只在子进程环境里同时设置这两项，父进程不导入 Control。HTTP 矩阵只导入 `engine_bootstrap`，不打开数据库，也不更换主密钥。
+
+## 泄密扫描
+
+矩阵收集假服务实际签发的业务 token，以及注册和注销后重新登录得到的平台会话 cookie。LEAK 检查响应正文、监听日志和 SQLite。凭据接口可以回显账号密码，但不能出现这些 token 或会话。报告落盘前会脱敏。
+
+`PHASE4_1A_INJECT_LEAK=1` 会把业务 token 和最新会话写进 `testplat_engine` 日志，LEAK 必须失败。默认不打开。
+
 ## 已知偏差
 
-`frontend/vite.config.ts` 的开发代理设置了 `changeOrigin: true`。浏览器的 `Origin` 仍是 Vite 地址，后端 `assert_same_origin` 用改写后的 `Host` 比较，登录和注册返回 403，文案是「Origin 与当前站点不一致」。本批不改 `frontend/src` 和 `vite.config.ts`。截图使用 `frontend/scripts/vite.screenshot.mjs`，其中 `changeOrigin` 为 false，只为拍到登录后的页面。
+真实 GSB 业务成功不是自动门禁。传输失败或超时可以留下执行记录，记录里要有 operator、env、commit、config_revision。不要把 `live_http=200` 写成业务通过。

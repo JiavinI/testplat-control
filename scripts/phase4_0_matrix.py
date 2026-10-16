@@ -52,6 +52,10 @@ def _check(item: str, desc: str, fn: Callable[[], str]) -> None:
 
 
 def main() -> int:
+    # 在任何 Control 导入之前换到临时库。本脚本会注册用户，但不更换调用者的主密钥。
+    work = Path(tempfile.mkdtemp(prefix="phase4_0_matrix_"))
+    os.environ["DATABASE_URL"] = f"sqlite:///{work / 'control.db'}"
+    os.environ.pop("TESTPLAT_REPOS_FILE", None)
     from fastapi.testclient import TestClient
 
     from testplat_control.adapters.fake_engine import FakeEngineAdapter
@@ -70,7 +74,6 @@ def main() -> int:
     client = TestClient(app)
     # 同步与执行都要求平台会话。脚本里没有 pytest 的依赖覆盖。
     establish(client)
-    work = Path(tempfile.mkdtemp(prefix="phase4_0_matrix_"))
 
     # ---- §7-1 ----
     def t1() -> str:
