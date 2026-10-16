@@ -178,6 +178,8 @@ function AccountTable({
   const updateMutation = useUpdateAccount(projectId, env)
   const discardUnauthorized = useUnauthorizedGuard()
   const targetRef = useRef<EditTarget | null>(null)
+  const refreshingRef = useRef(false)
+  const refreshTicket = useRef(0)
   const [draft, setDraft] = useState<AccountDraft | null>(null)
   const [revealed, setRevealed] = useState<Record<string, string> | null>(null)
   const [credentialDraft, setCredentialDraft] = useState<Record<string, string>>({})
@@ -205,11 +207,14 @@ function AccountTable({
       env,
       accountName: null,
     })
+    refreshTicket.current += 1
+    refreshingRef.current = false
     setDraft(null)
     setRevealed(null)
     setCredentialDraft({})
     setFormError(null)
     setConflict(false)
+    setRefreshing(false)
   }, [projectId, env])
 
   const openCreate = () => {
@@ -232,6 +237,8 @@ function AccountTable({
 
   const close = () => {
     begin(null)
+    refreshTicket.current += 1
+    refreshingRef.current = false
     setDraft(null)
     clearSecrets()
     setConflict(false)
@@ -284,45 +291,61 @@ function AccountTable({
     if (!draft || draft.mode !== 'edit' || !session || session.accountName !== draft.account_name) {
       return
     }
+    if (refreshingRef.current) {
+      return
+    }
     const revealedNow = revealed !== null
+    const ticket = refreshTicket.current + 1
+    refreshTicket.current = ticket
+    refreshingRef.current = true
     setRefreshing(true)
     try {
       const fresh = await getAccount(session.projectId, session.env, session.accountName)
-      if (!isCurrentEditTarget(targetRef.current, session)) {
+      if (!isCurrentEditTarget(targetRef.current, session) || refreshTicket.current !== ticket) {
         return
       }
-      setDraft(draftFromAccount(fresh))
+      // 凭据和账号一起写入。先落 revision 会让旧凭据草稿配上新版本，绕过乐观锁。
+      let nextCredentials: Record<string, string> | null = null
       if (revealedNow) {
         const data = await fetchAccountCredentials(
           session.projectId,
           session.env,
           session.accountName,
         )
-        if (!isCurrentEditTarget(targetRef.current, session)) {
+        if (!isCurrentEditTarget(targetRef.current, session) || refreshTicket.current !== ticket) {
           return
         }
-        setRevealed(data.credentials)
-        setCredentialDraft({ ...data.credentials })
+        nextCredentials = data.credentials
+      }
+      setDraft(draftFromAccount(fresh))
+      if (nextCredentials) {
+        setRevealed(nextCredentials)
+        setCredentialDraft({ ...nextCredentials })
       }
       setConflict(false)
       setFormError(null)
     } catch (error) {
-      if (!isCurrentEditTarget(targetRef.current, session)) {
+      if (!isCurrentEditTarget(targetRef.current, session) || refreshTicket.current !== ticket) {
         return
       }
       if (discardUnauthorized(error)) {
         abandonEditor()
         return
       }
+      // 失败时不写入新版本，避免「新 revision + 旧凭据」。
       setFormError(formatErrorMessage(error))
     } finally {
-      if (isCurrentEditTarget(targetRef.current, session)) {
+      if (refreshTicket.current === ticket) {
+        refreshingRef.current = false
         setRefreshing(false)
       }
     }
   }
 
   const save = async () => {
+    if (refreshingRef.current) {
+      return
+    }
     const session = targetRef.current
     if (!draft || !session) {
       return
@@ -523,6 +546,7 @@ function AccountTable({
             <Button
               type="primary"
               loading={saving}
+              disabled={refreshing}
               data-testid="account-save"
               onClick={() => {
                 void save()
@@ -557,7 +581,7 @@ function AccountTable({
                 }
               />
             ) : null}
-            {formError && !conflict ? (
+            {formError && formError !== REVISION_CONFLICT_MESSAGE ? (
               <Alert type="error" showIcon style={{ marginBottom: 12 }} message={formError} />
             ) : null}
             {profilesError ? (

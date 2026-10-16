@@ -396,6 +396,101 @@ describe('测试账号凭据', () => {
     expect(screen.getByLabelText('展示名')).toHaveValue('另一个')
     expect(screen.getByTestId('editing-revision')).toHaveTextContent('版本 4')
   })
+
+  it('刷新凭据未返回时保存不会提交新版本和旧凭据', async () => {
+    const user = userEvent.setup({ delay: null })
+    const pendingCreds = deferred<AccountCredentials>()
+    getAccountCredentials
+      .mockResolvedValueOnce({
+        account_name: 'gsb',
+        credentials: { username: 'old-user', password: 'old-password' },
+      })
+      .mockImplementationOnce(() => pendingCreds.promise)
+    listEnvironments.mockResolvedValue([testEnv])
+    listAccounts.mockResolvedValue([gsbAccount])
+    updateAccount.mockRejectedValueOnce(
+      new ApiHttpError(409, '配置版本冲突，请刷新后再保存', ''),
+    )
+    getAccount.mockResolvedValue({ ...gsbAccount, revision: 2, display_name: '服务器名称' })
+    renderSection(<AccountSection projectId="main/gsb" />)
+
+    await user.click(await screen.findByTestId('account-edit-gsb'))
+    await user.click(await screen.findByTestId('reveal-credentials'))
+    expect(await screen.findByLabelText('username')).toHaveValue('old-user')
+    fireEvent.change(screen.getByLabelText('password'), { target: { value: 'my-new-password' } })
+    await user.click(screen.getByTestId('account-save'))
+    expect(await screen.findByTestId('revision-conflict')).toBeInTheDocument()
+    expect(updateAccount).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByTestId('revision-refresh'))
+    await waitFor(() => {
+      expect(getAccountCredentials).toHaveBeenCalledTimes(2)
+    })
+    expect(screen.getByTestId('editing-revision')).toHaveTextContent('版本 1')
+    expect(screen.getByLabelText('username')).toHaveValue('old-user')
+    expect(screen.getByLabelText('password')).toHaveValue('my-new-password')
+    const saveButton = screen.getByTestId('account-save')
+    expect(saveButton).toBeDisabled()
+    saveButton.removeAttribute('disabled')
+    fireEvent.click(saveButton)
+    expect(updateAccount).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(updateAccount.mock.calls)).not.toContain('"revision":2')
+
+    await act(async () => {
+      pendingCreds.resolve({
+        account_name: 'gsb',
+        credentials: { username: 'server-new-user', password: 'server-new-password' },
+      })
+    })
+    expect(screen.getByTestId('editing-revision')).toHaveTextContent('版本 2')
+    expect(screen.getByLabelText('username')).toHaveValue('server-new-user')
+    expect(screen.getByLabelText('password')).toHaveValue('server-new-password')
+    expect(screen.getByTestId('account-save')).toBeEnabled()
+  })
+
+  it('刷新凭据失败时保留旧版本，不能留下新 revision 和旧凭据', async () => {
+    const user = userEvent.setup({ delay: null })
+    getAccountCredentials
+      .mockResolvedValueOnce({
+        account_name: 'gsb',
+        credentials: { username: 'old-user', password: 'old-password' },
+      })
+      .mockRejectedValueOnce(new ApiHttpError(500, '凭据刷新失败', ''))
+    listEnvironments.mockResolvedValue([testEnv])
+    listAccounts.mockResolvedValue([gsbAccount])
+    updateAccount.mockRejectedValue(new ApiHttpError(409, '配置版本冲突，请刷新后再保存', ''))
+    getAccount.mockResolvedValue({ ...gsbAccount, revision: 2, display_name: '服务器名称' })
+    renderSection(<AccountSection projectId="main/gsb" />)
+
+    await user.click(await screen.findByTestId('account-edit-gsb'))
+    await user.click(await screen.findByTestId('reveal-credentials'))
+    expect(await screen.findByLabelText('username')).toHaveValue('old-user')
+    fireEvent.change(screen.getByLabelText('password'), { target: { value: 'my-new-password' } })
+    await user.click(screen.getByTestId('account-save'))
+    expect(await screen.findByTestId('revision-conflict')).toBeInTheDocument()
+
+    await user.click(screen.getByTestId('revision-refresh'))
+    expect(await screen.findByText('凭据刷新失败')).toBeInTheDocument()
+    expect(screen.getByTestId('editing-revision')).toHaveTextContent('版本 1')
+    expect(screen.getByLabelText('username')).toHaveValue('old-user')
+    expect(screen.getByLabelText('password')).toHaveValue('my-new-password')
+    expect(screen.getByTestId('account-save')).toBeEnabled()
+
+    await user.click(screen.getByTestId('account-save'))
+    await waitFor(() => {
+      expect(updateAccount).toHaveBeenCalledTimes(2)
+    })
+    const second = updateAccount.mock.calls[1]?.[3] as {
+      revision: number
+      credentials?: Record<string, string>
+    }
+    expect(second.revision).toBe(1)
+    expect(second.credentials).toEqual({
+      username: 'old-user',
+      password: 'my-new-password',
+    })
+    expect(JSON.stringify(updateAccount.mock.calls)).not.toContain('"revision":2')
+  })
 })
 
 describe('缓存项目切换', () => {
