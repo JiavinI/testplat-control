@@ -1,3 +1,4 @@
+/** 历史脚本：4.1a 当前门禁不再运行。运行环境下拉只使用数据库环境，见 docs/phase4_1a/integration-gates.md。 */
 /**
  * Phase 3 浏览器门禁：Case 元信息/运行/历史 + API 回归 + 横向溢出 + console/网络。
  * 截图写入 screenshots/phase3/；Phase 3.3a 身份相关截图写入 screenshots/phase3_3/

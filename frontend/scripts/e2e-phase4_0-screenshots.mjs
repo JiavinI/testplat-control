@@ -1,14 +1,18 @@
 /**
- * Phase 4.0 §7-10：390 / 1440 截图 — 项目列表（同步）、环境选择、历史 env+SHA
+ * Phase 4.0 §7-10：390 / 1440 截图 — 项目列表（同步）、环境选择、历史 env+SHA。
+ * 4.1a 起先注册或登录，再写入数据库环境。运行下拉只列出数据库环境。
  */
 import { chromium } from 'playwright'
 import fs from 'node:fs'
 import path from 'node:path'
+import { captureLoggedOut, submitPlatformAuth } from './platform-session.mjs'
 
 const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:5173'
 const OUT = path.resolve(process.env.E2E_OUT_DIR || 'screenshots/phase4_0')
 const REPO = process.env.E2E_REPO || 'main'
 const PROJECT = process.env.E2E_PROJECT || 'demo'
+const USER = process.env.E2E_USERNAME || 'shotop40'
+const PASS = process.env.E2E_PASSWORD || 'shot-pass-1'
 const BACKEND = process.env.E2E_BACKEND || 'http://127.0.0.1:8000'
 fs.mkdirSync(OUT, { recursive: true })
 
@@ -68,10 +72,32 @@ async function ensureHistory(page) {
   }
 }
 
-async function runViewport(browser, vp) {
+async function seedEnv(page) {
+  const response = await page.request.post(
+    `${BASE}/api/repos/${REPO}/projects/${PROJECT}/environments`,
+    {
+      data: {
+        env: 'test',
+        api_hosts: { local: 'http://127.0.0.1:9' },
+        enabled: true,
+        timeout_seconds: 5,
+      },
+    },
+  )
+  if (response.status() !== 201 && response.status() !== 409) {
+    throw new Error(`写入环境失败 HTTP ${response.status()}`)
+  }
+}
+
+async function runViewport(browser, vp, mode) {
   const context = await browser.newContext({ viewport: { width: vp.w, height: vp.h } })
   const page = await context.newPage()
   const prefix = vp.prefix
+
+  await captureLoggedOut(page, BASE)
+  await shot(page, `${prefix}-login`)
+  await submitPlatformAuth(page, { username: USER, password: PASS, mode })
+  await seedEnv(page)
 
   // 1) 项目列表含同步
   await page.goto(`${BASE}/projects`, { waitUntil: 'networkidle' })
@@ -109,17 +135,18 @@ async function runViewport(browser, vp) {
   await shot(page, `${prefix}-history-env-sha`)
 
   await context.close()
-  return [`${prefix}-project-list-sync`, `${prefix}-env-select`, `${prefix}-history-env-sha`]
+  return [`${prefix}-login`, `${prefix}-project-list-sync`, `${prefix}-env-select`, `${prefix}-history-env-sha`]
 }
 
 const browser = await launch()
 try {
   const names = []
-  for (const vp of [
-    { w: 390, h: 844, prefix: 'mobile-390x844' },
-    { w: 1440, h: 900, prefix: 'desktop-1440x900' },
-  ]) {
-    names.push(...(await runViewport(browser, vp)))
+  const viewports = [
+    { w: 1440, h: 900, prefix: 'desktop-1440x900', mode: 'register' },
+    { w: 390, h: 844, prefix: 'mobile-390x844', mode: 'login' },
+  ]
+  for (const vp of viewports) {
+    names.push(...(await runViewport(browser, vp, vp.mode)))
   }
   fs.writeFileSync(
     path.join(OUT, 'screenshot-manifest.json'),

@@ -69,9 +69,21 @@ def leaks(text: str) -> int:
     return sum(text.count(t) for t in SEARCH_TARGETS)
 
 
+def _establish():
+    """延迟导入，避免在修改 sys.path 之前触发 E402。"""
+    root = Path(__file__).resolve().parents[1]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from tests.platform_gate import establish
+
+    return establish
+
+
 class Matrix:
     def __init__(self) -> None:
         self.client = httpx.Client(timeout=60)
+        # 配置与执行接口需要平台会话；cookie 留在这个客户端上。
+        _establish()(self.client, auth_base=BACKEND)
         self.rows: list[dict[str, Any]] = []
         self.projects: dict[str, str] = {}
         self.real_422: dict[str, Any] = {}

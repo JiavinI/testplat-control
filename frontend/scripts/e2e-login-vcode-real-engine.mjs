@@ -1,3 +1,4 @@
+/** 历史脚本：4.1a 当前门禁不再运行。运行环境下拉只使用数据库环境，见 docs/phase4_1a/integration-gates.md。 */
 /**
  * Phase 3.3c 真实 Engine：vcode_redis 登录成功 / Redis 不可达失败截图（390 / 1440）。
  * 输出：frontend/screenshots/phase3_3c-real-engine/

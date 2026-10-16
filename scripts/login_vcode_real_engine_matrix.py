@@ -158,9 +158,19 @@ def _reset_commandstats() -> None:
         client.close()
 
 
+def _establish():
+    root = Path(__file__).resolve().parents[1]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from tests.platform_gate import establish
+
+    return establish
+
+
 class Matrix:
     def __init__(self) -> None:
         self.client = httpx.Client(timeout=90)
+        _establish()(self.client, auth_base=BACKEND)
         self.rows: list[dict[str, Any]] = []
         self.projects: dict[str, str] = {}
 

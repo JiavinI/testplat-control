@@ -1,0 +1,84 @@
+{
+  "phase": "4.1a",
+  "assets_sha": "f226b4a88b68fd582f717f5f0ff3652c1f56eb7e",
+  "real_gsb_business_pass_required": false,
+  "results": [
+    {
+      "item": "A1",
+      "status": "PASS",
+      "evidence": "register login refresh logout relogin lab_env"
+    },
+    {
+      "item": "A2",
+      "status": "PASS",
+      "evidence": "demo_and_other hosts isolated"
+    },
+    {
+      "item": "A3",
+      "status": "PASS",
+      "evidence": "pre not in git; smoke success"
+    },
+    {
+      "item": "A4",
+      "status": "PASS",
+      "evidence": "unified_login + gsb POST balance GET search"
+    },
+    {
+      "item": "A5",
+      "status": "PASS",
+      "evidence": "keyword host timeout override"
+    },
+    {
+      "item": "A6",
+      "status": "PASS",
+      "evidence": "new password misses old cache; unchanged reuses"
+    },
+    {
+      "item": "A7",
+      "status": "PASS",
+      "evidence": "in-flight steps keep old host; next run uses new host"
+    },
+    {
+      "item": "A8",
+      "status": "PASS",
+      "evidence": "web kept; commit bc4cffa"
+    },
+    {
+      "item": "A9",
+      "status": "PASS",
+      "evidence": "spare ignored; missing and disabled preflight"
+    },
+    {
+      "item": "A10",
+      "status": "PASS",
+      "evidence": "history revision 9 unchanged"
+    },
+    {
+      "item": "A11",
+      "status": "PASS",
+      "evidence": "second writer 409; run has one revision"
+    },
+    {
+      "item": "A12",
+      "status": "PASS",
+      "evidence": "restart decrypts; child_sessions=1; child logs responses sqlite clean"
+    },
+    {
+      "item": "A13",
+      "status": "PASS",
+      "evidence": "strict schema alias fail-fast; cache covered by A6"
+    },
+    {
+      "item": "REAL",
+      "status": "PASS",
+      "evidence": "fake_assets_ok live_http=200 real_gsb_business_not_required sync_kept_web"
+    },
+    {
+      "item": "LEAK",
+      "status": "PASS",
+      "evidence": "responses logs sqlite clean; tokens=3 sessions=2; live_http=200"
+    }
+  ],
+  "passed": 15,
+  "failed": 0
+}
