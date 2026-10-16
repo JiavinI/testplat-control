@@ -180,6 +180,12 @@ function AccountTable({
   const targetRef = useRef<EditTarget | null>(null)
   const refreshingRef = useRef(false)
   const refreshTicket = useRef(0)
+  /** 凭据读取代次。刷新、关闭或切换编辑目标时递增，在途 reveal 的结果必须丢弃。 */
+  const credentialEpoch = useRef(0)
+  const revealTicket = useRef(0)
+  const revealingRef = useRef(false)
+  /** 刷新进行中又点了查看凭据：并入这次刷新，不另开一次回写。 */
+  const credentialWantedRef = useRef(false)
   const [draft, setDraft] = useState<AccountDraft | null>(null)
   const [revealed, setRevealed] = useState<Record<string, string> | null>(null)
   const [credentialDraft, setCredentialDraft] = useState<Record<string, string>>({})
@@ -190,7 +196,15 @@ function AccountTable({
   const [listError, setListError] = useState<string | null>(null)
   const saving = createMutation.isPending || updateMutation.isPending
 
+  const invalidateCredentialReads = () => {
+    credentialEpoch.current += 1
+    revealTicket.current += 1
+    revealingRef.current = false
+    credentialWantedRef.current = false
+  }
+
   const begin = (accountName: string | null) => {
+    invalidateCredentialReads()
     const next = nextEditTarget(targetRef.current, { projectId, env, accountName })
     targetRef.current = next
     return next
@@ -209,6 +223,7 @@ function AccountTable({
     })
     refreshTicket.current += 1
     refreshingRef.current = false
+    invalidateCredentialReads()
     setDraft(null)
     setRevealed(null)
     setCredentialDraft({})
@@ -261,17 +276,33 @@ function AccountTable({
     if (!draft || draft.mode !== 'edit' || !session || session.accountName !== draft.account_name) {
       return
     }
+    if (refreshingRef.current) {
+      credentialWantedRef.current = true
+      return
+    }
+    const ticket = revealTicket.current + 1
+    revealTicket.current = ticket
+    const epoch = credentialEpoch.current
+    revealingRef.current = true
     setRevealing(true)
     setFormError(null)
     try {
       const data = await fetchAccountCredentials(session.projectId, session.env, session.accountName)
-      if (!isCurrentEditTarget(targetRef.current, session)) {
+      if (
+        revealTicket.current !== ticket ||
+        credentialEpoch.current !== epoch ||
+        !isCurrentEditTarget(targetRef.current, session)
+      ) {
         return
       }
       setRevealed(data.credentials)
       setCredentialDraft({ ...data.credentials })
     } catch (error) {
-      if (!isCurrentEditTarget(targetRef.current, session)) {
+      if (
+        revealTicket.current !== ticket ||
+        credentialEpoch.current !== epoch ||
+        !isCurrentEditTarget(targetRef.current, session)
+      ) {
         return
       }
       if (discardUnauthorized(error)) {
@@ -280,7 +311,8 @@ function AccountTable({
       }
       setFormError(formatErrorMessage(error))
     } finally {
-      if (isCurrentEditTarget(targetRef.current, session)) {
+      if (revealTicket.current === ticket) {
+        revealingRef.current = false
         setRevealing(false)
       }
     }
@@ -294,25 +326,42 @@ function AccountTable({
     if (refreshingRef.current) {
       return
     }
-    const revealedNow = revealed !== null
+    const credentialReadPending = revealingRef.current || credentialWantedRef.current
     const ticket = refreshTicket.current + 1
     refreshTicket.current = ticket
     refreshingRef.current = true
     setRefreshing(true)
+    // 废弃在途 reveal。它只认编辑目标，刷新后仍会把旧密码写进新版本。
+    revealTicket.current += 1
+    revealingRef.current = false
+    setRevealing(false)
+    credentialEpoch.current += 1
+    const epoch = credentialEpoch.current
+    let needCredentials = revealed !== null || credentialReadPending
     try {
       const fresh = await getAccount(session.projectId, session.env, session.accountName)
-      if (!isCurrentEditTarget(targetRef.current, session) || refreshTicket.current !== ticket) {
+      if (
+        !isCurrentEditTarget(targetRef.current, session) ||
+        refreshTicket.current !== ticket ||
+        credentialEpoch.current !== epoch
+      ) {
         return
       }
       // 凭据和账号一起写入。先落 revision 会让旧凭据草稿配上新版本，绕过乐观锁。
       let nextCredentials: Record<string, string> | null = null
-      if (revealedNow) {
+      while (needCredentials || credentialWantedRef.current) {
+        needCredentials = false
+        credentialWantedRef.current = false
         const data = await fetchAccountCredentials(
           session.projectId,
           session.env,
           session.accountName,
         )
-        if (!isCurrentEditTarget(targetRef.current, session) || refreshTicket.current !== ticket) {
+        if (
+          !isCurrentEditTarget(targetRef.current, session) ||
+          refreshTicket.current !== ticket ||
+          credentialEpoch.current !== epoch
+        ) {
           return
         }
         nextCredentials = data.credentials
