@@ -257,6 +257,31 @@ def test_inject_hook_is_off_unless_requested(matrix, monkeypatch: pytest.MonkeyP
         matrix.scan_secret_carriers(logs="\n".join(records), sqlite_blob=b"", traffic=[])
 
 
+def test_child_session_hook_is_off_unless_requested(
+    matrix, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = "child-restart-session-cookie"
+    matrix.note_session(session)
+    monkeypatch.delenv("PHASE4_1A_INJECT_CHILD_LEAK", raising=False)
+    records: list[str] = []
+    handler, watched = matrix._watch_secret_loggers(records)
+    try:
+        matrix.inject_child_session_leak()
+        assert records == []
+        monkeypatch.setenv("PHASE4_1A_INJECT_CHILD_LEAK", "1")
+        matrix.inject_child_session_leak()
+    finally:
+        for logger, propagate, level in watched:
+            logger.removeHandler(handler)
+            logger.propagate = propagate
+            logger.setLevel(level)
+    assert records == [session], "inject"
+    with pytest.raises(AssertionError, match="^log$"):
+        matrix.scan_secret_carriers(logs="\n".join(records), sqlite_blob=b"", traffic=[])
+    rendered = matrix.redact(json.dumps({"ok": False, "carrier": "log", "sessions": 1}))
+    assert session not in rendered
+
+
 def test_e2e_keeps_caller_database_and_original_key(tmp_path: Path) -> None:
     assets = _assets()
     if assets is None:
@@ -319,3 +344,31 @@ def test_injected_business_token_fails_matrix_leak(tmp_path: Path) -> None:
         assert password not in text
         token = "tok-" + hashlib.sha256(password.encode("utf-8")).hexdigest()[:12]
         assert token not in text
+
+
+def test_restart_child_session_leak_fails_matrix(tmp_path: Path) -> None:
+    assets = _assets()
+    if assets is None:
+        pytest.skip("资产仓不在")
+    env = os.environ.copy()
+    env["PHASE4_1A_INJECT_CHILD_LEAK"] = "1"
+    env.pop("PHASE4_1A_INJECT_LEAK", None)
+    env["PHASE4_1A_OUT"] = str(tmp_path)
+    env["PHASE4_ASSETS_SRC"] = str(assets)
+    env.pop("DATABASE_URL", None)
+    result = _run_script(ROOT / "scripts" / "phase4_1a_matrix.py", env, timeout=180)
+    assert result.returncode != 0
+    report_path = tmp_path / "phase4_1a-matrix-report.json"
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    failed = [row["item"] for row in payload["results"] if row["status"] != "PASS"]
+    assert failed == ["A12"]
+    restart = [row for row in payload["results"] if row["item"] == "A12"][0]
+    assert restart["evidence"] == "AssertionError: child_exit"
+    leak = [row for row in payload["results"] if row["item"] == "LEAK"][0]
+    assert leak["status"] == "PASS"
+    text = report_path.read_text(encoding="utf-8") + result.stdout + result.stderr
+    for password in ("pw-project-a-91", "pw-project-b-82", "pw-project-a-new7", "matrix-pass-1"):
+        assert password not in text
+        token = "tok-" + hashlib.sha256(password.encode("utf-8")).hexdigest()[:12]
+        assert token not in text
+    assert "child-restart-session-cookie" not in text

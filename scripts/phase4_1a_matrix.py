@@ -9,7 +9,9 @@
     uv run python scripts/phase4_1a_matrix.py
 
 ``PHASE4_1A_INJECT_LEAK=1`` 把已签发的业务 token 和最新会话写进被监听日志，LEAK 必须失败。
-默认关闭，不进入正常运行路径。
+``PHASE4_1A_INJECT_CHILD_LEAK=1`` 把 A12 重启子进程的真实会话写进该进程的
+Engine 日志，A12 必须失败。
+两个钩子默认都关闭，不进入正常运行路径。
 """
 
 from __future__ import annotations
@@ -203,6 +205,45 @@ def inject_leak_markers() -> None:
     logger = logging.getLogger("testplat_engine")
     logger.info("%s", ISSUED_BUSINESS_TOKENS[0])
     logger.info("%s", SESSION_COOKIES[-1])
+
+
+def inject_child_session_leak() -> None:
+    """测试钩子：把重启子进程刚刚签发的会话写进 testplat_engine 日志。"""
+    if os.environ.get("PHASE4_1A_INJECT_CHILD_LEAK") != "1":
+        return
+    if not SESSION_COOKIES:
+        return
+    logging.getLogger("testplat_engine").warning("%s", SESSION_COOKIES[-1])
+
+
+class _MemoryLogHandler(logging.Handler):
+    def __init__(self, records: list[str]) -> None:
+        super().__init__(level=logging.DEBUG)
+        self._records = records
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self._records.append(record.getMessage())
+
+
+def _watch_secret_loggers(
+    records: list[str],
+) -> tuple[logging.Handler, list[tuple[logging.Logger, bool, int]]]:
+    """监听 Control 与 Engine 日志，且不再向 stderr 传播，避免秘密出现在输出里。"""
+    handler = _MemoryLogHandler(records)
+    watched: list[tuple[logging.Logger, bool, int]] = []
+    for name in ("testplat_control", "testplat_engine"):
+        logger = logging.getLogger(name)
+        watched.append((logger, logger.propagate, logger.level))
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
+        logger.propagate = False
+    return handler, watched
+
+
+def _child_scan_failure(exc: Exception) -> str:
+    if isinstance(exc, AssertionError) and str(exc) in {"log", "sqlite", "response", "traceback"}:
+        return str(exc)
+    return type(exc).__name__
 
 
 class Capture:
@@ -537,40 +578,68 @@ class Trace:
         return self._add(url, self.client.put(url, **kwargs))
 
 
+def _emit_child_result(payload: dict[str, object]) -> None:
+    print(redact(json.dumps(payload)))
+
+
 def restart_main() -> int:
-    """新进程用同一把主密钥读取凭据，并确认库里没有明文。"""
+    """新进程重新登录，读取凭据，并扫描本进程的日志、响应和 SQLite。"""
     from fastapi.testclient import TestClient
 
     from testplat_control.main import app
     from tests.platform_gate import establish
 
-    client = TestClient(app)
-    establish(
-        client,
-        username=os.environ["GATE_USER"],
-        password=os.environ["GATE_PASSWORD"],
-    )
-    response = client.get(os.environ["CRED_PATH"])
-    if response.status_code != 200:
-        print(json.dumps({"ok": False, "status": response.status_code}))
-        return 1
-    got = (response.json().get("credentials") or {}).get("password")
-    if got != os.environ["GATE_ACCOUNT_PASSWORD"]:
-        print(json.dumps({"ok": False, "mismatch": True}))
-        return 1
-    db_path = os.environ["DATABASE_URL"].removeprefix("sqlite:///")
-    blob = Path(db_path).read_bytes()
-    leaked = [
-        name
-        for name, secret in (
-            ("account", os.environ["GATE_ACCOUNT_PASSWORD"]),
-            ("platform", os.environ["GATE_PASSWORD"]),
-            ("master", os.environ.get("TESTPLAT_MASTER_KEY", "")),
+    logs: list[str] = []
+    handler, watched = _watch_secret_loggers(logs)
+    try:
+        raw = TestClient(app)
+        client = Trace(raw)
+        session = establish(
+            client,
+            username=os.environ["GATE_USER"],
+            password=os.environ["GATE_PASSWORD"],
         )
-        if secret and secret.encode() in blob
-    ]
-    print(json.dumps({"ok": not leaked, "sqlite_leaks": leaked}))
-    return 0 if not leaked else 1
+        note_session(session)
+        remember(
+            os.environ.get("TESTPLAT_MASTER_KEY", ""),
+            os.environ.get("GATE_PASSWORD", ""),
+            os.environ.get("GATE_ACCOUNT_PASSWORD", ""),
+        )
+        response = client.get(os.environ["CRED_PATH"])
+        if response.status_code != 200:
+            _emit_child_result({"ok": False, "status": response.status_code, "sessions": 0})
+            return 1
+        got = (response.json().get("credentials") or {}).get("password")
+        if got != os.environ["GATE_ACCOUNT_PASSWORD"]:
+            _emit_child_result({"ok": False, "mismatch": True, "sessions": len(SESSION_COOKIES)})
+            return 1
+        db_path = os.environ["DATABASE_URL"].removeprefix("sqlite:///")
+        blob = Path(db_path).read_bytes()
+        inject_child_session_leak()
+        scan_secret_carriers(
+            logs="\n".join(logs),
+            sqlite_blob=blob,
+            traffic=client.traffic,
+        )
+        joined = "\n".join(logs) + "\n".join(text for _url, _status, text in client.traffic)
+        if "Traceback" in joined:
+            raise AssertionError("traceback")
+        _emit_child_result({"ok": True, "sessions": len(SESSION_COOKIES), "carrier": "clean"})
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        _emit_child_result(
+            {
+                "ok": False,
+                "carrier": _child_scan_failure(exc),
+                "sessions": len(SESSION_COOKIES),
+            }
+        )
+        return 1
+    finally:
+        for logger, propagate, level in watched:
+            logger.removeHandler(handler)
+            logger.propagate = propagate
+            logger.setLevel(level)
 
 
 def main() -> int:
@@ -1007,13 +1076,37 @@ def main() -> int:
                 timeout=60,
                 check=False,
             )
-            line = (proc.stdout or "").strip().splitlines()
-            payload = json.loads(line[-1]) if line else {"ok": False, "status": proc.returncode}
-            assert payload.get("ok") is True, payload
+            child_text = f"{proc.stdout or ''}\n{proc.stderr or ''}"
+            for secret in (
+                token,
+                master,
+                PASS_A,
+                PLATFORM_PASSWORD,
+                *SESSION_COOKIES,
+                *ISSUED_BUSINESS_TOKENS,
+            ):
+                assert secret not in child_text, "child_output"
+            assert "Traceback" not in child_text, "traceback"
+            lines = (proc.stdout or "").strip().splitlines()
+            try:
+                payload = json.loads(lines[-1]) if lines else {}
+            except json.JSONDecodeError:
+                payload = {}
+            if not isinstance(payload, dict):
+                payload = {}
+            if proc.returncode != 0:
+                raise AssertionError("child_exit")
+            if payload.get("ok") is not True:
+                raise AssertionError("child_scan")
+            if int(payload.get("sessions") or 0) < 1:
+                raise AssertionError("child_session")
             blob = db_path.read_bytes()
             for secret in (token, master, PASS_A, *SESSION_COOKIES, *ISSUED_BUSINESS_TOKENS):
                 assert secret.encode() not in blob, "sqlite"
-            return "restart decrypts; sqlite has no plaintext"
+            return (
+                f"restart decrypts; child_sessions={payload.get('sessions')}; "
+                "child logs responses sqlite clean"
+            )
 
         def a13() -> str:
             strict = client.post(

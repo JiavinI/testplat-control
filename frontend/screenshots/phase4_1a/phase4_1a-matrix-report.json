@@ -41,7 +41,7 @@
     {
       "item": "A8",
       "status": "PASS",
-      "evidence": "web kept; commit a8594aa"
+      "evidence": "web kept; commit bc4cffa"
     },
     {
       "item": "A9",
@@ -61,7 +61,7 @@
     {
       "item": "A12",
       "status": "PASS",
-      "evidence": "restart decrypts; sqlite has no plaintext"
+      "evidence": "restart decrypts; child_sessions=1; child logs responses sqlite clean"
     },
     {
       "item": "A13",

@@ -64,7 +64,9 @@
 
 矩阵收集假服务实际签发的业务 token，以及注册和注销后重新登录得到的平台会话 cookie。LEAK 检查响应正文、监听日志和 SQLite。凭据接口可以回显账号密码，但不能出现这些 token 或会话。报告落盘前会脱敏。
 
-`PHASE4_1A_INJECT_LEAK=1` 会把业务 token 和最新会话写进 `testplat_engine` 日志，LEAK 必须失败。默认不打开。
+`PHASE4_1A_INJECT_LEAK=1` 会把业务 token 和最新会话写进父进程的 `testplat_engine` 日志，LEAK 必须失败。默认不打开。
+
+A12 的重启子进程会再次登录，得到父进程看不到的新会话。子进程自己登记这枚会话，并扫描本进程的日志、响应正文和 SQLite，只把脱敏结果（是否通过、载体名、会话枚数）和退出码交给父进程。`PHASE4_1A_INJECT_CHILD_LEAK=1` 把这枚真实会话写进子进程的 Engine 日志，A12 必须失败。默认不打开，也不改变父进程注入钩子的行为。
 
 ## 已知偏差
 
