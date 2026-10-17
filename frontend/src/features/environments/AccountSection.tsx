@@ -161,7 +161,7 @@ function AccountTable({
   projectId: string
   env: string
   accounts: ReturnType<typeof useAccounts>
-  profiles: Array<{ name: string; credential_fields: string[] }>
+  profiles: Array<{ name: string; credential_fields: string[]; unavailable_reason?: string | null }>
   profilesLoading: boolean
   profilesError: unknown
   editorOpen: boolean
@@ -663,9 +663,12 @@ function AccountTable({
               loading={profilesLoading}
               value={draft.login_profile || undefined}
               placeholder="选择 Git 登录流程"
-              options={profiles.map((item) => ({ value: item.name, label: item.name }))}
+              options={profiles.map((item) => ({ value: item.name, label: `${item.name}${item.unavailable_reason ? '（待适配）' : ''}` }))}
               onChange={(value) => setDraft({ ...draft, login_profile: value })}
             />
+            {profiles.find((item) => item.name === draft.login_profile)?.unavailable_reason ? (
+              <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={profiles.find((item) => item.name === draft.login_profile)?.unavailable_reason} />
+            ) : null}
             <Space style={{ marginBottom: 12 }}>
               <span>启用</span>
               <Switch

@@ -23,7 +23,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from testplat_control.database.models import Project, ProjectEnvironment, Repo
+from testplat_control.database.models import Project, ProjectEnvironment, Repo, WorkspaceBinding
 from testplat_control.services.manifest import (
     ManifestError,
     envs_for_project,
@@ -389,6 +389,25 @@ class RepoSyncService:
                 if not has_web:
                     row.envs = list(envs)
                     row.default_env = default_env
+
+        db.flush()
+        for key, spec in manifest.projects.items():
+            project_id = f"{repo_key}/{key}"
+            binding = db.get(WorkspaceBinding, project_id)
+            if spec.workspace is None:
+                if binding is not None:
+                    db.delete(binding)
+                continue
+            ws = spec.workspace
+            if binding is None:
+                binding = WorkspaceBinding(project_id=project_id)
+                db.add(binding)
+            binding.platform = ws["platform"]
+            binding.platform_name = ws["platform_name"]
+            binding.business_project = ws["project"]
+            binding.business_project_name = ws["project_name"]
+            binding.configuration_project_id = f"{repo_key}/{ws.get('configuration', key)}"
+        db.flush()
 
         # 清单消失的项目标记 archived，不删
         existing = db.query(Project).filter(Project.repo == repo_key).all()

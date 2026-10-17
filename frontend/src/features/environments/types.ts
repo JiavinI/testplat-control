@@ -59,6 +59,7 @@ export interface AccountUpdate {
 export interface LoginProfile {
   name: string
   credential_fields: string[]
+  unavailable_reason?: string | null
 }
 
 export interface LoginProfiles {

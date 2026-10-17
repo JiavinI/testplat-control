@@ -28,6 +28,7 @@ class LoginProfileSpec:
     name: str
     body: dict[str, Any]
     credential_fields: tuple[str, ...]
+    unavailable_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,11 +98,30 @@ def load_profile_catalog(config_root: str | Path) -> ProfileCatalog:
             or not isinstance(body, dict)
         ):
             raise ProfileFileError("登录流程文件无效")
+        unavailable = body.get("unavailable")
+        reason = None
+        if unavailable is not None:
+            if (
+                set(body) != {"unavailable"}
+                or not isinstance(unavailable, dict)
+                or set(unavailable) != {"reason", "credentials"}
+                or not isinstance(unavailable["reason"], str)
+                or not unavailable["reason"].strip()
+                or _SECRET_RE.search(unavailable["reason"])
+                or not isinstance(unavailable["credentials"], dict)
+                or any(
+                    not isinstance(k, str) or v != f"${{secret:{k}}}"
+                    for k, v in unavailable["credentials"].items()
+                )
+            ):
+                raise ProfileFileError("待适配登录流程声明无效")
+            reason = unavailable["reason"]
         profiles.append(
             LoginProfileSpec(
                 name=name,
                 body=dict(body),
                 credential_fields=tuple(_secret_fields(body)),
+                unavailable_reason=reason,
             )
         )
     return ProfileCatalog(

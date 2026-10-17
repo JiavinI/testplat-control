@@ -17,6 +17,7 @@ from testplat_control.services.repo_sync import (
     snapshot_path,
 )
 from testplat_control.services.repos_config import ReposConfig
+from testplat_control.services.workspaces import configuration_project
 
 
 def get_sync_service(request: Request) -> RepoSyncService:
@@ -44,6 +45,7 @@ def visible_envs(db: Session, project: Project) -> tuple[list[str], str | None]:
 
     默认只返回数据库环境。显式兼容模式且项目没有数据库环境时才展示 Git 模板名。
     """
+    project = configuration_project(db, project)
     rows = db.query(ProjectEnvironment).filter(ProjectEnvironment.project_id == project.id).all()
     if rows:
         names = sorted(row.env for row in rows if row.enabled)
@@ -61,6 +63,7 @@ def require_env(db: Session, project: Project, env: str) -> str:
     if not env or not str(env).strip():
         raise HTTPException(status_code=422, detail="env 为必填项")
     env = str(env).strip()
+    project = configuration_project(db, project)
     rows = db.query(ProjectEnvironment).filter(ProjectEnvironment.project_id == project.id).all()
     if rows:
         match = next((row for row in rows if row.env == env), None)

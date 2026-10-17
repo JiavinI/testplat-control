@@ -31,6 +31,7 @@ from testplat_control.services.auth_loader import (
 from testplat_control.services.crypto import MasterKeyError, decrypt_credentials
 from testplat_control.services.env_loader import load_project_environment
 from testplat_control.services.login_profiles import ProfileFileError, load_profile_catalog
+from testplat_control.services.workspaces import configuration_project, workspace_response
 
 logger = logging.getLogger(__name__)
 
@@ -195,11 +196,12 @@ def resolve_run_config(
     asset_defaults: dict[str, Any] | None = None,
 ) -> ResolvedRunConfig:
     """冻结同一环境版本下的账号、参数和摘要。调用方读完后结束会话事务。"""
-    web = _load_consistent_web(db, project.id, env)
+    owner = configuration_project(db, project)
+    web = _load_consistent_web(db, owner.id, env)
     if web is None:
         has_web = (
             db.query(ProjectEnvironment.id)
-            .filter(ProjectEnvironment.project_id == project.id)
+            .filter(ProjectEnvironment.project_id == owner.id)
             .first()
             is not None
         )
@@ -232,6 +234,7 @@ def resolve_run_config(
         catalog = load_profile_catalog(config_root)
     except ProfileFileError as exc:
         raise HTTPException(status_code=422, detail=exc.message) from None
+    context = workspace_response(db, project)
     auth = _auth_from_accounts(
         env=env,
         project=project,
@@ -239,6 +242,7 @@ def resolve_run_config(
         decrypted=decrypted,
         catalog_profiles={item.name: item.body for item in catalog.profiles},
         login_plugins=catalog.login_plugins,
+        workspace_project=None if context is None else context["project"],
     )
     timeout = effective_timeout(request_timeout, web.timeout_seconds)
     case_params = dict(web.case_params)
@@ -259,6 +263,8 @@ def resolve_run_config(
         accounts=accounts,
         catalog_fields={item.name: list(item.credential_fields) for item in catalog.profiles},
     )
+    if context is not None:
+        snapshot["workspace"] = context
     # 明文凭据不要留在返回值上；AuthTable 内是 SecretStr。
     decrypted.clear()
     return ResolvedRunConfig(
@@ -329,6 +335,7 @@ def _auth_from_accounts(
     decrypted: dict[str, dict[str, str]],
     catalog_profiles: dict[str, dict[str, Any]],
     login_plugins: tuple[str, ...],
+    workspace_project: str | None = None,
 ) -> AuthLoadResult | None:
     """每个启用账号单独解析自己的凭据，身份名是账号名。"""
     if not accounts:
@@ -346,8 +353,11 @@ def _auth_from_accounts(
                 public_reason=f"账号 {name} 的登录流程 {account.login_profile} 不存在"
             )
             continue
+        if "unavailable" in profile:
+            identities[name] = UnavailableAuth(public_reason=profile["unavailable"]["reason"])
+            continue
         document = {
-            "identities": {name: deepcopy(profile)},
+            "identities": {name: _workspace_values(deepcopy(profile), workspace_project)},
             "login_plugins": list(login_plugins),
         }
         secrets = decrypted.get(name, {})
@@ -377,6 +387,19 @@ def _auth_from_accounts(
         logger.error("构造账号身份表失败 env=%s exc_type=%s", env, type(exc).__name__)
         raise HTTPException(status_code=422, detail="鉴权配置无效") from None
     return AuthLoadResult(table=table, login_plugins=login_plugins)
+
+
+def _workspace_values(node: Any, project: str | None) -> Any:
+    """只替换独立的业务项目占位符，不渲染 URL、凭据或业务请求参数。"""
+    if isinstance(node, dict):
+        return {key: _workspace_values(value, project) for key, value in node.items()}
+    if isinstance(node, list):
+        return [_workspace_values(value, project) for value in node]
+    if node == "${workspace:project}":
+        if project is None:
+            raise HTTPException(status_code=422, detail="登录流程需要明确的平台项目关系")
+        return project
+    return node
 
 
 def _snapshot(

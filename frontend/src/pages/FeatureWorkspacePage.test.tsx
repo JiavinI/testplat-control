@@ -18,12 +18,13 @@ const tree: AssetNode = {
     ['api', 'pages', 'scenarios', 'flows', 'config'].map((path) => ({ id: path, name: path, path, type: 'directory', children: [] })),
 }
 const listProjects = vi.fn()
+const getProject = vi.fn()
 const getAssetsTree = vi.fn()
 const listExecutionRecords = vi.fn()
 vi.mock('@/features/auth/api', () => ({ getMe: vi.fn().mockResolvedValue({ username: 'operator' }), logout: vi.fn() }))
 vi.mock('@/features/projects/api', () => ({
   listProjects: (...args: unknown[]) => listProjects(...args),
-  getProject: vi.fn(async (id: string) => id === first.id ? first : second),
+  getProject: (...args: unknown[]) => getProject(...args),
 }))
 vi.mock('@/features/assets/api', () => ({
   getAssetsTree: (...args: unknown[]) => getAssetsTree(...args), getAssetDetails: vi.fn(),
@@ -52,11 +53,61 @@ beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
   listProjects.mockResolvedValue([first, second])
+  getProject.mockImplementation(async (id: string) => (await listProjects()).find((item: ProjectResponse) => item.id === id))
   getAssetsTree.mockResolvedValue(tree)
   listExecutionRecords.mockResolvedValue([])
 })
 
 describe('功能入口与项目上下文', () => {
+  const platforms = () => [
+    ['gsb', 'GSB', 'go2', 'gsb', 'gsb'], ['gsb', 'GSB', 'e3e3', 'gsb_e3e3', 'gsb_e3e3'],
+    ['go2', 'GO2 网站', 'go2', 'go2', 'gsb'], ['e3e3', 'E3E3 网站', 'e3e3', 'e3e3', 'gsb_e3e3'],
+    ['daifa_admin', '代发后台', 'go2', 'daifa_admin', 'daifa_admin'],
+    ['daifa_picker', '拿货端', 'go2', 'daifa_picker', 'daifa_picker'],
+    ['admin_go2', 'GO2 管理后台', 'go2', 'admin_go2', 'admin_go2'],
+  ].map(([platform, label, project, key, owner]) => ({
+    ...first, id: `main/${key}`, project: key, name: `${label} ${project.toUpperCase()}`,
+    workspace: { platform, platform_name: label, project, project_name: project.toUpperCase(), configuration_project_id: `main/${owner}` },
+  }))
+
+  it('六个平台入口、GSB 两个归属明确，切换平台保留适用项目并清空详情', async () => {
+    listProjects.mockResolvedValue(platforms())
+    const user = userEvent.setup({ delay: null })
+    const { router } = open('/apis/main/gsb_e3e3')
+    await screen.findByTestId('asset-browser')
+    expect(screen.getByTestId('workspace-context-title')).toHaveTextContent('E3E3 的 GSB')
+    await user.click(document.querySelector('[data-asset-id="api"]')!)
+    expect(await screen.findByTestId('asset-detail-panel')).toBeInTheDocument()
+    await user.click(screen.getByRole('combobox', { name: '选择平台' }))
+    for (const label of ['GO2 网站', 'E3E3 网站', 'GSB', '代发后台', '拿货端', 'GO2 管理后台']) {
+      expect((await screen.findAllByTitle(label)).length).toBeGreaterThan(0)
+    }
+    await user.click(await screen.findByTitle('E3E3 网站'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/apis/main/e3e3'))
+    expect(screen.queryByTestId('asset-detail-panel')).not.toBeInTheDocument()
+    expect(screen.getByTestId('workspace-context-title')).toHaveTextContent('E3E3 网站 · E3E3')
+    await user.click(screen.getByRole('combobox', { name: '选择平台' }))
+    await user.click(await screen.findByTitle('GSB'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/apis/main/gsb_e3e3'))
+    await user.click(screen.getByRole('combobox', { name: '选择项目' }))
+    await user.click(await screen.findByTitle('GO2'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/apis/main/gsb'))
+    expect(screen.getByTestId('workspace-context-title')).toHaveTextContent('GO2 的 GSB')
+  })
+
+  it('配置入口提示共享身份，平台切换保留账号页签', async () => {
+    listProjects.mockResolvedValue(platforms())
+    const user = userEvent.setup({ delay: null })
+    const { router } = open('/configuration/main/go2?tab=accounts')
+    await screen.findByTestId('account-manager')
+    expect(screen.getByText(/环境和账号与「GSB GO2」共用/)).toBeInTheDocument()
+    await user.click(screen.getByRole('combobox', { name: '选择平台' }))
+    await user.click(await screen.findByTitle('GSB'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/configuration/main/gsb'))
+    expect(router.state.location.search).toBe('?tab=accounts')
+    expect(screen.getByText(/环境和账号与「GO2 网站 GO2」共用/)).toBeInTheDocument()
+  })
+
   it('首页直接进入接口管理，四个菜单保留项目，场景树和历史独立', async () => {
     const user = userEvent.setup({ delay: null })
     const { router } = open('/')

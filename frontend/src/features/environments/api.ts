@@ -121,6 +121,7 @@ export function parseLoginProfiles(payload: unknown): LoginProfiles {
       assertArray(item.credential_fields, `${label}.credential_fields`, OMITTED)
       return {
         name: requireString(item, 'name', label, OMITTED),
+        ...(typeof item.unavailable_reason === 'string' ? { unavailable_reason: item.unavailable_reason } : {}),
         credential_fields: item.credential_fields.map((field, fieldIndex) => {
           if (typeof field !== 'string') {
             throw new ApiParseError(`${label}.credential_fields[${fieldIndex}] 应为字符串`, OMITTED)

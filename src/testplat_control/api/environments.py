@@ -42,6 +42,7 @@ from testplat_control.services.project_access import (
     get_project,
     get_repos_config,
 )
+from testplat_control.services.workspaces import configuration_project
 
 router = APIRouter(prefix="/repos/{repo}/projects/{project}", tags=["environments"])
 
@@ -77,6 +78,7 @@ class EnvironmentResponse(BaseModel):
 class LoginProfileResponse(BaseModel):
     name: str
     credential_fields: list[str] = Field(..., description="模板中的 ${secret:字段名}，不含值")
+    unavailable_reason: str | None = None
 
 
 class LoginProfilesResponse(BaseModel):
@@ -149,7 +151,7 @@ async def get_environments(
     user: PlatformPrincipal = Depends(require_user),
 ) -> list[EnvironmentResponse]:
     del user
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     return [_env_response(item) for item in list_environments(db, row.id)]
 
 
@@ -161,7 +163,7 @@ async def post_environment(
     db: Session = Depends(get_db),
     user: PlatformPrincipal = Depends(require_user),
 ) -> EnvironmentResponse:
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     created = create_environment(
         db,
         project_id=row.id,
@@ -184,7 +186,7 @@ async def get_environment_detail(
     user: PlatformPrincipal = Depends(require_user),
 ) -> EnvironmentResponse:
     del user
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     return _env_response(get_environment(db, row.id, env))
 
 
@@ -197,7 +199,7 @@ async def put_environment(
     db: Session = Depends(get_db),
     user: PlatformPrincipal = Depends(require_user),
 ) -> EnvironmentResponse:
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     fields: dict[str, Any] = {}
     present = body.model_fields_set
     if "api_hosts" in present:
@@ -223,7 +225,9 @@ async def put_environment(
     return _env_response(updated)
 
 
-@router.get("/login-profiles", response_model=LoginProfilesResponse)
+@router.get(
+    "/login-profiles", response_model=LoginProfilesResponse, response_model_exclude_none=True
+)
 async def get_login_profiles(
     repo: str,
     project: str,
@@ -233,7 +237,7 @@ async def get_login_profiles(
 ) -> LoginProfilesResponse:
     """当前资产 commit 下的流程名与所需凭据字段名。不返回凭据。"""
     del user
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     commit_sha, _, config_root = ensure_snapshot_dirs(get_repos_config(request), row)
     try:
         catalog = load_profile_catalog(config_root)
@@ -242,7 +246,11 @@ async def get_login_profiles(
     return LoginProfilesResponse(
         commit_sha=commit_sha,
         profiles=[
-            LoginProfileResponse(name=item.name, credential_fields=list(item.credential_fields))
+            LoginProfileResponse(
+                name=item.name,
+                credential_fields=list(item.credential_fields),
+                unavailable_reason=item.unavailable_reason,
+            )
             for item in catalog.profiles
         ],
     )
@@ -257,7 +265,7 @@ async def get_accounts(
     user: PlatformPrincipal = Depends(require_user),
 ) -> list[AccountResponse]:
     del user
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     return [_account_response(item) for item in list_accounts(db, row.id, env)]
 
 
@@ -270,7 +278,7 @@ async def post_account(
     db: Session = Depends(get_db),
     user: PlatformPrincipal = Depends(require_user),
 ) -> AccountResponse:
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     created = create_account(
         db,
         project_id=row.id,
@@ -296,7 +304,7 @@ async def get_account_detail(
     user: PlatformPrincipal = Depends(require_user),
 ) -> AccountResponse:
     del user
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     return _account_response(get_account(db, row.id, env, name))
 
 
@@ -310,7 +318,7 @@ async def put_account(
     db: Session = Depends(get_db),
     user: PlatformPrincipal = Depends(require_user),
 ) -> AccountResponse:
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     fields: dict[str, Any] = {}
     present = body.model_fields_set
     if "display_name" in present:
@@ -354,7 +362,7 @@ async def get_account_credentials(
 ) -> Response:
     """显式查看凭据。禁止缓存。"""
     del user
-    row = get_project(db, repo, project)
+    row = configuration_project(db, get_project(db, repo, project))
     account = get_account(db, row.id, env, name)
     payload = CredentialsResponse(
         account_name=account.account_name,

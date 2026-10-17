@@ -23,7 +23,7 @@ class AssetNode:
 class AssetService:
     """资产扫描和管理服务"""
 
-    def __init__(self, assets_root: Path):
+    def __init__(self, assets_root: Path, config_root: Path | None = None):
         """
         初始化资产服务。
 
@@ -31,6 +31,7 @@ class AssetService:
             assets_root: 资产根目录路径
         """
         self.assets_root = Path(assets_root)
+        self.config_root = config_root
         self._asset_cache: dict[str, AssetNode] = {}
 
     def scan_assets(self) -> AssetNode:
@@ -77,6 +78,27 @@ class AssetService:
         root = self._build_tree(self.assets_root, prefix="")
         root.id = "assets"
         root.name = "assets"
+        if self.config_root is not None:
+            # The manifest can reuse API assets while selecting a different login config.
+            root.children = [node for node in root.children or [] if node.id != "config"]
+            self._asset_cache = {
+                key: node
+                for key, node in self._asset_cache.items()
+                if key != "config" and not key.startswith("config.")
+            }
+            config = AssetService(self.config_root).scan_assets()
+
+            def attach(node: AssetNode, is_root: bool = False) -> None:
+                node.id = "config" if is_root else f"config.{node.id}"
+                node.path = "config" if is_root else f"config/{node.path}"
+                if is_root:
+                    node.name = "config"
+                self._asset_cache[node.id] = node
+                for child in node.children or []:
+                    attach(child)
+
+            attach(config, True)
+            root.children.append(config)
         return root
 
     def get_asset(self, asset_id: str) -> AssetNode | None:

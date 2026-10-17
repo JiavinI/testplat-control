@@ -67,6 +67,19 @@ class Project(Base):
         )
 
 
+class WorkspaceBinding(Base):
+    """显式的平台 / 业务项目运行上下文；配置归属可共享，旧 Project ID 不变。"""
+
+    __tablename__ = "workspace_bindings"
+
+    project_id: str = Column(String(160), ForeignKey("projects.id"), primary_key=True)
+    platform: str = Column(String(64), nullable=False)
+    platform_name: str = Column(String(128), nullable=False)
+    business_project: str = Column(String(64), nullable=False)
+    business_project_name: str = Column(String(128), nullable=False)
+    configuration_project_id: str = Column(String(160), ForeignKey("projects.id"), nullable=False)
+
+
 class ExecutionRecord(Base):
     """执行记录表；Phase 4.0 增加 env / repo / commit_sha / operator。"""
 

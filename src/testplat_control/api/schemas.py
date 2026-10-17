@@ -10,6 +10,16 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 logger = logging.getLogger(__name__)
 
 
+class WorkspaceResponse(BaseModel):
+    """平台与业务项目坐标；configuration_project_id 为共享配置所属工作区。"""
+
+    platform: str
+    platform_name: str
+    project: str
+    project_name: str
+    configuration_project_id: str
+
+
 class ProjectResponse(BaseModel):
     """项目响应（只读；来自 Git 清单）。"""
 
@@ -23,6 +33,8 @@ class ProjectResponse(BaseModel):
     commit_sha: str | None = Field(None, description="当前同步的 commit SHA")
     created_at: datetime = Field(..., description="首次同步时间")
     updated_at: datetime = Field(..., description="最近同步更新时间")
+
+    workspace: WorkspaceResponse | None = None
 
     @classmethod
     def from_model(cls, project: Any) -> "ProjectResponse":

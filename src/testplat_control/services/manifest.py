@@ -34,6 +34,7 @@ class ManifestProject:
     assets: str  # 相对仓库根
     config: str
     default_env: str | None
+    workspace: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -136,13 +137,42 @@ def parse_manifest_dict(data: Any) -> Manifest:
             not isinstance(default_env, str) or not default_env.strip()
         ):
             raise ManifestError("invalid_default_env")
+        workspace = spec.get("workspace")
+        if workspace is not None:
+            required = {"platform", "platform_name", "project", "project_name"}
+            if not isinstance(workspace, dict) or not required.issubset(workspace):
+                raise ManifestError("invalid_workspace")
+            if set(workspace) - (required | {"configuration"}):
+                raise ManifestError("invalid_workspace")
+            if any(not isinstance(v, str) or not v.strip() for v in workspace.values()):
+                raise ManifestError("invalid_workspace")
+            if any(not is_valid_key(workspace[k]) for k in ("platform", "project")):
+                raise ManifestError("invalid_workspace")
+            workspace = {k: v.strip() for k, v in workspace.items()}
         projects[key] = ManifestProject(
             key=key,
             name=name.strip(),
             assets=assets.strip().replace("\\", "/"),
             config=config.strip().replace("\\", "/"),
             default_env=None if default_env is None else default_env.strip(),
+            workspace=workspace,
         )
+    seen: set[tuple[str, str]] = set()
+    for key, spec in projects.items():
+        if spec.workspace is None:
+            continue
+        coordinate = (spec.workspace["platform"], spec.workspace["project"])
+        if coordinate in seen:
+            raise ManifestError("duplicate_workspace")
+        seen.add(coordinate)
+        owner = spec.workspace.get("configuration", key)
+        if owner not in projects:
+            raise ManifestError("missing_configuration_project")
+        owner_spec = projects[owner]
+        if owner_spec.workspace and owner_spec.workspace.get("configuration", owner) != owner:
+            raise ManifestError("chained_configuration_project")
+        if spec.config != owner_spec.config:
+            raise ManifestError("configuration_path_mismatch")
     return Manifest(schema_version=str(version), projects=projects)
 
 
