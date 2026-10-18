@@ -618,14 +618,18 @@ steps:
     environment = client.get(f"{base}/environments/test").json()
     updated = client.put(f"{base}/environments/test", json={
         "revision": environment["revision"],
-        "case_params": {"keyword": "from-env", "count": 4, "active": True, "filter": {"a": 5, "b": 6}},
+        "case_params": {
+            "keyword": "from-env", "count": 4, "active": True, "filter": {"a": 5, "b": 6},
+        },
     })
     assert updated.status_code == 200
     for params, expected in [
         ({}, {"keyword": "from-env", "count": 4, "active": True}),
         ({"count": 0, "active": False}, {"keyword": "from-env", "count": 0, "active": False}),
     ]:
-        response = client.post(f"{base}/assets/api.gsb.preview/run", json={"env": "test", "params": params})
+        response = client.post(
+            f"{base}/assets/api.gsb.preview/run", json={"env": "test", "params": params}
+        )
         assert response.status_code == 200
         assert response.json()["status"] == "success"
         assert submitted[-1] == expected
@@ -633,7 +637,8 @@ steps:
         assert sent_body() == {key: str(value) for key, value in expected.items()}
 
     case_response = client.post(f"{base}/cases/case.gsb.preview/run", json={
-        "env": "test", "params": {"keyword": "", "filter": {"a": 0}, "active": False, "optional": None},
+        "env": "test",
+        "params": {"keyword": "", "filter": {"a": 0}, "active": False, "optional": None},
     })
     assert case_response.status_code == 200
     assert case_response.json()["status"] == "success"

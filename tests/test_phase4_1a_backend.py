@@ -207,7 +207,9 @@ def test_account_username_projection(
 ) -> None:
     """登录用户名来自凭据白名单；其它字段不外泄，读取不会改写密文。"""
     client = _client()
-    ctx = bootstrap_synced_project(client, tmp_path, repo_key=f"projection{index}", project_key="demo")
+    ctx = bootstrap_synced_project(
+        client, tmp_path, repo_key=f"projection{index}", project_key="demo"
+    )
     base = f"{ctx['base']}/environments/test/accounts"
     client.post(f"{ctx['base']}/environments", json={"env": "test"})
     credentials = {"password": PASSWORD, "token": "fake-private-token", "cookie": "fake-cookie"}

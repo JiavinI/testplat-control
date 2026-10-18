@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | Engine | codex/local-engine-delivery | eb591d8879ec793f928500e5d7436648ef735309，0.5.1，已推送 |
 | Assets | codex/gsb-b2-auth | 7a2cc0bb393663bb15ac8573bddb167a90a6eef0，已推送 |
-| Control | codex/local-engine-delivery | 本文随功能与依赖提交保存；最终验证另补记录 |
+| Control | codex/local-engine-delivery | 7fc3159 功能与远程依赖；04dc72a 尾部空白清理；收尾记录另随末尾提交保存 |
 
 Engine 先推送，再由 `uv lock --upgrade-package testplat-engine` 更新 Control 的来源与锁文件。不再依赖本地扩展才能运行。只变化 Engine 版本／来源，以及当前 uv 自动生成的 lock revision（5 → 3），其它依赖版本未变。历史 [本地交付记录](local-engine-delivery-2026-10-16.md) 保留当时事实。
 
@@ -25,7 +25,12 @@ Engine 先推送，再由 `uv lock --upgrade-package testplat-engine` 更新 Con
 
 - 工作区 Control 全量 414 通过；前端 28 文件／191 通过，lint 和 build 通过（既有 bundle 提示）。
 - Engine 全量 429 通过；Assets 静态校验全部通过，安全输出回归 3 通过。
-- 干净 Control 检出、不带 editable／wheel 的远程锁定验证：提交后执行，最终证据将在本文件补充。
+- 干净 Control 检出 `04dc72a`：`uv run --isolated --locked --extra dev pytest -q` **411 通过、3 跳过**，95.01 秒；跳过项仅因初始没有相邻 Assets。随后从 GitHub 检出 Assets `7a2cc0b`，定向补跑这 3 项 **全部通过**（11.31 秒），不将首次跳过写为通过。
+- 干净 Assets 静态校验全部通过；安全输出回归 **3 通过**（5.87 秒）。
+- 依赖来源断言：Engine 0.5.1 导入自 uv 隔离环境的 site-packages，direct_url.json 的 vcs_info.commit_id 为 `eb591d8879ec793f928500e5d7436648ef735309`，无 editable 标记；`ensure_engine_compatible()` 通过，确实创建并检查 runtime。
+- 本阶段所有变更 Python 文件 ruff check 和 diff 检查通过。最终收尾仅对两处测试文件的长行换行，AST 比较不变，未改运行逻辑；未为文档改动重复全量测试。
+
+首次全量日志 `/tmp/testplat-stage-close-clean-control.log`，缺失资产补验 `/tmp/testplat-stage-close-clean-assets-gates.log`，临时文件可能被清理，以下命令是复现依据。
 
 此前浏览器隔离验收、参数持久化并发与假目标请求证据见 [工作区实现说明](platform-workspaces.md)。本轮不重复执行真实业务请求。
 
@@ -52,8 +57,14 @@ npm run build
 
 ## 预览与后续边界
 
-原预览后端仍为上一切片服务，未重启、未加 parameter_sets 表、未改账号或主密钥。本次原库文件校验保持不变。源码新功能已在隔离库验收；原预览尚未启用参数保存，不得直接重启误触原库。独立安全预览或备份加表需下一阶段另定范围。
+原预览后端仍为上一切片服务，未重启、未加 parameter_sets 表、未改账号或主密钥。本次原库 SHA-256 前后均为 `e3703f7970cd59e877b069b7140a847fa3dd53532a8f5fa6e167648984593c08`。源码新功能已在隔离库验收；原预览尚未启用参数保存，不得直接重启误触原库。独立安全预览或备份加表需下一阶段另定范围。
 
 代发后台验证码／Redis、网站浏览器登录、搜索商品与完整场景真实验收尚未完成。真实余额沿用历史证据，不据此宣称其它接口通过。公共运行策略与连接配置、Page、复杂编排、测试数据、套件、Assets 编辑继续延后。
 
 外层工作区没有远程仓库；相关需求、决策及交接将在 docs/workspace-records 中作为本阶段交付快照保存，后续本地工作仍以外层入口文档为准。用户原有 PHASE2_3_REVIEW_REPORT.md 不纳入提交。
+
+## 交付核对
+
+推送目标仅为上述三仓工作分支，不改 main、标签或发布。交付结束用 `git ls-remote origin refs/heads/<分支>` 与 `git rev-parse HEAD` 逐仓核对；Control 最终 HEAD 包含本记录和工作区文档快照，代码基线仍是上表提交。Control 保留唯一未跟踪的用户报告，Engine／Assets 无未提交修改。
+
+新会话读取最新任务与交接后，只讨论下一阶段切片；原预览保存启用与真实业务验收是明确后续项，并非本次交付已通过的能力。
