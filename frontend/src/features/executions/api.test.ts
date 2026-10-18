@@ -31,6 +31,7 @@ describe('executions api (Phase 4.0)', () => {
         params: [
           { name: 'username', type: 'string', required: true, description: '用户名' },
         ],
+        asset_defaults: { username: '', count: 0, active: false },
       }),
     )
     const result = await getAssetParams(PID, 'api.user.create', {
@@ -41,6 +42,7 @@ describe('executions api (Phase 4.0)', () => {
       '/repos/main/projects/demo/assets/api.user.create/params',
     )
     expect(result.params[0].name).toBe('username')
+    expect(result.asset_defaults).toEqual({ username: '', count: 0, active: false })
   })
 
   it('runAsset 提交 {env, params} body 并解析 commit_sha', async () => {

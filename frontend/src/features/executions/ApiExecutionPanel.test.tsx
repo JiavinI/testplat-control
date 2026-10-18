@@ -96,6 +96,32 @@ afterEach(() => {
 })
 
 describe('ApiExecutionPanel', () => {
+  it('显示默认来源，资产默认值不复制进请求，本次 false/0 可清除恢复', async () => {
+    getAssetParams.mockResolvedValue({
+      ...mixedParams,
+      asset_defaults: { username: '', age: 9, active: true },
+    })
+    runAsset.mockResolvedValue({ record_id: 'defaults', status: 'success', duration: 0, result: {} })
+    renderPanel('main/demo', 'api.demo.mixed', 'test', { age: 0, unrelated: 'do-not-show' })
+    const username = await screen.findByLabelText('username')
+    expect(username).toHaveAttribute('placeholder', '留空使用资产默认值')
+    expect(username).toHaveValue('')
+    expect(screen.getByTestId('parameter-effective-username')).toHaveTextContent('""')
+    expect(screen.getByTestId('parameter-effective-age')).toHaveTextContent('环境覆盖（兼容共享）')
+    expect(screen.getByTestId('parameter-preview')).not.toHaveTextContent('do-not-show')
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => expect(runAsset).toHaveBeenCalledWith('main/demo', 'api.demo.mixed', { env: 'test', params: {} }))
+    fireEvent.click(within(screen.getByTestId('param-active')).getByRole('radio', { name: 'false' }))
+    expect(screen.getByTestId('parameter-effective-active')).toHaveTextContent('false')
+    expect(screen.getByTestId('parameter-effective-active')).toHaveTextContent('本次输入')
+    fireEvent.change(screen.getByTestId('param-age'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => expect(runAsset).toHaveBeenLastCalledWith('main/demo', 'api.demo.mixed', { env: 'test', params: { active: false, age: 0 } }))
+    fireEvent.click(screen.getByRole('button', { name: /^清除本次输入$/ }))
+    expect(screen.getByTestId('parameter-effective-active')).toHaveTextContent('资产默认值')
+    expect(screen.getByTestId('parameter-effective-age')).toHaveTextContent('环境覆盖（兼容共享）')
+  })
+
   it(
     '提交时做类型转换，空非必填省略，保留 false',
     async () => {
@@ -397,8 +423,8 @@ describe('ApiExecutionPanel', () => {
       }),
     )
     await user.click(screen.getByRole('button', { name: '执行 API' }))
-    expect(await screen.findByText('请填写该参数')).toBeInTheDocument()
-    expect(runAsset).toHaveBeenCalledTimes(3)
+    await waitFor(() => expect(runAsset).toHaveBeenCalledTimes(4))
+    expect(runAsset.mock.calls[3][2]).toEqual({ env: 'staging', params: {} })
   })
 
   it('参数加载 404 可重试', async () => {

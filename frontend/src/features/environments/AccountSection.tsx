@@ -65,7 +65,7 @@ function draftFromAccount(row: TestAccount): AccountDraft {
 
 /**
  * 测试账号。列表不展示密码。
- * 凭据只在点击「查看凭据」后进入本组件状态，不进 Query 缓存。
+ * 除列表白名单中的登录用户名外，凭据只在点击「查看凭据」后进入本组件状态，不进 Query 缓存。
  */
 export function AccountSection({ projectId }: { projectId: string }) {
   const environments = useEnvironments(projectId)
@@ -513,6 +513,12 @@ function AccountTable({
       key: 'reference',
       render: (_value, row) => splitAccountReference(row.account_name).reference,
     },
+    {
+      title: '登录账号',
+      dataIndex: 'login_username',
+      key: 'login_username',
+      render: (value: string | null | undefined) => value === '' ? '（空账号）' : value ?? '—',
+    },
     { title: '完整引用', dataIndex: 'account_name', key: 'account_name' },
     { title: '登录流程', dataIndex: 'login_profile', key: 'login_profile' },
     {
@@ -566,6 +572,7 @@ function AccountTable({
         columns={columns}
         dataSource={rows}
         pagination={false}
+        scroll={{ x: 960 }}
         data-testid="account-table"
         locale={{ emptyText: '这个环境还没有测试账号' }}
       />

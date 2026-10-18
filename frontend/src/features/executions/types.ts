@@ -76,6 +76,22 @@ export interface ParamInfo {
 export interface ParamsResponse {
   asset_id: string
   params: ParamInfo[]
+  asset_defaults?: Record<string, unknown>
+}
+
+export interface ParameterContext {
+  project_id: string
+  asset_type: 'api' | 'case'
+  asset_id: string
+  env: string
+  commit_sha: string
+  environment_revision: number
+  git_defaults: Record<string, unknown>
+  shared_environment: Record<string, unknown>
+  asset_default: { values: Record<string, unknown>; revision: number }
+  environment_override: { values: Record<string, unknown>; revision: number }
+  effective: Record<string, unknown>
+  sources: Record<string, string>
 }
 
 export interface RunRequest {
@@ -159,6 +175,7 @@ export interface ExecutionListQuery {
 }
 
 export type ApiExecutionPanelProps = {
+  parameterContext?: ParameterContext
   projectId: string
   assetId: string
   /** 运行必填 env；由工作台环境下拉传入 */
@@ -296,7 +313,10 @@ export interface CaseExecutionRecordDetail {
 }
 
 export type CaseExecutionPanelProps = {
+  parameterContext?: ParameterContext
   projectId: string
   caseId: string
   env: string
+  assetDefaults?: Record<string, unknown>
+  caseParams?: Record<string, unknown>
 }

@@ -542,6 +542,107 @@ def test_case_param_overlay_and_cache_scope(world: dict) -> None:
     assert resolved.timeout_seconds == 2
 
 
+def test_parameter_preview_defaults_match_real_requests(
+    world: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """传给 Engine 的参数保留类型；隔离目标收到既有模板渲染后的字符串值。"""
+    from testplat_control.adapters.package_engine import PackageEngineAdapter
+    from tests.repo_support import commit_all, sync_repo, write_tree
+
+    submitted = []
+    execute = PackageEngineAdapter.execute
+
+    async def capture_execute(self, request):
+        submitted.append(request.to_dict()["params"])
+        return await execute(self, request)
+
+    monkeypatch.setattr(PackageEngineAdapter, "execute", capture_execute)
+    client, ctx = world["client"], world["ctx"]
+    base = ctx["base"]
+    write_tree(ctx["repo_path"], {
+        "projects/demo/api/gsb/preview.yaml": """\
+id: api.gsb.preview
+type: api
+name: 参数预览验收接口
+host: gsb
+method: POST
+url: /balance
+auth: none
+request:
+  type: json
+  inputs:
+    keyword: {type: string, required: true, default: ""}
+    count: {type: number, required: true, default: 0}
+    active: {type: boolean, required: true, default: false}
+  body:
+    keyword: "${keyword}"
+    count: "${count}"
+    active: "${active}"
+success:
+  status_code: 200
+""",
+        "projects/demo/scenarios/gsb/preview.case.yaml": """\
+schema_version: "0.2"
+id: case.gsb.preview
+name: Preview fixture
+params:
+  keyword: from-case
+  filter: {a: 7, b: 8}
+  active: true
+steps:
+  - step_id: send
+    type: api
+    api_id: api.gsb.preview
+    params:
+      keyword: "${params.keyword}"
+      count: "${params.filter.a}"
+      active: "${params.active}"
+""",
+    })
+    commit_all(ctx["repo_path"], "add parameter preview fixtures")
+    assert sync_repo(client, ctx["repo"])["ok"]
+    _env(client, base, world["login"].base, world["business"].base)
+    preview = client.get(f"{base}/assets/api.gsb.preview/params")
+    assert preview.status_code == 200
+    assert preview.json()["asset_defaults"] == {"keyword": "", "count": 0, "active": False}
+
+    def sent_body() -> dict:
+        events = world["business"].capture.snapshot()
+        return json.loads([event["body"] for event in events if event["path"] == "/balance"][-1])
+
+    first = client.post(f"{base}/assets/api.gsb.preview/run", json={"env": "test", "params": {}})
+    assert first.status_code == 200, first.json().get("detail")
+    assert first.json()["status"] == "success"
+    assert submitted[-1] == preview.json()["asset_defaults"]
+    assert sent_body() == {"keyword": "", "count": "0", "active": "False"}
+    environment = client.get(f"{base}/environments/test").json()
+    updated = client.put(f"{base}/environments/test", json={
+        "revision": environment["revision"],
+        "case_params": {"keyword": "from-env", "count": 4, "active": True, "filter": {"a": 5, "b": 6}},
+    })
+    assert updated.status_code == 200
+    for params, expected in [
+        ({}, {"keyword": "from-env", "count": 4, "active": True}),
+        ({"count": 0, "active": False}, {"keyword": "from-env", "count": 0, "active": False}),
+    ]:
+        response = client.post(f"{base}/assets/api.gsb.preview/run", json={"env": "test", "params": params})
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+        assert submitted[-1] == expected
+        # 预览输入不等于最终请求体：当前模板插值将 number／boolean 字符串化。
+        assert sent_body() == {key: str(value) for key, value in expected.items()}
+
+    case_response = client.post(f"{base}/cases/case.gsb.preview/run", json={
+        "env": "test", "params": {"keyword": "", "filter": {"a": 0}, "active": False, "optional": None},
+    })
+    assert case_response.status_code == 200
+    assert case_response.json()["status"] == "success"
+    # Case 步骤的引用解析保留类型，区别于当前单接口的模板插值。
+    assert sent_body() == {"keyword": "", "count": 0, "active": False}
+    assert submitted[-1]["filter"] == {"a": 0}
+    assert submitted[-1]["optional"] is None
+
+
 def test_projects_isolate_accounts_and_hosts(world: dict) -> None:
     """A2：同名账号在两个项目使用各自地址和凭据；操作人不是测试账号。"""
     client: TestClient = world["client"]

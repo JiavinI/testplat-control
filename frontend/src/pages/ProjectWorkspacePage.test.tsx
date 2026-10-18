@@ -187,6 +187,15 @@ vi.mock('@/features/environments/api', () => ({
 }))
 
 vi.mock('@/features/executions/api', () => ({
+  getParameterContext: vi.fn().mockImplementation(async (projectId, assetType, assetId, env) => {
+    const environments = await listEnvironments(projectId)
+    const shared = environments.find((item: { env: string }) => item.env === env)?.case_params ?? {}
+    return {
+    project_id: projectId, asset_type: assetType, asset_id: assetId, env, commit_sha: project.commit_sha,
+    environment_revision: 1, git_defaults: {}, shared_environment: shared,
+    asset_default: { values: {}, revision: 0 }, environment_override: { values: {}, revision: 0 }, effective: shared, sources: {},
+  }}),
+  saveParameterSet: vi.fn(),
   getAssetParams: (...args: unknown[]) => getAssetParams(...args),
   runAsset: (...args: unknown[]) => runAsset(...args),
   listExecutionRecords: (...args: unknown[]) => listExecutionRecords(...args),

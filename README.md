@@ -2,19 +2,27 @@
 
 测试平台控制面（FastAPI）。
 
-## 当前本地开发（2026-10-17）
+## 当前安装与开发（2026-10-18）
 
-本轮扩展已经保存在 Control / Engine 的 `codex/local-engine-delivery` 分支；Engine 本地候选版本为 **0.5.1**，尚未远程发布。Assets 使用 `codex/gsb-b2-auth`。三个仓库按相邻目录检出后，在 Control 执行：
+Control 通过远程精确提交安装 Engine **0.5.1**，已包含请求内容覆盖、登录凭据透传与脱敏扩展，不需要相邻 Engine 或 editable 覆盖：
+
+```bash
+uv sync --locked --extra dev
+uv run --locked python -c 'from testplat_control.engine_bootstrap import ensure_engine_compatible; print(ensure_engine_compatible())'
+uv run --locked --extra dev pytest -q
+```
+
+测试在导入应用前强制隔离内存库；服务启动读取调用者环境和 `.env`，请显式指定自己的数据库、仓库登记和对应主密钥，不要指向既有预览库。交付分支、复现证据及限制见 [本阶段交付](docs/stage-delivery-2026-10-18.md)。
+
+需要同时修改 Engine 时，仍可显式使用本地开发入口：
 
 ```bash
 bash scripts/dev.sh check
 bash scripts/dev.sh pytest -q
 bash scripts/verify-local-engine.sh
-# 服务读取调用者的配置；请显式指定自己的 DATABASE_URL 和原有主密钥。
-bash scripts/dev.sh uvicorn testplat_control.main:app --host 127.0.0.1 --port 8000
 ```
 
-`dev.sh` 使用 `uv run --isolated --locked --with-editable`，验证实际导入的 Engine 来源与契约，再执行命令；不改项目虚拟环境、锁文件或预览配置。Engine 不在相邻目录时，用 `TESTPLAT_ENGINE_SOURCE=/绝对路径/testplat-engine` 指定。测试在导入应用前强制内存库；启动服务则使用调用者环境，不会自动加载预览私有 `env.sh`。可复现步骤、验证证据与远程交付边界见 [本地交付说明](docs/local-engine-delivery-2026-10-16.md)。
+`dev.sh` 使用 `uv run --isolated --locked --with-editable`，验证相邻 Engine 来源及契约，不改变锁文件或加载预览私有配置。可用 `TESTPLAT_ENGINE_SOURCE=/绝对路径/testplat-engine` 指定源码目录。[历史本地交付记录](docs/local-engine-delivery-2026-10-16.md) 保留当时的依赖状态与证据。
 
 ## Engine 依赖（当前：Engine 0.5）
 
@@ -27,21 +35,21 @@ Control 通过 Python 包依赖调用 `testplat-engine`，**禁止**运行时 `s
 
 Phase 3 文档里的 `>=0.2.0,<0.3` 与 commit `4715c61` 是当时的基线，不是当前锁定。
 
-### 保留的远程锁定（当前不含扩展）
+### 当前远程精确锁定
 
 `testplat-engine` 通过 `[tool.uv.sources]` **锁定到 GitHub 上的精确 commit**（非本地 path editable）：
 
 ```toml
 # pyproject.toml 中的 [tool.uv.sources]
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "5231fb470dbb7a23b0d44489c49e2b8e88da7d36" }
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "eb591d8879ec793f928500e5d7436648ef735309" }
 ```
 
-> 该 rev 是旧 Engine v0.5.0（`5231fb4`），缺少请求覆盖契约，当前 Control 会在启动时明确拒绝。授权远程交付后先发布 Engine，再更新可获取的精确 SHA 和锁文件；目前使用上述本地入口。
+> 该 rev 是已推送工作分支上的 Engine 0.5.1 提交，包含请求覆盖契约；未合并 main、打标签或发布包。安装按精确 SHA，不依赖分支移动。
 
 - 版本约束：`>=0.5.0,<0.6`（与依赖声明一致）
 - 安装以 **rev/commit** 为准，不依赖分支名漂移；禁止 `sys.path` 注入；本地开发通过上面的显式隔离 editable 入口
 
-`uv sync --locked --extra dev` 只能安装旧远程基线，不能提供本轮能力。不要把未推送的本地 SHA 填进远程锁定。
+`uv sync --locked --extra dev` 直接安装上述远程 Engine。`uv.lock` 由 uv 生成；本轮 uv 将锁文件格式 revision 从 5 写为 3，其余依赖版本未变。
 
 ### 验证入口
 

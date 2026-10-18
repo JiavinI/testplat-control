@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiParseError } from '@/shared/api/errors'
-import { getAccountCredentials, updateEnvironment } from './api'
+import { getAccountCredentials, parseAccount, updateEnvironment } from './api'
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -24,6 +24,19 @@ afterEach(() => {
 })
 
 describe('environments api', () => {
+  it('账号列表只保留登录用户名，不把服务误带的完整凭据放入状态', () => {
+    const account = {
+      account_name: 'gsb.b1.primary', login_username: '泡泡象',
+      display_name: null, business_role: null, login_profile: 'gsb_login',
+      enabled: true, revision: 1, updated_by: null,
+    }
+    const parsed = parseAccount({ ...account, credentials: { password: 'fake-secret' }, token: 'fake-token' })
+    expect(parsed).toEqual(account)
+    expect(JSON.stringify(parsed)).not.toContain('fake-secret')
+    expect(JSON.stringify(parsed)).not.toContain('fake-token')
+    expect(parseAccount({ ...account, login_username: undefined }).login_username).toBeNull()
+  })
+
   it('更新环境的请求体带 revision', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(environment))
     await updateEnvironment(

@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Descriptions, Divider, Space, Typography } from 'antd'
+import { Alert, Button, Card, Descriptions, Divider, Input, Space, Typography } from 'antd'
 import { PlayCircleOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { ApiHttpError, ApiParseError } from '@/shared/api/errors'
@@ -11,6 +11,7 @@ import {
 } from './api'
 import { CaseResultView } from './CaseResultView'
 import { useRunCase } from './hooks'
+import { ParameterPreview } from './ParameterPreview'
 import type {
   CaseExecutionPanelProps,
   CaseExecutionRecordDetail,
@@ -24,15 +25,21 @@ type LocatedSystemFailure = {
 }
 
 /**
- * Case 执行面板：仅 params={} 运行，不解析 YAML、不覆盖 fail_fast/timeout。
+ * Case 执行面板：单次 JSON 参数覆盖，不解析 YAML、不覆盖 fail_fast/timeout。
  * 5xx 错误体无 record_id，需按 asset_type=case + asset_id + status=failed 定位历史。
  */
-export function CaseExecutionPanel({ projectId, caseId, env }: CaseExecutionPanelProps) {
+export function CaseExecutionPanel(props: CaseExecutionPanelProps) {
+  return <CaseExecutionPanelReady key={`${props.projectId}:${props.caseId}:${props.env}`} {...props} />
+}
+
+function CaseExecutionPanelReady({ projectId, caseId, env, assetDefaults, caseParams, parameterContext }: CaseExecutionPanelProps) {
   const runMutation = useRunCase(projectId, caseId)
   const [runResult, setRunResult] = useState<CaseRunResponse | null>(null)
   const [submitError, setSubmitError] = useState<unknown>(null)
   const [located, setLocated] = useState<LocatedSystemFailure | null>(null)
   const [locating, setLocating] = useState(false)
+  const [paramsText, setParamsText] = useState('')
+  const temporary = parseTemporaryParams(paramsText)
   const submitting = runMutation.isPending || locating
 
   const handleRun = async () => {
@@ -40,8 +47,9 @@ export function CaseExecutionPanel({ projectId, caseId, env }: CaseExecutionPane
     setLocated(null)
     setRunResult(null)
     try {
+      if ('error' in temporary) throw new Error(temporary.error)
       // 只传 env + params；禁止 fail_fast / timeout 覆盖字段
-      const data = await runMutation.mutateAsync({ env, params: {} })
+      const data = await runMutation.mutateAsync({ env, params: temporary.value })
       setRunResult(data)
     } catch (error) {
       if (error instanceof ApiHttpError && error.status >= 500) {
@@ -89,7 +97,25 @@ export function CaseExecutionPanel({ projectId, caseId, env }: CaseExecutionPane
       data-testid="case-execution-panel"
     >
       <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-        使用资产默认参数同步运行；不在客户端覆盖 fail_fast 或超时。
+        使用当前场景的资产默认值和所选环境覆盖。下方仅填写本次变化，留空沿用默认值。
+      </Typography.Paragraph>
+
+      <Typography.Text>本次场景参数（JSON 对象）</Typography.Text>
+      <Input.TextArea
+        aria-label="本次场景参数"
+        value={paramsText}
+        onChange={(event) => setParamsText(event.target.value)}
+        disabled={submitting}
+        placeholder='例如 {"product_keyword":"示例商品"}'
+        autoSize={{ minRows: 3, maxRows: 12 }}
+        style={{ margin: '8px 0', fontFamily: 'monospace' }}
+      />
+      <Button size="small" disabled={submitting} onClick={() => setParamsText('')}>清除本次场景输入</Button>
+      {'error' in temporary ? (
+        <Alert type="error" style={{ marginTop: 8 }} message={temporary.error} description="修正 JSON 后再预览和执行。" />
+      ) : <ParameterPreview env={env} assetDefaults={assetDefaults} caseParams={caseParams} temporary={temporary.value} context={parameterContext} />}
+      <Typography.Paragraph type="secondary">
+        环境覆盖目前仍在共享配置中维护；单次输入不会保存或修改步骤。完整场景校验由运行预检完成。
       </Typography.Paragraph>
 
       <Space style={{ marginTop: 4 }}>
@@ -98,7 +124,7 @@ export function CaseExecutionPanel({ projectId, caseId, env }: CaseExecutionPane
           className="tp-run-btn"
           icon={<PlayCircleOutlined />}
           loading={submitting}
-          disabled={submitting}
+          disabled={submitting || 'error' in temporary}
           onClick={() => {
             void handleRun()
           }}
@@ -191,4 +217,15 @@ export function CaseExecutionPanel({ projectId, caseId, env }: CaseExecutionPane
       ) : null}
     </Card>
   )
+}
+
+function parseTemporaryParams(text: string): { value: Record<string, unknown> } | { error: string } {
+  if (!text.trim()) return { value: {} }
+  try {
+    const value: unknown = JSON.parse(text)
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return { error: '场景参数必须是 JSON 对象' }
+    return { value: value as Record<string, unknown> }
+  } catch {
+    return { error: '场景参数不是合法 JSON' }
+  }
 }

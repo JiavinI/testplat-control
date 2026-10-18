@@ -192,11 +192,58 @@ def test_env_and_account_rules(tmp_path: Path, master_key: str) -> None:
 
     listed = client.get(f"{base}/environments/pre/accounts")
     assert listed.status_code == 200
+    assert listed.json()[0]["login_username"] == "user-name"
+    assert listed.headers["cache-control"] == "no-store"
     assert PASSWORD not in listed.text
     creds = client.get(f"{base}/environments/pre/accounts/gsb/credentials")
     assert creds.status_code == 200
     assert creds.json()["credentials"]["password"] == PASSWORD
     assert creds.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("index,username", list(enumerate(["泡泡象", "18500000000", "", None])))
+def test_account_username_projection(
+    tmp_path: Path, master_key: str, index: int, username: str | None
+) -> None:
+    """登录用户名来自凭据白名单；其它字段不外泄，读取不会改写密文。"""
+    client = _client()
+    ctx = bootstrap_synced_project(client, tmp_path, repo_key=f"projection{index}", project_key="demo")
+    base = f"{ctx['base']}/environments/test/accounts"
+    client.post(f"{ctx['base']}/environments", json={"env": "test"})
+    credentials = {"password": PASSWORD, "token": "fake-private-token", "cookie": "fake-cookie"}
+    if username is not None:
+        credentials["username"] = username
+    created = client.post(base, json={
+        "account_name": "gsb.b1.primary",
+        "display_name": "不应当作登录名",
+        "login_profile": "gsb_login",
+        "credentials": credentials,
+    })
+    assert created.status_code == 201
+    with SessionLocal() as db:
+        before = db.execute(
+            text("SELECT encrypted_credentials FROM test_accounts WHERE project_id = :project"),
+            {"project": ctx["project_id"]},
+        ).scalar_one()
+    for response in [created, client.get(base), client.get(f"{base}/gsb.b1.primary")]:
+        assert response.status_code in (200, 201)
+        body = response.json()
+        item = body[0] if isinstance(body, list) else body
+        assert item["login_username"] == username
+        assert "credentials" not in item
+        for secret in (PASSWORD, "fake-private-token", "fake-cookie", before):
+            assert secret not in response.text
+    with SessionLocal() as db:
+        after = db.execute(
+            text("SELECT encrypted_credentials FROM test_accounts WHERE project_id = :project"),
+            {"project": ctx["project_id"]},
+        ).scalar_one()
+        assert after == before
+    changed = client.put(f"{base}/gsb.b1.primary", json={
+        "revision": 1, "credentials": {"username": "updated-user", "password": PASSWORD},
+    })
+    assert changed.status_code == 200
+    assert client.get(base).json()[0]["login_username"] == "updated-user"
 
 
 def test_a11_revision_conflict(tmp_path: Path, master_key: str) -> None:
@@ -592,6 +639,9 @@ def test_r3_merges_before_required_check(
     client = _client()
     ctx = bootstrap_synced_project(client, tmp_path, files, repo_key="mergep", project_key="demo")
     base = ctx["base"]
+    preview = client.get(f"{base}/assets/api.user.create/params")
+    assert preview.status_code == 200
+    assert preview.json()["asset_defaults"] == {"username": "from-asset"}
 
     initial = client.post(
         f"{base}/environments",

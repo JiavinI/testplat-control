@@ -383,3 +383,17 @@ h4.tp-page-title {
   border-radius: 8px;
   background: #fafaf9;
 }
+
+/* 环境详情直接展示完整地址；编辑表单给 URL 留足宽度。 */
+.tp-service-hosts { display: grid; gap: 16px; }
+.tp-service-hosts section { min-width: 0; }
+.tp-service-host { display: grid; grid-template-columns: minmax(130px, 180px) minmax(0, 1fr); gap: 12px; padding: 12px; border-bottom: 1px solid #e7e5e4; }
+.tp-service-host__url { overflow-wrap: anywhere; white-space: pre-wrap; }
+.tp-host-editor-row { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto; gap: 12px; align-items: end; margin-bottom: 12px; }
+.tp-host-editor-row label { min-width: 0; display: grid; gap: 4px; }
+.tp-parameter-value { display: block; overflow-wrap: anywhere; white-space: pre-wrap; max-width: 360px; font-family: ui-monospace, monospace; }
+@media (max-width: 600px) {
+  .tp-service-host, .tp-host-editor-row { grid-template-columns: minmax(0, 1fr); }
+  .tp-host-editor-row { padding-bottom: 12px; border-bottom: 1px solid #e7e5e4; }
+  .tp-host-editor-row > button { justify-self: end; }
+}

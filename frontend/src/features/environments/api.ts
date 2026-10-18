@@ -90,9 +90,10 @@ export function parseEnvironment(payload: unknown, label = 'EnvironmentResponse'
 
 export function parseAccount(payload: unknown, label = 'AccountResponse'): TestAccount {
   assertObject(payload, label, OMITTED)
-  // 列表与详情契约不含凭据。即使响应多带了 credentials，也不放进账号状态。
+  // 登录用户名单独白名单解析。即使响应多带了 credentials，也不放进账号状态。
   return {
     account_name: requireString(payload, 'account_name', label, OMITTED),
+    login_username: payload.login_username === undefined ? null : requireNullableString(payload, 'login_username', label, OMITTED),
     display_name: requireNullableString(payload, 'display_name', label, OMITTED),
     business_role: requireNullableString(payload, 'business_role', label, OMITTED),
     login_profile: requireString(payload, 'login_profile', label, OMITTED),

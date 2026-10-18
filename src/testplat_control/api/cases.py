@@ -21,8 +21,9 @@ from testplat_control.database.models import ExecutionRecord
 from testplat_control.database.session import get_db
 from testplat_control.deps import get_engine_port
 from testplat_control.ports.engine import EnginePort
-from testplat_control.services.case_asset_service import find_case_file
+from testplat_control.services.case_asset_service import case_parameter_defaults, find_case_file
 from testplat_control.services.execution_service import run_case
+from testplat_control.services.parameter_sets import begin_snapshot
 from testplat_control.services.platform_auth import PlatformPrincipal
 from testplat_control.services.project_access import (
     ensure_snapshot_dirs,
@@ -86,6 +87,7 @@ async def run_case_asset(
     user: PlatformPrincipal = Depends(require_user),
 ) -> CaseRunResponse:
     """串行运行一个 Case，并保存执行记录。"""
+    begin_snapshot(db)
     row = get_project(db, repo, project)
     env = require_env(db, row, body.env)
     commit_sha, assets_root, config_root = ensure_snapshot_dirs(get_repos_config(request), row)
@@ -101,6 +103,7 @@ async def run_case_asset(
         config_root=config_root,
         timeout_seconds=body.timeout_seconds,
         operator=user.username,
+        asset_defaults=case_parameter_defaults(assets_root, case_id),
     )
     result = _load_case_result(record)
     if result is None or not record.id:

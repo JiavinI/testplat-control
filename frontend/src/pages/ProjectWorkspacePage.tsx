@@ -30,6 +30,7 @@ import {
 } from '@/features/executions'
 import { ApiInfoPanel } from '@/features/assets/ApiInfoPanel'
 import { useCaseAssetDetail } from '@/features/executions/hooks'
+import { StoredParameters } from '@/features/executions/StoredParameters'
 import { useEnvironments } from '@/features/environments/hooks'
 import { useProject } from '@/features/projects/hooks'
 import { joinProjectId } from '@/shared/project/ids'
@@ -264,7 +265,10 @@ export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<W
       ) : null}
 
       {isApi && selectedFromTree && selectedEnv && canRun && !detailsQuery.isLoading && !detailsQuery.isError ? (
+        <StoredParameters key={`${projectId}:${selectedFromTree.id}:${selectedEnv}:${project.commit_sha}`} projectId={projectId} assetType="api" assetId={selectedFromTree.id} env={selectedEnv} commit={project.commit_sha ?? ''}>
+          {(context) =>
         <ApiExecutionPanel
+          parameterContext={context}
           key={`${projectId}:${selectedFromTree.id}:${selectedEnv}`}
           projectId={projectId}
           assetId={selectedFromTree.id}
@@ -275,15 +279,27 @@ export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<W
             environmentQuery.data?.find((item) => item.env === selectedEnv)?.case_params
           }
         />
+          }
+        </StoredParameters>
       ) : null}
 
       {isCase && selectedFromTree && selectedEnv && canRun ? (
+        <StoredParameters key={`${projectId}:${selectedFromTree.id}:${selectedEnv}:${project.commit_sha}`} projectId={projectId} assetType="case" assetId={selectedFromTree.id} env={selectedEnv} commit={project.commit_sha ?? ''}>
+          {(context) =>
         <CaseExecutionPanel
+          parameterContext={context}
           key={`${projectId}:case:${selectedFromTree.id}:${selectedEnv}`}
           projectId={projectId}
           caseId={selectedFromTree.id}
           env={selectedEnv}
+          assetDefaults={
+            selectedFromTree.metadata?.params && typeof selectedFromTree.metadata.params === 'object' && !Array.isArray(selectedFromTree.metadata.params)
+              ? selectedFromTree.metadata.params as Record<string, unknown> : undefined
+          }
+          caseParams={activeEnvironment?.case_params}
         />
+          }
+        </StoredParameters>
       ) : null}
 
       {!isApi && !isCase && selectedFromTree ? (

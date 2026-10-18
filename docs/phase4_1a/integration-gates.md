@@ -10,9 +10,9 @@
 
 `frontend/scripts/e2e-feature-navigation.mjs` 验证功能隔离、配置页签、窄屏抽屉和页面错误。通过 `E2E_STORAGE_STATE` 指定已有平台会话，或使用 `E2E_USERNAME` / `E2E_PASSWORD` 登录；不会自行注册、创建环境或修改账号。`E2E_RUN_API=1` 可额外运行 `E2E_API_ID`（默认 `api.gsb.account.balance`）。截图和报告默认放在 `/tmp/testplat-feature-navigation`。
 
-## 当前依赖入口（2026-10-17）
+## 当前依赖入口（2026-10-18）
 
-当前使用 `bash scripts/dev.sh check` 验证相邻 Engine 0.5.1 本地候选；远程锁定仍为旧 0.5.0，直接启动会因缺少请求覆盖契约而失败。下表 Python / pytest 门禁统一使用显式本地入口；完整交付边界见 [本地交付说明](../local-engine-delivery-2026-10-16.md)。
+Control 已锁定远程 Engine 0.5.1 精确 SHA，可用 `uv run --isolated --locked --extra dev pytest -q`，无需 editable。下表保留显式相邻 Engine 开发入口；只使用远程依赖时可将 `bash scripts/dev.sh` 替换为 `uv run --locked --extra dev`。交付和干净检出证据见 [阶段交付](../stage-delivery-2026-10-18.md)。
 
 ## 当前门禁
 
@@ -88,4 +88,4 @@ A12 的重启子进程会再次登录，得到父进程看不到的新会话。�
 
 接口详情、完整环境 URL、请求内容临时编辑和响应优先展示见 [本轮验收](../api-workspace-2026-10-16.md)。`node frontend/scripts/e2e-api-workspace.mjs` 只做浏览器隔离 mock，不触碰数据库；真实余额的本轮证据来自独立临时数据库，不能把 mock 响应当成业务验收。
 
-`bash scripts/verify-local-engine.sh` 构建本地 Engine wheel，在隔离环境安装并执行假服务集成、默认配置边界、启动诊断及兼容契约测试。Control 仍锁旧远程 Engine，发布顺序及门禁见 [依赖交付方案](../local-engine-delivery-2026-10-16.md)。搜索商品与完整场景仍未完成真实验收。
+`bash scripts/verify-local-engine.sh` 构建本地 Engine wheel，在隔离环境安装并执行假服务集成、默认配置边界、启动诊断及兼容契约测试。当前远程锁定与验证见 [阶段交付](../stage-delivery-2026-10-18.md)；本地 wheel 仍是并行开发的补充门禁。搜索商品与完整场景仍未完成真实验收。

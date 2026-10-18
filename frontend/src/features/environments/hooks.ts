@@ -34,6 +34,7 @@ function useInvalidateProjectConfig() {
   return () => {
     void client.invalidateQueries({ queryKey: environmentKeys.all })
     void client.invalidateQueries({ queryKey: projectKeys.all })
+    void client.invalidateQueries({ queryKey: ['executions', 'parameterContext'] })
   }
 }
 

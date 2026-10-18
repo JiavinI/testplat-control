@@ -60,6 +60,7 @@ const testEnv: ProjectEnvironment = {
 
 const gsbAccount: TestAccount = {
   account_name: 'gsb',
+  login_username: 'buyer-user',
   display_name: '采购',
   business_role: '买家',
   login_profile: 'gsb_login',
@@ -169,6 +170,27 @@ beforeEach(() => {
 })
 
 describe('环境管理', () => {
+  it('先展示当前环境的完整地址，切换后只展示所选环境并保留未知服务', async () => {
+    const longUrl = `https://api.example.invalid/${'long-path/'.repeat(15)}`
+    listEnvironments.mockResolvedValue([
+      { ...testEnv, api_hosts: { gsb: longUrl, custom_service: 'https://custom.example.invalid' } },
+      { ...testEnv, env: 'pre', enabled: false, api_hosts: { portal: 'https://pre.example.invalid' } },
+    ])
+    renderSection(<EnvironmentSection projectId="main/gsb" />)
+    expect(await screen.findByText(longUrl)).toBeInTheDocument()
+    expect(screen.getByText('https://custom.example.invalid')).toBeInTheDocument()
+    expect(screen.getByText('API 服务')).toBeInTheDocument()
+    expect(screen.queryByText('https://pre.example.invalid')).not.toBeInTheDocument()
+    fireEvent.mouseDown(screen.getByTestId('environment-select').querySelector('.ant-select-selector')!)
+    fireEvent.click(await screen.findByText('pre（已停用）', { selector: '.ant-select-item-option-content' }))
+    expect(screen.getByText('https://pre.example.invalid')).toBeInTheDocument()
+    expect(screen.queryByText(longUrl)).not.toBeInTheDocument()
+    expect(screen.getByText('网站服务')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('env-edit-pre'))
+    expect(screen.getByLabelText('环境名')).toHaveValue('pre')
+    expect(screen.getByLabelText('地址 1')).toHaveValue('https://pre.example.invalid')
+  })
+
   it('新增环境提交服务地址、超时和参数默认值', async () => {
     const user = userEvent.setup({ delay: null })
     listEnvironments.mockResolvedValue([])
@@ -314,6 +336,8 @@ describe('测试账号凭据', () => {
     renderSection(<AccountSection projectId="main/gsb" />)
     expect(await screen.findByTestId('account-edit-gsb')).toBeInTheDocument()
     expect(screen.getByTestId('account-table')).not.toHaveTextContent('secret-pass')
+    expect(screen.getByTestId('account-table')).toHaveTextContent('登录账号')
+    expect(screen.getByTestId('account-table')).toHaveTextContent('buyer-user')
     expect(getAccountCredentials).not.toHaveBeenCalled()
 
     await user.click(screen.getByTestId('account-edit-gsb'))

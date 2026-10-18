@@ -1,6 +1,6 @@
 """项目环境、登录流程与测试账号。
 
-列表与详情不返回凭据。显式查看凭据的响应禁止缓存。
+列表与详情仅返回登录用户名，不返回完整凭据。显式查看凭据的响应禁止缓存。
 PUT 必须带 revision，不一致返回 409。
 """
 
@@ -106,6 +106,7 @@ class AccountUpdate(BaseModel):
 
 class AccountResponse(BaseModel):
     account_name: str
+    login_username: str | None
     display_name: str | None
     business_role: str | None
     login_profile: str
@@ -134,6 +135,8 @@ def _env_response(row: ProjectEnvironment) -> EnvironmentResponse:
 def _account_response(row: TestAccount) -> AccountResponse:
     return AccountResponse(
         account_name=row.account_name,
+        # 只允许 username 进入列表 DTO，其他凭据字段不能透传。
+        login_username=read_credentials(row).get("username"),
         display_name=row.display_name,
         business_role=row.business_role,
         login_profile=row.login_profile,
@@ -261,10 +264,12 @@ async def get_accounts(
     repo: str,
     project: str,
     env: str,
+    response: Response,
     db: Session = Depends(get_db),
     user: PlatformPrincipal = Depends(require_user),
 ) -> list[AccountResponse]:
     del user
+    response.headers["Cache-Control"] = "no-store"
     row = configuration_project(db, get_project(db, repo, project))
     return [_account_response(item) for item in list_accounts(db, row.id, env)]
 
@@ -300,10 +305,12 @@ async def get_account_detail(
     project: str,
     env: str,
     name: str,
+    response: Response,
     db: Session = Depends(get_db),
     user: PlatformPrincipal = Depends(require_user),
 ) -> AccountResponse:
     del user
+    response.headers["Cache-Control"] = "no-store"
     row = configuration_project(db, get_project(db, repo, project))
     return _account_response(get_account(db, row.id, env, name))
 

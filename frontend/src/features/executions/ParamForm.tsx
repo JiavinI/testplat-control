@@ -1,14 +1,16 @@
 import { Form, Input, InputNumber, Radio, Typography } from 'antd'
 import type { FormInstance } from 'antd/es/form'
-import { hasEnvCaseDefault } from './envDefaults'
-import type { ParamInfo } from './types'
+import { resolveParameterValues, validParameterDefault } from './parameterValues'
+import type { ParameterContext, ParamInfo } from './types'
 
 interface ParamFormProps {
+  context?: ParameterContext
   form: FormInstance<Record<string, unknown>>
   params: ParamInfo[]
   disabled?: boolean
   /** 当前环境 case_params。有默认值的必填项允许留空，且不把默认值填进表单。 */
   caseParams?: Record<string, unknown>
+  assetDefaults?: Record<string, unknown>
 }
 
 const BOOL_OPTIONS = [
@@ -16,7 +18,8 @@ const BOOL_OPTIONS = [
   { label: 'false', value: false },
 ]
 
-export function ParamForm({ form, params, disabled, caseParams }: ParamFormProps) {
+export function ParamForm({ form, params, disabled, caseParams, assetDefaults, context }: ParamFormProps) {
+  const defaults = resolveParameterValues(context?.git_defaults ?? assetDefaults, context?.shared_environment ?? caseParams, {}, params.map((item) => item.name), context?.asset_default.values, context?.environment_override.values)
   return (
     <Form
       form={form}
@@ -31,13 +34,15 @@ export function ParamForm({ form, params, disabled, caseParams }: ParamFormProps
         </Typography.Text>
       ) : (
         params.map((item) => {
-          const covered = item.required && hasEnvCaseDefault(caseParams, item.name)
+          const row = defaults.find((row) => row.name === item.name)!
+          const covered = validParameterDefault(item, row)
+          const source = row.source === 'environment' ? '环境默认值' : row.source === 'override' ? '当前资产环境覆盖' : row.source === 'saved' ? '页面默认值' : '资产默认值'
           return (
             <Form.Item
               key={item.name}
               name={item.name}
               label={item.name}
-              extra={fieldExtra(item, covered)}
+              extra={fieldExtra(item, covered, source)}
               rules={
                 item.required && !covered
                   ? [
@@ -49,7 +54,7 @@ export function ParamForm({ form, params, disabled, caseParams }: ParamFormProps
                   : undefined
               }
             >
-              {renderControl(item, covered)}
+              {renderControl(item, covered, source)}
             </Form.Item>
           )
         })
@@ -58,13 +63,13 @@ export function ParamForm({ form, params, disabled, caseParams }: ParamFormProps
   )
 }
 
-function fieldExtra(item: ParamInfo, covered: boolean): string | undefined {
-  const hint = covered ? '留空使用环境默认值，本次请求不提交该参数' : null
+function fieldExtra(item: ParamInfo, covered: boolean, source: string): string | undefined {
+  const hint = covered ? `留空使用${source}，本次请求不提交该参数` : null
   const parts = [item.description, hint].filter((part): part is string => Boolean(part))
   return parts.length > 0 ? parts.join('。') : undefined
 }
 
-function renderControl(item: ParamInfo, covered: boolean) {
+function renderControl(item: ParamInfo, covered: boolean, source: string) {
   if (item.type === 'boolean') {
     return (
       <Radio.Group
@@ -76,10 +81,8 @@ function renderControl(item: ParamInfo, covered: boolean) {
       />
     )
   }
-  const placeholder = item.required
-    ? covered
-      ? '留空使用环境默认值'
-      : item.type === 'number'
+  const placeholder = covered ? `留空使用${source}` : item.required
+      ? item.type === 'number'
         ? '必填数字'
         : '必填'
     : item.type === 'number'

@@ -170,6 +170,36 @@ class ProjectEnvironment(Base):
         )
 
 
+class ParameterSet(Base):
+    """按实际工作区、资产和作用域保存的业务参数；不包含账号凭据。"""
+
+    __tablename__ = "parameter_sets"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "asset_type", "asset_id", "scope", "env_key",
+            name="uq_parameter_set_scope",
+        ),
+    )
+
+    id: str = Column(String(36), primary_key=True)
+    project_id: str = Column(String(160), ForeignKey("projects.id"), nullable=False)
+    asset_type: str = Column(String(16), nullable=False)  # api | case
+    asset_id: str = Column(String(255), nullable=False)
+    scope: str = Column(String(32), nullable=False)  # asset_default | environment_override
+    env_key: str = Column(String(64), nullable=False, default="")
+    values = Column(JSON, nullable=False, default=dict)
+    revision: int = Column(Integer, nullable=False, default=1)
+    updated_by: str | None = Column(String(64), nullable=True)
+    created_at: datetime = Column(DateTime, nullable=False)
+    updated_at: datetime = Column(DateTime, nullable=False)
+
+    def __repr__(self) -> str:
+        return (
+            f"ParameterSet(project_id={self.project_id!r}, asset_id={self.asset_id!r}, "
+            f"scope={self.scope!r}, env_key={self.env_key!r}, revision={self.revision!r})"
+        )
+
+
 class TestAccount(Base):
     """测试账号。唯一键 (project_id, env, account_name)；凭据只存密文。"""
 

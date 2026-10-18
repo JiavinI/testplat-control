@@ -9,9 +9,11 @@ import {
   getCaseAssetDetail,
   getCaseExecutionRecord,
   getExecutionRecord,
+  getParameterContext,
   listExecutionRecords,
   runAsset,
   runCase,
+  saveParameterSet,
 } from './api'
 import type {
   CaseAssetDetail,
@@ -40,12 +42,30 @@ export const executionKeys = {
     [...executionKeys.all, 'caseRecord', projectId, recordId] as const,
 }
 
+export function useParameterContext(projectId: string, assetType: 'api' | 'case', assetId: string, env: string, commit: string) {
+  return useQuery({
+    queryKey: [...executionKeys.all, 'parameterContext', projectId, assetType, assetId, env, commit],
+    queryFn: () => getParameterContext(projectId, assetType, assetId, env),
+    enabled: Boolean(projectId && assetId && env),
+  })
+}
+
+export function useSaveParameterSet(projectId: string, assetType: 'api' | 'case', assetId: string, env: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { scope: 'asset_default' | 'environment_override'; values: Record<string, unknown>; revision: number; commit_sha: string }) =>
+      saveParameterSet(projectId, assetType, assetId, env, input),
+    onSuccess: () => client.invalidateQueries({ queryKey: [...executionKeys.all, 'parameterContext', projectId, assetType, assetId] }),
+  })
+}
+
 export function useAssetParams(
   projectId: string,
   assetId: string,
+  commit?: string,
 ): UseQueryResult<ParamsResponse, Error> {
   return useQuery({
-    queryKey: executionKeys.params(projectId, assetId),
+    queryKey: [...executionKeys.params(projectId, assetId), commit ?? ''],
     queryFn: () => getAssetParams(projectId, assetId),
     enabled: Boolean(projectId && assetId),
   })

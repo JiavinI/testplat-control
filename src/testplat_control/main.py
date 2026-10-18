@@ -14,6 +14,7 @@ from testplat_control.api import (
     cases,
     environments,
     execution,
+    parameter_sets,
     platform_session,
     projects,
     repos,
@@ -127,6 +128,7 @@ app.include_router(assets.router, dependencies=_AUTH)
 app.include_router(run.router, dependencies=_AUTH)
 app.include_router(cases.router, dependencies=_AUTH)
 app.include_router(environments.router, dependencies=_AUTH)
+app.include_router(parameter_sets.router, dependencies=_AUTH)
 
 
 @app.get("/health")

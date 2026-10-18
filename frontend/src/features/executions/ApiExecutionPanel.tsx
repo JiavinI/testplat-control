@@ -10,6 +10,7 @@ import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
 import { formatRunFailure } from './accountFailure'
 import { useAssetParams, useRunAsset } from './hooks'
 import { ParamForm } from './ParamForm'
+import { ParameterPreview } from './ParameterPreview'
 import { ApiRunResult } from './ApiRunResult'
 import { JsonBlock } from './JsonBlock'
 import { serializeRunParams } from './serializeParams'
@@ -26,8 +27,9 @@ export function ApiExecutionPanel({
   caseParams,
   requestDefinition,
   runDisabled,
+  parameterContext,
 }: ApiExecutionPanelProps) {
-  const paramsQuery = useAssetParams(projectId, assetId)
+  const paramsQuery = useAssetParams(projectId, assetId, parameterContext?.commit_sha)
 
   if (paramsQuery.isLoading) {
     return <LoadingState tip="加载参数…" />
@@ -55,6 +57,8 @@ export function ApiExecutionPanel({
       runDisabled={runDisabled}
       key={`${projectId}:${assetId}:${env}`}
       params={paramsQuery.data?.params ?? []}
+      assetDefaults={paramsQuery.data?.asset_defaults}
+      parameterContext={parameterContext}
     />
   )
 }
@@ -67,11 +71,15 @@ function ApiExecutionPanelReady({
   params,
   requestDefinition,
   runDisabled,
+  assetDefaults,
+  parameterContext,
 }: ApiExecutionPanelProps & {
   params: NonNullable<ReturnType<typeof useAssetParams>['data']>['params']
+  assetDefaults?: Record<string, unknown>
 }) {
   // Form 实例仅在已挂载 ParamForm 的子树中创建，避免 useForm disconnected 警告
   const [form] = Form.useForm<Record<string, unknown>>()
+  const values = Form.useWatch([], form) ?? {}
   const [runResult, setRunResult] = useState<RunResponse | null>(null)
   const [submitError, setSubmitError] = useState<unknown>(null)
   const [editBody, setEditBody] = useState(false)
@@ -171,7 +179,9 @@ function ApiExecutionPanelReady({
         <JsonBlock value={rawBody ? originalBody : requestDefinition.body} aria-label="请求模板" />
       </div> : null}
       <div style={{ display: editBody ? 'none' : undefined }}>
-        <ParamForm form={form} params={params} disabled={submitting} caseParams={caseParams} />
+        <ParamForm form={form} params={params} disabled={submitting} caseParams={caseParams} assetDefaults={assetDefaults} context={parameterContext} />
+        <Button size="small" disabled={submitting} onClick={() => form.resetFields()}>清除本次输入</Button>
+        <ParameterPreview env={env} params={params} assetDefaults={assetDefaults} caseParams={caseParams} temporary={serializeRunParams(params, values)} context={parameterContext} />
       </div>
       {editBody ? (
         <div>
@@ -189,6 +199,7 @@ function ApiExecutionPanelReady({
           />
           <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
             可以新增、删除或修改任意字段。填写实际请求内容后原样发送，仅本次运行生效。
+            此模式不使用上方模板参数与默认值预览。
           </Typography.Paragraph>
           <Button size="small" disabled={submitting} onClick={() => setBodyText(originalBody)}>
             从 YAML 恢复

@@ -25,9 +25,40 @@ import type {
   ExecutionRecordDetail,
   ExecutionRecordListItem,
   ParamsResponse,
+  ParameterContext,
   RunRequest,
   RunResponse,
 } from './types'
+
+function parseParameterContext(payload: unknown): ParameterContext {
+  const label = 'ParameterContext'
+  assertObject(payload, label, '[已省略]')
+  for (const key of ['git_defaults', 'shared_environment', 'effective', 'sources']) {
+    assertObject(payload[key], `${label}.${key}`, '[已省略]')
+  }
+  for (const key of ['asset_default', 'environment_override']) {
+    assertObject(payload[key], `${label}.${key}`, '[已省略]')
+    assertObject(payload[key].values, `${label}.${key}.values`, '[已省略]')
+    if (!Number.isInteger(payload[key].revision) || Number(payload[key].revision) < 0) throw new ApiParseError('参数版本格式无效', '[已省略]')
+  }
+  if (!['api', 'case'].includes(String(payload.asset_type)) || !Number.isInteger(payload.environment_revision)) throw new ApiParseError('参数上下文格式无效', '[已省略]')
+  for (const key of ['project_id', 'asset_id', 'env', 'commit_sha']) requireString(payload, key, label, '[已省略]')
+  return payload as unknown as ParameterContext
+}
+
+export async function getParameterContext(projectId: string, assetType: 'api' | 'case', assetId: string, env: string): Promise<ParameterContext> {
+  return parseParameterContext(await apiClient.get<unknown>(
+    `${projectResourcePath(projectId, 'parameter-sets', assetType, assetId)}?env=${encodeURIComponent(env)}`,
+  ))
+}
+
+export async function saveParameterSet(projectId: string, assetType: 'api' | 'case', assetId: string, env: string,
+  input: { scope: 'asset_default' | 'environment_override'; values: Record<string, unknown>; revision: number; commit_sha: string },
+): Promise<unknown> {
+  const { scope, ...body } = input
+  const query = scope === 'environment_override' ? `?env=${encodeURIComponent(env)}` : ''
+  return apiClient.put(`${projectResourcePath(projectId, 'parameter-sets', assetType, assetId, scope)}${query}`, body)
+}
 
 function recordsPath(projectId: string, query: ExecutionListQuery = {}): string {
   const base = projectResourcePath(projectId, 'execution-records')
@@ -91,7 +122,8 @@ function parseParamsResponse(payload: unknown): ParamsResponse {
             })()
     return { name, type, required: item.required, description }
   })
-  return { asset_id: assetId, params }
+  if (payload.asset_defaults !== undefined) assertObject(payload.asset_defaults, 'ParamsResponse.asset_defaults', '[已省略]')
+  return { asset_id: assetId, params, ...(payload.asset_defaults === undefined ? {} : { asset_defaults: payload.asset_defaults }) }
 }
 
 export function parseRunResponse(payload: unknown): RunResponse {

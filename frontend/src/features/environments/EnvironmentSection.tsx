@@ -1,5 +1,4 @@
-import { Alert, Button, Input, Modal, Space, Switch, Table, Typography } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
+import { Alert, Button, Descriptions, Empty, Input, Modal, Select, Space, Switch, Typography } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { formatErrorMessage } from '@/shared/ui/errorMessage'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
@@ -22,6 +21,7 @@ import {
 } from './names'
 import { isRevisionConflict, REVISION_CONFLICT_MESSAGE } from './revision'
 import type { ProjectEnvironment } from './types'
+import { ServiceHosts } from './ServiceHosts'
 
 interface EnvDraft {
   mode: 'create' | 'edit'
@@ -63,6 +63,7 @@ function draftFromEnvironment(row: ProjectEnvironment): EnvDraft {
  */
 export function EnvironmentSection({ projectId }: { projectId: string }) {
   const listQuery = useEnvironments(projectId)
+  const [selectedEnv, setSelectedEnv] = useState<string | null>(null)
   const createMutation = useCreateEnvironment(projectId)
   const updateMutation = useUpdateEnvironment(projectId)
   const discardUnauthorized = useUnauthorizedGuard()
@@ -92,6 +93,7 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
   }
 
   useEffect(() => {
+    setSelectedEnv(null)
     targetRef.current = nextEditTarget(targetRef.current, {
       projectId,
       env: '',
@@ -155,6 +157,7 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
         return
       }
       close()
+      setSelectedEnv(envName)
     } catch (error) {
       if (!isCurrentEditTarget(targetRef.current, session)) {
         return
@@ -234,61 +237,37 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
   }
 
   const rows = listQuery.data ?? []
-  const columns: ColumnsType<ProjectEnvironment> = [
-    { title: '环境名', dataIndex: 'env', key: 'env' },
-    {
-      title: '启用',
-      dataIndex: 'enabled',
-      key: 'enabled',
-      render: (value: boolean) => (value ? '是' : '否'),
-    },
-    {
-      title: '超时',
-      dataIndex: 'timeout_seconds',
-      key: 'timeout_seconds',
-      render: (value: number | null) => (value === null ? '默认 30' : String(value)),
-    },
-    { title: '版本', dataIndex: 'revision', key: 'revision' },
-    {
-      title: '更新人',
-      dataIndex: 'updated_by',
-      key: 'updated_by',
-      render: (value: string | null) => value || '—',
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      render: (_value, row) => (
-        <Space>
-          <Button
-            size="small"
-            data-testid={`env-edit-${row.env}`}
-            onClick={() => {
-              begin(row.env)
-              setFormError(null)
-              setConflict(false)
-              setDraft(draftFromEnvironment(row))
-            }}
-          >
-            编辑
-          </Button>
-          <Button
-            size="small"
-            data-testid={`env-toggle-${row.env}`}
-            onClick={() => {
-              void toggleEnabled(row)
-            }}
-          >
-            {row.enabled ? '停用' : '启用'}
-          </Button>
-        </Space>
-      ),
-    },
-  ]
+  const current = rows.find((row) => row.env === selectedEnv) ?? rows.find((row) => row.enabled) ?? rows[0]
 
   return (
     <div data-testid="environment-manager">
-      <Space style={{ marginBottom: 12 }}>
+      <Space style={{ marginBottom: 16 }} wrap>
+        <span>环境</span>
+        <Select
+          aria-label="查看环境"
+          data-testid="environment-select"
+          style={{ minWidth: 180 }}
+          value={current?.env}
+          placeholder="请选择环境"
+          options={rows.map((row) => ({ value: row.env, label: row.enabled ? row.env : `${row.env}（已停用）` }))}
+          onChange={(value) => { close(); setListError(null); setSelectedEnv(value) }}
+        />
+        {current ? (
+          <>
+            <Button
+              data-testid={`env-edit-${current.env}`}
+              onClick={() => {
+                begin(current.env)
+                setFormError(null)
+                setConflict(false)
+                setDraft(draftFromEnvironment(current))
+              }}
+            >编辑当前环境</Button>
+            <Button data-testid={`env-toggle-${current.env}`} onClick={() => { void toggleEnabled(current) }}>
+              {current.enabled ? '停用' : '启用'}
+            </Button>
+          </>
+        ) : null}
         <Button
           type="primary"
           data-testid="env-create-open"
@@ -311,16 +290,27 @@ export function EnvironmentSection({ projectId }: { projectId: string }) {
           data-testid="env-list-error"
         />
       ) : null}
-      <Table
-        size="small"
-        rowKey="env"
-        columns={columns}
-        dataSource={rows}
-        pagination={false}
-        data-testid="environment-table"
-        locale={{ emptyText: '还没有环境' }}
-      />
+      {current ? (
+        <div data-testid="environment-detail">
+          <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 4 }}>
+            <Descriptions.Item label="状态">{current.enabled ? '使用中' : '已停用'}</Descriptions.Item>
+            <Descriptions.Item label="请求超时">{current.timeout_seconds ?? 30} 秒</Descriptions.Item>
+            <Descriptions.Item label="版本">{current.revision}</Descriptions.Item>
+            <Descriptions.Item label="更新人">{current.updated_by || '—'}</Descriptions.Item>
+          </Descriptions>
+          <ServiceHosts hosts={current.api_hosts} />
+          <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>
+            服务地址用于当前环境的请求和登录。共享配置的影响范围见上方提示。
+          </Typography.Paragraph>
+          {Object.keys(current.case_params).length > 0 ? (
+            <Typography.Paragraph type="secondary">
+              此环境保留 {Object.keys(current.case_params).length} 项参数覆盖，可在编辑环境中维护。
+            </Typography.Paragraph>
+          ) : null}
+        </div>
+      ) : <Empty description="还没有环境，请先新增环境" />}
       <Modal
+        width={860}
         title={draft?.mode === 'edit' ? `编辑环境 ${draft.env}` : '新增环境'}
         open={draft !== null}
         onCancel={close}
@@ -425,27 +415,34 @@ function EnvironmentForm({
         逻辑服务名与地址。留空表示该环境不配置 host。
       </Typography.Paragraph>
       {draft.hosts.map((row, index) => (
-        <Space key={index} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-          <Input
-            aria-label={`服务名 ${index + 1}`}
-            placeholder="gsb"
-            value={row.name}
-            onChange={(event) => {
-              const hosts = draft.hosts.slice()
-              hosts[index] = { ...row, name: event.target.value }
-              onChange({ ...draft, hosts })
-            }}
-          />
-          <Input
-            aria-label={`地址 ${index + 1}`}
-            placeholder="https://example.invalid"
-            value={row.url}
-            onChange={(event) => {
-              const hosts = draft.hosts.slice()
-              hosts[index] = { ...row, url: event.target.value }
-              onChange({ ...draft, hosts })
-            }}
-          />
+        <div key={index} className="tp-host-editor-row">
+          <label>
+            <Typography.Text type="secondary">逻辑服务名</Typography.Text>
+            <Input
+              aria-label={`服务名 ${index + 1}`}
+              placeholder="gsb"
+              value={row.name}
+              onChange={(event) => {
+                const hosts = draft.hosts.slice()
+                hosts[index] = { ...row, name: event.target.value }
+                onChange({ ...draft, hosts })
+              }}
+            />
+          </label>
+          <label>
+            <Typography.Text type="secondary">完整地址</Typography.Text>
+            <Input.TextArea
+              autoSize={{ minRows: 1, maxRows: 5 }}
+              aria-label={`地址 ${index + 1}`}
+              placeholder="https://example.invalid"
+              value={row.url}
+              onChange={(event) => {
+                const hosts = draft.hosts.slice()
+                hosts[index] = { ...row, url: event.target.value }
+                onChange({ ...draft, hosts })
+              }}
+            />
+          </label>
           <Button
             aria-label={`删除服务地址 ${index + 1}`}
             onClick={() => {
@@ -458,10 +455,10 @@ function EnvironmentForm({
           >
             删除
           </Button>
-        </Space>
+        </div>
       ))}
       <Button
-        style={{ marginBottom: 12 }}
+        style={{ marginBottom: 16, display: 'block' }}
         onClick={() => onChange({ ...draft, hosts: [...draft.hosts, { name: '', url: '' }] })}
       >
         添加服务地址
@@ -474,7 +471,7 @@ function EnvironmentForm({
         placeholder="留空使用默认 30 秒"
         onChange={(event) => onChange({ ...draft, timeoutText: event.target.value })}
       />
-      <Typography.Text>参数默认值</Typography.Text>
+      <Typography.Text>环境参数覆盖（兼容现有配置）</Typography.Text>
       <Input.TextArea
         aria-label="参数默认值"
         style={{ marginTop: 4 }}
@@ -484,7 +481,7 @@ function EnvironmentForm({
         onChange={(event) => onChange({ ...draft, caseParamsText: event.target.value })}
       />
       <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-        JSON 对象，只放非秘密业务默认值。
+        JSON 对象，仅用于环境差异，单次输入优先。接口／场景自身的默认值应随各自维护；已有值继续生效。
       </Typography.Paragraph>
     </div>
   )

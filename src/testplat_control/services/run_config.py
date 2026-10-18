@@ -31,6 +31,12 @@ from testplat_control.services.auth_loader import (
 from testplat_control.services.crypto import MasterKeyError, decrypt_credentials
 from testplat_control.services.env_loader import load_project_environment
 from testplat_control.services.login_profiles import ProfileFileError, load_profile_catalog
+from testplat_control.services.parameter_sets import (
+    begin_snapshot,
+    compose_parameters,
+    read_parameter_layers,
+    redact_parameters,
+)
 from testplat_control.services.workspaces import configuration_project, workspace_response
 
 logger = logging.getLogger(__name__)
@@ -194,8 +200,13 @@ def resolve_run_config(
     request_timeout: float | None,
     declared_names: set[str] | None = None,
     asset_defaults: dict[str, Any] | None = None,
+    asset_type: str | None = None,
+    asset_id: str | None = None,
 ) -> ResolvedRunConfig:
     """冻结同一环境版本下的账号、参数和摘要。调用方读完后结束会话事务。"""
+    # 正常资产运行跨环境与参数集读同一事务；历史独立配置调用保留原 revision 重读路径。
+    if asset_type is not None and asset_id is not None:
+        begin_snapshot(db)
     owner = configuration_project(db, project)
     web = _load_consistent_web(db, owner.id, env)
     if web is None:
@@ -246,12 +257,18 @@ def resolve_run_config(
     )
     timeout = effective_timeout(request_timeout, web.timeout_seconds)
     case_params = dict(web.case_params)
-    params = params_for_run(
-        case_params,
-        request_params,
-        declared_names=declared_names,
-        asset_defaults=asset_defaults,
+    saved, override, revisions = ({}, {}, {})
+    if asset_type is not None and asset_id is not None:
+        saved, override, revisions = read_parameter_layers(
+            db, project_id=project.id, asset_type=asset_type, asset_id=asset_id, env=env,
+        )
+    effective, sources = compose_parameters(
+        asset_defaults or {}, saved, case_params, override, request_params, names=declared_names,
     )
+    # Case 资产基线仍由 Engine 合成；Control 提供其上的覆盖层。
+    params = effective if declared_names is not None else compose_parameters(
+        {}, saved, case_params, override, request_params,
+    )[0]
     api_hosts = dict(web.api_hosts)
     account_revisions = {item.account_name: item.revision for item in accounts}
     snapshot = _snapshot(
@@ -265,6 +282,12 @@ def resolve_run_config(
     )
     if context is not None:
         snapshot["workspace"] = context
+    if asset_type is not None and asset_id is not None:
+        snapshot["parameters"] = {
+            "asset_type": asset_type, "asset_id": asset_id,
+            "revisions": revisions, "effective": redact_parameters(effective),
+            "sources": sources,
+        }
     # 明文凭据不要留在返回值上；AuthTable 内是 SecretStr。
     decrypted.clear()
     return ResolvedRunConfig(
