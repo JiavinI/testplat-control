@@ -188,5 +188,3 @@ def asset_default_params(inputs: Any) -> dict[str, Any]:
         if isinstance(spec, dict) and "default" in spec:
             found[name] = spec["default"]
     return found
-
-
