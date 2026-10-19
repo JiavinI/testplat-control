@@ -48,10 +48,12 @@ export function AssetDetailPanel({
 }: AssetDetailPanelProps) {
   if (!selectedFromTree) {
     return (
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description="选择左侧资产以查看元信息"
-      />
+      <div className="tp-empty-pane">
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description="选择左侧资产以查看元信息"
+        />
+      </div>
     )
   }
 

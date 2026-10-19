@@ -165,12 +165,24 @@ export function AssetBrowser({
     <Card
       size="small"
       title={section ? `${SECTIONS[section].label}资产` : '资产树'}
+      variant={layout === 'tree' ? 'borderless' : 'outlined'}
+      className={layout === 'tree' ? 'tp-asset-tree-card' : undefined}
       style={
         layout === 'tree'
-          ? { width: '100%' }
+          ? { width: '100%', border: 'none', background: 'transparent' }
           : { flex: '1 1 260px', minWidth: 240, maxWidth: 420 }
       }
-      styles={{ body: { padding: 12 } }}
+      styles={{
+        header: {
+          padding: '10px 14px',
+          minHeight: 40,
+          borderBottom: '1px solid #e7e5e4',
+          fontSize: 13,
+          fontWeight: 650,
+          color: '#292524',
+        },
+        body: { padding: '10px 12px 14px' },
+      }}
     >
       <AssetTree
         tree={treeForDisplay}
@@ -187,7 +199,7 @@ export function AssetBrowser({
 
   if (layout === 'tree') {
     return (
-      <div data-testid="asset-browser" data-layout="tree">
+      <div data-testid="asset-browser" data-layout="tree" style={{ width: '100%' }}>
         {treeCard}
       </div>
     )

@@ -56,12 +56,22 @@ function useIsNarrowViewport(query = '(max-width: 767px)'): boolean {
   return narrow
 }
 
+export type ProjectWorkspacePageProps = {
+  section?: Exclude<WorkspaceSection, 'configuration'>
+  headerPrefix?: React.ReactNode
+  alerts?: React.ReactNode
+}
+
 /**
  * 项目工作台：组合资产浏览、API/Case 执行与执行历史。
  * api.* 挂动态参数面板；case.* 挂文件元信息 + 运行（步骤只来自运行/历史）。
  * 运行环境下拉只使用该项目已启用的数据库环境，不回退 Git 示例环境。
  */
-export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<WorkspaceSection, 'configuration'> }) {
+export function ProjectWorkspacePage({
+  section = 'apis',
+  headerPrefix,
+  alerts,
+}: ProjectWorkspacePageProps) {
   const { repo = '', project: projectKey = '' } = useParams()
   const projectId = repo && projectKey ? joinProjectId(repo, projectKey) : ''
   const projectQuery = useProject(projectId)
@@ -205,6 +215,7 @@ export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<W
   const centerColumn = (
     <div
       data-testid="workspace-main"
+      className="tp-workspace-main"
       style={{
         flex: '1 1 360px',
         minWidth: 0,
@@ -219,7 +230,7 @@ export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<W
         aria-label="资产元信息"
         className="tp-surface tp-pane-enter"
         style={{
-          padding: 14,
+          padding: 16,
         }}
       >
         {isCase && selectedFromTree ? (
@@ -314,12 +325,6 @@ export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<W
         </Typography.Paragraph>
       ) : null}
 
-      {!selectedFromTree ? (
-        <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-          从左侧选择{SECTIONS[section].label}资产。
-        </Typography.Paragraph>
-      ) : null}
-
       {section === 'apis' ? <Collapse size="small" items={[{
         key: `${projectId}:${selectedFromTree?.id ?? 'all'}`, label: '执行历史',
         children: <ExecutionHistory
@@ -339,39 +344,51 @@ export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<W
   return (
     <div
       data-testid="project-workspace"
+      className="tp-project-workspace"
       style={{ maxWidth: '100%', overflowX: 'hidden' }}
     >
-      <Space
-        style={{ width: '100%', justifyContent: 'flex-end', marginBottom: 12 }}
-        align="start"
-        wrap
-      >
-        <Space align="center" wrap>
-          <Typography.Text code data-testid="workspace-commit-sha">
-            {shortSha(project.commit_sha)}
-          </Typography.Text>
-          {section !== 'pages' ? <Select
-            style={{ minWidth: 140 }}
-            value={selectedEnv ?? undefined}
-            options={envOptions}
-            placeholder={environmentQuery.isLoading ? '加载环境…' : '无可用环境'}
-            onChange={handleEnvChange}
-            loading={environmentQuery.isLoading}
-            disabled={envOptions.length === 0}
-            aria-label="运行环境"
-            data-testid="workspace-env-select"
-          /> : null}
-        </Space>
-        {isNarrow ? (
-          <Button
-            icon={<FolderOpenOutlined />}
-            onClick={() => setAssetDrawerOpen(true)}
-            aria-label="打开资产浏览"
-          >
-            资产
-          </Button>
-        ) : null}
-      </Space>
+      <div className="tp-workspace-toolbar">
+        <div className="tp-workspace-toolbar__left">
+          {headerPrefix}
+        </div>
+        <div className="tp-workspace-toolbar__right">
+          <Space align="center" size={14} wrap>
+            <Space size={6} align="center">
+              <Typography.Text type="secondary" className="tp-toolbar-label">Commit</Typography.Text>
+              <Typography.Text code data-testid="workspace-commit-sha" className="tp-commit-sha">
+                {shortSha(project.commit_sha)}
+              </Typography.Text>
+            </Space>
+            {section !== 'pages' ? (
+              <Space size={6} align="center">
+                <Typography.Text type="secondary" className="tp-toolbar-label">环境</Typography.Text>
+                <Select
+                  style={{ minWidth: 130 }}
+                  value={selectedEnv ?? undefined}
+                  options={envOptions}
+                  placeholder={environmentQuery.isLoading ? '加载环境…' : '无可用环境'}
+                  onChange={handleEnvChange}
+                  loading={environmentQuery.isLoading}
+                  disabled={envOptions.length === 0}
+                  aria-label="运行环境"
+                  data-testid="workspace-env-select"
+                />
+              </Space>
+            ) : null}
+            {isNarrow ? (
+              <Button
+                icon={<FolderOpenOutlined />}
+                onClick={() => setAssetDrawerOpen(true)}
+                aria-label="打开资产浏览"
+              >
+                资产
+              </Button>
+            ) : null}
+          </Space>
+        </div>
+      </div>
+
+      {alerts}
 
       {noEnabledEnv && section !== 'pages' ? (
         <Alert
@@ -408,9 +425,10 @@ export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<W
       ) : null}
 
       <div
+        className="tp-workspace-columns"
         style={{
           display: 'flex',
-          gap: 12,
+          gap: 14,
           alignItems: 'flex-start',
           flexWrap: isNarrow ? 'wrap' : 'nowrap',
         }}
@@ -419,17 +437,18 @@ export function ProjectWorkspacePage({ section = 'apis' }: { section?: Exclude<W
           <aside
             data-testid="workspace-assets-aside"
             aria-label="资产浏览"
-            className="tp-surface"
+            className="tp-surface tp-workspace-aside"
             style={{
-              flex: '0 0 300px',
-              maxWidth: 360,
-              minWidth: 240,
+              flex: '0 0 280px',
+              width: 280,
+              maxWidth: 320,
+              minWidth: 260,
               position: 'sticky',
               top: 8,
               alignSelf: 'flex-start',
               maxHeight: 'calc(100vh - 120px)',
               overflow: 'auto',
-              padding: 10,
+              padding: 0,
             }}
           >
             {browser}

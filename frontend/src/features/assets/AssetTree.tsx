@@ -17,13 +17,22 @@ interface AssetTreeProps {
 
 function buildTreeData(node: AssetNode): DataNode {
   const isDir = node.type === 'directory'
+  const method = typeof node.metadata?.method === 'string' ? node.metadata.method : null
+
   const title = (
-    <span data-asset-id={node.id} data-asset-type={node.type}>
-      {!isDir && node.id.startsWith('api.') && typeof node.metadata?.method === 'string'
-        ? <Tag color={node.metadata.method === 'GET' ? 'green' : 'blue'} style={{ fontSize: 10, marginInlineEnd: 4 }}>{node.metadata.method}</Tag> : null}
+    <span className="tp-tree-node-title" data-asset-id={node.id} data-asset-type={node.type}>
+      {!isDir && node.id.startsWith('api.') && method ? (
+        <Tag
+          color={method === 'GET' ? 'green' : 'blue'}
+          className={`tp-method-badge tp-method-badge--${method.toLowerCase()}`}
+        >
+          {method}
+        </Tag>
+      ) : null}
       <Typography.Text
         ellipsis={{ tooltip: `${node.name} (${node.id})` }}
-        style={{ maxWidth: 240 }}
+        className="tp-tree-node-text"
+        style={{ maxWidth: 190 }}
       >
         {node.id.startsWith('api.') && typeof node.metadata?.name === 'string' ? node.metadata.name : node.name}
       </Typography.Text>
@@ -35,8 +44,8 @@ function buildTreeData(node: AssetNode): DataNode {
     title,
     icon: isDir
       ? ({ expanded }: { expanded?: boolean }) =>
-          expanded ? <FolderOpenOutlined /> : <FolderOutlined />
-      : <FileOutlined />,
+          expanded ? <FolderOpenOutlined className="tp-tree-icon tp-tree-icon--open" /> : <FolderOutlined className="tp-tree-icon" />
+      : <FileOutlined className="tp-tree-icon tp-tree-icon--file" />,
     isLeaf: !isDir,
     selectable: true,
     children: isDir
@@ -65,7 +74,7 @@ export function AssetTree({
   }, [tree])
 
   return (
-    <div data-testid="asset-tree">
+    <div data-testid="asset-tree" className="tp-asset-tree-wrapper">
       <Input.Search
         allowClear
         placeholder="按名称 / 路径 / ID 过滤"
@@ -73,7 +82,8 @@ export function AssetTree({
         onChange={(e) => onFilterQueryChange(e.target.value)}
         onSearch={(value) => onFilterQueryChange(value)}
         aria-label="过滤资产"
-        style={{ marginBottom: 8 }}
+        className="tp-asset-search"
+        style={{ marginBottom: 10 }}
       />
       <Tree
         showIcon
@@ -82,6 +92,7 @@ export function AssetTree({
         treeData={treeData}
         expandedKeys={expandedKeys}
         selectedKeys={selectedAssetId ? [selectedAssetId] : []}
+        className="tp-asset-tree"
         onExpand={(keys) => {
           onExpandedKeysChange(keys.map(String))
         }}
