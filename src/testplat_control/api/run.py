@@ -63,6 +63,10 @@ class RunRequest(BaseModel):
     request_override: dict[str, Any] | None = Field(
         None, description="临时请求覆盖，仅支持 body；整体替换，不写回 Assets、不渲染占位符"
     )
+    identity: str | None = Field(
+        None, min_length=1, max_length=128,
+        description="本次调用账号名；none 为匿名，省略兼容旧调用上下文",
+    )
     timeout_seconds: float | None = Field(
         None,
         gt=0,
@@ -255,5 +259,6 @@ async def run_asset(
         asset_defaults=asset_default_params(api.get("inputs")),
         validate_params=lambda params: _validate_run_params(form, params),
         request_override=body.request_override,
+        identity=body.identity,
     )
     return _run_response(record)

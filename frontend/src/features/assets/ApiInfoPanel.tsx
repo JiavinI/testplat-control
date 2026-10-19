@@ -25,8 +25,7 @@ export function ApiInfoPanel({ asset, environment, projectId }: {
       <Space wrap style={{ marginBottom: 12 }}>
         <Tag color={metadata.method === 'GET' ? 'green' : 'blue'}>{String(metadata.method ?? '—')}</Tag>
         <Typography.Text code style={{ overflowWrap: 'anywhere' }}>{path || '未定义路径'}</Typography.Text>
-        <Typography.Text type="secondary">鉴权</Typography.Text>
-        <Typography.Text code>{String(metadata.auth ?? '未声明')}</Typography.Text>
+        <Typography.Text type="secondary">调用身份由本次调试或场景步骤选择</Typography.Text>
       </Space>
       {typeof description === 'string' ? <Typography.Paragraph>{description}</Typography.Paragraph> : null}
       {fullUrl ? (

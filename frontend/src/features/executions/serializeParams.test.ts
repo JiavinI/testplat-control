@@ -12,6 +12,19 @@ const form: ParamInfo[] = [
 ]
 
 describe('serializeRunParams', () => {
+  it('对象数组在运行时解析，编辑预览容忍未完成 JSON', () => {
+    const form: ParamInfo[] = [
+      { name: 'product', type: 'object', required: true, description: null },
+      { name: 'items', type: 'array', required: true, description: null },
+    ]
+    expect(serializeRunParams(form, { product: '{' })).toEqual({ product: '{' })
+    expect(() => serializeRunParams(form, { product: '{' }, true)).toThrow('合法 JSON')
+    expect(() => serializeRunParams(form, { product: '[]' }, true)).toThrow('对象')
+    expect(() => serializeRunParams(form, { items: '{}' }, true)).toThrow('数组')
+    expect(serializeRunParams(form, { product: '{"id":0}', items: '[false]' }, true)).toEqual({
+      product: { id: 0 }, items: [false],
+    })
+  })
   it('转换 string / number / boolean 类型', () => {
     const params = serializeRunParams(form, {
       username: 'alice',

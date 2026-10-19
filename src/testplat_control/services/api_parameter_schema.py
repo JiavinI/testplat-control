@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-ParamType = Literal["string", "number", "boolean"]
+ParamType = Literal["string", "number", "boolean", "object", "array"]
 
 _TYPE_ALIASES: dict[str, ParamType] = {
     "string": "string",
@@ -20,6 +20,8 @@ _TYPE_ALIASES: dict[str, ParamType] = {
     "long": "number",
     "boolean": "boolean",
     "bool": "boolean",
+    "object": "object",
+    "array": "array",
 }
 
 _SPEC_KEYS = {"type", "schema", "required", "description", "desc", "name", "default"}
@@ -31,7 +33,7 @@ class ParamInfo(BaseModel):
     """从 YAML inputs 提取的单个参数。"""
 
     name: str = Field(..., description="参数名")
-    type: ParamType = Field(..., description="参数类型：string、number 或 boolean")
+    type: ParamType = Field(..., description="参数类型：string、number、boolean、object 或 array")
     required: bool = Field(..., description="是否必填")
     description: str | None = Field(None, description="参数说明")
 
@@ -55,7 +57,7 @@ def build_param_infos(inputs: Any) -> list[ParamInfo]:
         参数表单。没有 inputs 时返回空列表。
 
     Raises:
-        ValueError: inputs 结构无法识别，或类型不在 string/number/boolean 中。
+        ValueError: inputs 结构无法识别，或类型不是支持的 JSON 输入类型。
         ValidationError: 字段无法构成 ParamInfo。
     """
     if inputs is None:
@@ -139,7 +141,7 @@ def _param_from_mapping(name: str, spec: dict[str, Any]) -> ParamInfo:
 
 
 def _normalize_type(raw: Any) -> ParamType:
-    """把 YAML 中的类型名归一成 string、number 或 boolean。"""
+    """把 YAML 中的类型名归一成表单支持的 JSON 类型。"""
     if raw is None:
         return "string"
     key = str(raw).strip().lower()
@@ -171,6 +173,10 @@ def _matches_type(expected: ParamType, value: Any) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool)
     if expected == "boolean":
         return isinstance(value, bool)
+    if expected == "object":
+        return isinstance(value, dict)
+    if expected == "array":
+        return isinstance(value, list)
     return False
 
 

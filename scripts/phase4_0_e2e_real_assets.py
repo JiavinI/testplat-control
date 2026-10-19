@@ -56,9 +56,9 @@ def _git(args: list[str], cwd: Path) -> str:
 
 
 def clone_assets_copy(work: Path, assets_src: Path) -> tuple[Path, str]:
-    """复制资产仓到临时目录并停在 EXPECTED_SHA。"""
+    """克隆已提交历史再固定版本，避免当前未提交资产污染历史兼容验证。"""
     dest = work / "assets-copy"
-    shutil.copytree(assets_src, dest, ignore=shutil.ignore_patterns(".venv", "__pycache__"))
+    _git(["clone", "--no-local", "--quiet", str(assets_src), str(dest)], cwd=work)
     _git(["checkout", "-B", "phase4-1a-pin", EXPECTED_SHA], cwd=dest)
     _git(["config", "user.email", "e2e@example.com"], cwd=dest)
     _git(["config", "user.name", "E2E"], cwd=dest)

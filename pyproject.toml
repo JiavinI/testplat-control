@@ -14,9 +14,9 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "packaging>=24.0",
-    # Phase 3.3d：跨执行登录缓存与 401 重登重发需要 Engine 0.5.x（九键 auth / cache_scope）。
+    # GSB 调用身份与结构化模板需要 Engine 0.5.2；保留九键 auth / cache_scope。
     # 具体 commit 由 uv sources 锁定；见文件下方 [tool.uv.sources] 说明。
-    "testplat-engine>=0.5.0,<0.6",
+    "testplat-engine>=0.5.2,<0.6",
     "pydantic-settings>=2.16.0",
     "cryptography>=50.0.2",
     "argon2-cffi>=25.1.0",
@@ -39,9 +39,9 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 远程精确锁定：已推送 codex/local-engine-delivery 的 Engine 0.5.1。
+# 远程精确锁定：GSB 结构化模板与调用身份所需的 Engine 0.5.2。
 # 包含请求覆盖及凭据透传扩展；无需本地 editable，不依赖分支后续移动。
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "eb591d8879ec793f928500e5d7436648ef735309" }
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "7ae2c013a976da62074d4f4d28b86e8220bbed6d" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

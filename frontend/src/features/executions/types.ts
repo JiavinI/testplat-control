@@ -3,7 +3,7 @@
  * 字段名与可空语义保持一致，避免前端另发明契约。
  */
 
-export type ParamType = 'string' | 'number' | 'boolean'
+export type ParamType = 'string' | 'number' | 'boolean' | 'object' | 'array'
 
 export type RunStatus = 'success' | 'failed'
 
@@ -97,7 +97,8 @@ export interface ParameterContext {
 export interface RunRequest {
   /** 必填：须在项目 envs 内，否则后端 422 */
   env: string
-  params: Record<string, string | number | boolean>
+  params: Record<string, unknown>
+  identity?: string
   request_override?: { body: unknown }
 }
 

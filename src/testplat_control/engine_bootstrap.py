@@ -25,8 +25,8 @@ from packaging.version import InvalidVersion, Version
 
 logger = logging.getLogger(__name__)
 
-# Phase 3.3d 兼容范围：与 pyproject 中 testplat-engine 约束一致。
-ENGINE_VERSION_SPEC = SpecifierSet(">=0.5.0,<0.6")
+# GSB 调用身份与结构化模板的最低版本；与 pyproject 中约束一致。
+ENGINE_VERSION_SPEC = SpecifierSet(">=0.5.2,<0.6")
 ENGINE_DISTRIBUTION = "testplat-engine"
 LOGIN_STRATEGY_GROUP = "testplat_engine.login_strategies"
 _REQUIRED_EXPORTS = (
@@ -197,7 +197,7 @@ def ensure_engine_compatible(login_plugins: Sequence[str] = ()) -> str:
     if parsed not in ENGINE_VERSION_SPEC:
         raise EngineBootstrapError(
             f"testplat-engine 版本不兼容: 当前 {check_version}，"
-            f"需要满足 {ENGINE_VERSION_SPEC}（Phase 3.3d 锁定 0.5.x）。"
+            f"需要满足 {ENGINE_VERSION_SPEC}（GSB 调用身份与结构化模板）。"
         )
 
     missing = [name for name in _REQUIRED_EXPORTS if not hasattr(eng, name)]
@@ -212,6 +212,12 @@ def ensure_engine_compatible(login_plugins: Sequence[str] = ()) -> str:
         raise EngineBootstrapError(
             "当前 testplat-engine 缺少 request_override 契约，不能提供已验证的请求内容覆盖。"
             "本地开发请使用 bash scripts/dev.sh；远程交付需先发布 Engine 扩展再更新依赖锁定。"
+        )
+
+    if "identity" not in inspect.signature(eng.ApiExecutionRequest).parameters:
+        raise EngineBootstrapError(
+            "当前 testplat-engine 缺少 identity 与结构化接口模板契约。"
+            "本地开发请使用 bash scripts/dev.sh；远程交付需先更新 Engine 依赖锁定。"
         )
 
     runtime = create_engine_with_plugins(login_plugins)

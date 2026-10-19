@@ -25,6 +25,7 @@ import type {
   ExecutionRecordDetail,
   ExecutionRecordListItem,
   ParamsResponse,
+  ParamType,
   ParameterContext,
   RunRequest,
   RunResponse,
@@ -96,13 +97,13 @@ function parseParamsResponse(payload: unknown): ParamsResponse {
     assertObject(item, `ParamsResponse.params[${index}]`)
     const name = requireString(item, 'name', `ParamsResponse.params[${index}]`)
     const typeRaw = requireString(item, 'type', `ParamsResponse.params[${index}]`)
-    if (typeRaw !== 'string' && typeRaw !== 'number' && typeRaw !== 'boolean') {
+    if (typeRaw !== 'string' && typeRaw !== 'number' && typeRaw !== 'boolean' && typeRaw !== 'object' && typeRaw !== 'array') {
       throw new ApiParseError(
         `ParamsResponse.params[${index}].type 非法`,
         JSON.stringify(item),
       )
     }
-    const type = typeRaw as 'string' | 'number' | 'boolean'
+    const type: ParamType = typeRaw
     if (typeof item.required !== 'boolean') {
       throw new ApiParseError(
         `ParamsResponse.params[${index}].required 应为布尔值`,

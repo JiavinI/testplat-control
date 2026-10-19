@@ -285,8 +285,9 @@ describe('ProjectWorkspacePage 集成', () => {
 
     expect(await screen.findByTestId('api-execution-panel')).toBeInTheDocument()
     expect(await screen.findByTestId('api-info-panel')).toHaveTextContent(
-      'gsb.b2.primary',
+      '调用身份由本次调试或场景步骤选择',
     )
+    expect(screen.getByTestId('api-info-panel')).not.toHaveTextContent('gsb.b2.primary')
     await screen.findByLabelText('password')
 
     fireEvent.change(screen.getByTestId('param-password'), {

@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Divider, Input, Radio, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Divider, Input, Radio, Select, Space, Tag, Typography } from 'antd'
 import { PlayCircleOutlined } from '@ant-design/icons'
 import { Form } from 'antd'
 import { useState } from 'react'
@@ -15,6 +15,7 @@ import { ApiRunResult } from './ApiRunResult'
 import { JsonBlock } from './JsonBlock'
 import { serializeRunParams } from './serializeParams'
 import type { ApiExecutionPanelProps, RunResponse } from './types'
+import { useAccounts } from '@/features/environments/hooks'
 
 /**
  * 单 API 执行面板：动态参数表单 + 执行 + 结果。
@@ -83,6 +84,8 @@ function ApiExecutionPanelReady({
   const [runResult, setRunResult] = useState<RunResponse | null>(null)
   const [submitError, setSubmitError] = useState<unknown>(null)
   const [editBody, setEditBody] = useState(false)
+  const [identity, setIdentity] = useState<string | undefined>()
+  const accounts = useAccounts(projectId, env)
   const bodyType = String(requestDefinition?.type ?? 'json')
   const bodyLabel = ({ query: 'Query 参数', json: 'JSON 请求体', form: 'Form 表单', raw: 'Raw 文本' } as Record<string, string>)[bodyType] ?? bodyType
   const rawBody = bodyType === 'raw'
@@ -99,7 +102,7 @@ function ApiExecutionPanelReady({
     setRunResult(null)
     try {
       const values = editBody ? {} : await form.validateFields()
-      const serialized = serializeRunParams(params, values)
+      const serialized = serializeRunParams(params, values, true)
       let body: unknown
       if (editBody) {
         try {
@@ -118,6 +121,7 @@ function ApiExecutionPanelReady({
       const data = await runMutation.mutateAsync({
         env,
         params: serialized,
+        ...(identity ? { identity } : {}),
         ...(editBody ? { request_override: { body } } : {}),
       })
       // HTTP 200 的 success / failed 都当可查看结果，不进网络错误态
@@ -161,6 +165,24 @@ function ApiExecutionPanelReady({
       }
       data-testid="api-execution-panel"
     >
+      <div style={{ marginBottom: 12 }}>
+        <Typography.Text>调用账号 </Typography.Text>
+        <Select
+          aria-label="调用账号" placeholder="选择本次调用账号" allowClear
+          style={{ minWidth: 240, maxWidth: '100%' }} value={identity}
+          loading={accounts.isLoading} disabled={submitting}
+          onChange={setIdentity}
+          options={[
+            { value: 'none', label: '匿名调用' },
+            ...(accounts.data ?? []).map((account) => ({
+              value: account.account_name,
+              label: `${account.display_name ?? account.account_name}${account.login_username ? ` · ${account.login_username}` : ''}`,
+              disabled: !account.enabled,
+            })),
+          ]}
+        />
+        {accounts.isError ? <Alert type="error" message="账号列表加载失败" action={<Button size="small" onClick={() => { void accounts.refetch() }}>重试</Button>} /> : null}
+      </div>
       {requestDefinition ? (
         <Radio.Group
           aria-label="请求编辑方式"

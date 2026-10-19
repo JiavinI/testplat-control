@@ -11,6 +11,11 @@ import { executionKeys } from './hooks'
 const getAssetParams = vi.fn()
 const runAsset = vi.fn()
 const listExecutionRecords = vi.fn()
+const listAccounts = vi.fn()
+
+vi.mock('@/features/environments/api', () => ({
+  listAccounts: (...args: unknown[]) => listAccounts(...args),
+}))
 
 vi.mock('./api', () => ({
   getAssetParams: (...args: unknown[]) => getAssetParams(...args),
@@ -89,6 +94,8 @@ beforeEach(() => {
   runAsset.mockReset()
   listExecutionRecords.mockReset()
   listExecutionRecords.mockResolvedValue([])
+  listAccounts.mockReset()
+  listAccounts.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -96,6 +103,51 @@ afterEach(() => {
 })
 
 describe('ApiExecutionPanel', () => {
+  it('本次调用选择账号，切换环境清空选择', async () => {
+    const user = userEvent.setup({ delay: null })
+    getAssetParams.mockResolvedValue(emptyParams)
+    listAccounts.mockResolvedValue([
+      { account_name: 'buyer', display_name: '采购商', login_username: 'fake-user', enabled: true },
+      { account_name: 'disabled', display_name: '停用账号', enabled: false },
+    ])
+    runAsset.mockResolvedValue({ record_id: 'caller', status: 'success', duration: 0, result: {} })
+    const { rerender, client } = renderPanel('main/demo', 'api.demo.shared', 'test')
+    await screen.findByRole('combobox', { name: '调用账号' })
+    await waitFor(() => expect(listAccounts).toHaveBeenCalledWith('main/demo', 'test'))
+    await user.click(screen.getByRole('combobox', { name: '调用账号' }))
+    await user.click(await screen.findByText('采购商 · fake-user'))
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => expect(runAsset).toHaveBeenLastCalledWith('main/demo', 'api.demo.shared', {
+      env: 'test', params: {}, identity: 'buyer',
+    }))
+    rerender(panelTree(client, { projectId: 'main/demo', assetId: 'api.demo.shared', env: 'pre' }))
+    fireEvent.click(await screen.findByRole('button', { name: '执行 API' }))
+    await waitFor(() => expect(runAsset).toHaveBeenLastCalledWith('main/demo', 'api.demo.shared', {
+      env: 'pre', params: {},
+    }))
+  })
+
+  it('编辑中的不完整 JSON 可预览，提交拒绝，完整 JSON 保留对象数组类型', async () => {
+    getAssetParams.mockResolvedValue({ asset_id: 'api.demo.json', params: [
+      { name: 'product', type: 'object', required: true, description: null },
+      { name: 'items', type: 'array', required: true, description: null },
+    ] })
+    runAsset.mockResolvedValue({ record_id: 'json', status: 'success', duration: 0, result: {} })
+    renderPanel()
+    const product = await screen.findByLabelText('product')
+    setInput(product, '{')
+    setInput(screen.getByLabelText('items'), '[]')
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('product 必须是合法 JSON')
+    expect(runAsset).not.toHaveBeenCalled()
+    setInput(product, '{"id":"p1"}')
+    setInput(screen.getByLabelText('items'), '[{"quantity":0,"active":false}]')
+    fireEvent.click(screen.getByRole('button', { name: '执行 API' }))
+    await waitFor(() => expect(runAsset).toHaveBeenLastCalledWith('main/demo', 'api.demo.mixed', {
+      env: 'test', params: { product: { id: 'p1' }, items: [{ quantity: 0, active: false }] },
+    }))
+  })
+
   it('显示默认来源，资产默认值不复制进请求，本次 false/0 可清除恢复', async () => {
     getAssetParams.mockResolvedValue({
       ...mixedParams,

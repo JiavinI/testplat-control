@@ -113,7 +113,7 @@ url: /bad
 request:
   inputs:
     payload:
-      type: object
+      type: unsupported
       required: true
       description: 请求体
 """

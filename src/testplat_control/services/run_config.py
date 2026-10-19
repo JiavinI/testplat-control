@@ -291,7 +291,10 @@ def resolve_run_config(
     # 明文凭据不要留在返回值上；AuthTable 内是 SecretStr。
     decrypted.clear()
     return ResolvedRunConfig(
-        environment={"api_hosts": api_hosts},
+        environment={
+            "api_hosts": api_hosts,
+            **({"business_project": context["project"]} if context is not None else {}),
+        },
         auth=auth,
         params=params,
         timeout_seconds=timeout,

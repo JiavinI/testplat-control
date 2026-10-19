@@ -130,7 +130,10 @@ with tempfile.TemporaryDirectory(prefix="testplat-platform-actual-") as d:
             ]:
                 r = client.post(
                     f"/repos/main/projects/{key}/assets/{api}/run",
-                    json={"env": "test", "params": {}},
+                    json={
+                        "env": "test", "params": {},
+                        **({"identity": "gsb.b2.primary"} if key in ("gsb", "gsb_e3e3") else {}),
+                    },
                 )
                 assert r.status_code == 200 and r.json()["status"] == "success", (
                     key,

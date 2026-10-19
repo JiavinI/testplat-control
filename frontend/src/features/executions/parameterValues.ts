@@ -44,6 +44,8 @@ export function resolveParameterValues(
 export function validParameterDefault(item: ParamInfo, row: ParameterValue): boolean {
   if (row.source === 'unset') return false
   const value = row.effective
+  if (item.type === 'array') return Array.isArray(value)
+  if (item.type === 'object') return value !== null && typeof value === 'object' && !Array.isArray(value)
   return item.type === 'number' ? typeof value === 'number' && Number.isFinite(value) : typeof value === item.type
 }
 

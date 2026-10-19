@@ -70,6 +70,13 @@ function fieldExtra(item: ParamInfo, covered: boolean, source: string): string |
 }
 
 function renderControl(item: ParamInfo, covered: boolean, source: string) {
+  if (item.type === 'object' || item.type === 'array') {
+    return <Input.TextArea
+      aria-label={item.name} data-testid={`param-${item.name}`}
+      placeholder={covered ? `留空使用${source}` : item.type === 'array' ? 'JSON 数组，例如 []' : 'JSON 对象，例如 {}'}
+      autoSize={{ minRows: 3, maxRows: 12 }}
+    />
+  }
   if (item.type === 'boolean') {
     return (
       <Radio.Group
@@ -97,6 +104,9 @@ function renderControl(item: ParamInfo, covered: boolean, source: string) {
         data-testid={`param-${item.name}`}
       />
     )
+  }
+  if (/password|passwd|pwd|secret|token/i.test(item.name)) {
+    return <Input.Password placeholder={placeholder} aria-label={item.name} data-testid={`param-${item.name}`} />
   }
   return (
     <Input

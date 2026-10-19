@@ -1,10 +1,12 @@
 # testplat-control
 
+2026-10-19 GSB 迁移已通过隔离验收。正式依赖精确锁定 Engine 0.5.2，支持结构化模板与调用者身份，无需本地 editable。迁移和独立预览说明见 [GSB 迁移说明](docs/gsb-api-migration-2026-10-19.md)。
+
 测试平台控制面（FastAPI）。
 
-## 当前安装与开发（2026-10-18）
+## 当前安装与开发（2026-10-19）
 
-Control 通过远程精确提交安装 Engine **0.5.1**，已包含请求内容覆盖、登录凭据透传与脱敏扩展，不需要相邻 Engine 或 editable 覆盖：
+Control 通过远程精确提交安装 Engine **0.5.2**，已包含结构化模板、调用身份、项目限制、请求内容覆盖及凭据脱敏扩展，不需要相邻 Engine 或 editable 覆盖：
 
 ```bash
 uv sync --locked --extra dev
@@ -28,8 +30,8 @@ bash scripts/verify-local-engine.sh
 
 Control 通过 Python 包依赖调用 `testplat-engine`，**禁止**运行时 `sys.path` 注入。
 
-- 兼容版本：`testplat-engine>=0.5.0,<0.6`
-- 启动时校验：包是否安装、版本是否兼容、Interface 符号齐全、包含 `request_override` 契约，并**实际调用**公开 `create_engine()`，验证返回对象具备 async `execute`；失败则 fail-fast（不再把无效 runtime 延迟到首次执行 503）
+- 兼容版本：`testplat-engine>=0.5.2,<0.6`
+- 启动时校验：包是否安装、版本是否兼容、Interface 符号齐全、包含 `request_override` 与 `identity` 契约，并**实际调用**公开 `create_engine()`，验证返回对象具备 async `execute`；失败则 fail-fast（不再把无效 runtime 延迟到首次执行 503）
 - 默认 DI 提供 `PackageEngineAdapter`（仅解析已安装包的官方 `create_engine()`）
 - 测试 / 浏览器 Fake 门禁通过 `app.dependency_overrides[get_engine_port]` 或 `harness_fake` 注入 `FakeEngineAdapter`
 
@@ -41,15 +43,15 @@ Phase 3 文档里的 `>=0.2.0,<0.3` 与 commit `4715c61` 是当时的基线，�
 
 ```toml
 # pyproject.toml 中的 [tool.uv.sources]
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "eb591d8879ec793f928500e5d7436648ef735309" }
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "7ae2c013a976da62074d4f4d28b86e8220bbed6d" }
 ```
 
-> 该 rev 是已推送工作分支上的 Engine 0.5.1 提交，包含请求覆盖契约；未合并 main、打标签或发布包。安装按精确 SHA，不依赖分支移动。
+> 该 rev 是已交付到 Git 远程的 Engine 0.5.2 功能提交，合并 main 后仍按精确 SHA 安装，不依赖分支移动。本次不打标签、发布包或部署。
 
-- 版本约束：`>=0.5.0,<0.6`（与依赖声明一致）
+- 版本约束：`>=0.5.2,<0.6`（与依赖声明一致）
 - 安装以 **rev/commit** 为准，不依赖分支名漂移；禁止 `sys.path` 注入；本地开发通过上面的显式隔离 editable 入口
 
-`uv sync --locked --extra dev` 直接安装上述远程 Engine。`uv.lock` 由 uv 生成；本轮 uv 将锁文件格式 revision 从 5 写为 3，其余依赖版本未变。
+`uv sync --locked --extra dev` 直接安装上述远程 Engine。`uv.lock` 由 uv 生成；本轮仅更新 Engine 的精确 Git 提交和版本，其余依赖版本未变。
 
 ### 验证入口
 

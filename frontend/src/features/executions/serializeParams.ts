@@ -9,11 +9,28 @@ import type { ParamInfo } from './types'
 export function serializeRunParams(
   form: ParamInfo[],
   values: Record<string, unknown>,
-): Record<string, string | number | boolean> {
-  const params: Record<string, string | number | boolean> = {}
+  strict = false,
+): Record<string, unknown> {
+  const params: Record<string, unknown> = {}
 
   for (const item of form) {
     const raw = values[item.name]
+    if (item.type === 'object' || item.type === 'array') {
+      if (raw === undefined || raw === null || raw === '') continue
+      let parsed: unknown
+      try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw } catch {
+        if (strict) throw new Error(`${item.name} 必须是合法 JSON`)
+        params[item.name] = raw
+        continue
+      }
+      if (item.type === 'array' ? !Array.isArray(parsed) : parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        if (strict) throw new Error(`${item.name} 必须是 JSON ${item.type === 'array' ? '数组' : '对象'}`)
+        params[item.name] = raw
+        continue
+      }
+      params[item.name] = parsed
+      continue
+    }
 
     if (item.type === 'boolean') {
       if (raw === undefined || raw === null || raw === '') {
