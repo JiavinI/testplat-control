@@ -22,7 +22,7 @@ GSB 的两个工作区复用 API、使用不同登录配置：source 分别为 g
 
 ## 依赖与交付边界
 
-用户确认隔离验收通过并授权合并三仓到 main。Engine 0.5.2 功能提交 `7ae2c013a976da62074d4f4d28b86e8220bbed6d` 已推送，Control 将 pyproject.toml 与 uv.lock 精确锁定到该提交，最低兼容版本同步为 0.5.2；新 Control 在启动时拒绝旧版本或缺少 identity 契约的错误安装。正式安装无需本地 editable；scripts/dev.sh 保留为显式本地开发入口。此次 Git 合并不打标签、发布包或部署，原预览未启用本切片。
+用户确认隔离验收通过并授权合并三仓到 main。Engine 0.5.2 功能提交 `7ae2c013a976da62074d4f4d28b86e8220bbed6d` 已推送，Control 的 pyproject.toml 与 uv.lock 已精确锁定到该提交，最低兼容版本同步为 0.5.2；新 Control 在启动时拒绝旧版本或缺少 identity 契约的错误安装。正式安装无需本地 editable；scripts/dev.sh 保留为显式本地开发入口。干净检出使用正式远程包验证 Control 421、Assets 6 通过，完整静态校验通过。此次 Git 合并不打标签、发布包或部署，原预览未启用本切片。合并记录与安装命令见 [本轮交付](stage-delivery-2026-10-19.md)。
 
 旧固定版本验收脚本改为从 Git 历史克隆再固定提交，避免源仓当前未提交资产污染旧版本兼容测试；不会覆盖源仓工作树。用户原 PHASE2_3_REVIEW_REPORT.md 保留。
 
