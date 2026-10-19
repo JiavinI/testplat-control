@@ -60,6 +60,7 @@ const testEnv: ProjectEnvironment = {
 
 const gsbAccount: TestAccount = {
   account_name: 'gsb',
+  login_username: 'buyer-user',
   display_name: '采购',
   business_role: '买家',
   login_profile: 'gsb_login',
@@ -145,6 +146,7 @@ const secondEnv: ProjectEnvironment = {
 const secondAccount: TestAccount = {
   ...gsbAccount,
   display_name: '第二项目',
+  enabled: false,
   revision: 5,
   updated_by: 'bob',
 }
@@ -168,6 +170,27 @@ beforeEach(() => {
 })
 
 describe('环境管理', () => {
+  it('先展示当前环境的完整地址，切换后只展示所选环境并保留未知服务', async () => {
+    const longUrl = `https://api.example.invalid/${'long-path/'.repeat(15)}`
+    listEnvironments.mockResolvedValue([
+      { ...testEnv, api_hosts: { gsb: longUrl, custom_service: 'https://custom.example.invalid' } },
+      { ...testEnv, env: 'pre', enabled: false, api_hosts: { portal: 'https://pre.example.invalid' } },
+    ])
+    renderSection(<EnvironmentSection projectId="main/gsb" />)
+    expect(await screen.findByText(longUrl)).toBeInTheDocument()
+    expect(screen.getByText('https://custom.example.invalid')).toBeInTheDocument()
+    expect(screen.getByText('API 服务')).toBeInTheDocument()
+    expect(screen.queryByText('https://pre.example.invalid')).not.toBeInTheDocument()
+    fireEvent.mouseDown(screen.getByTestId('environment-select').querySelector('.ant-select-selector')!)
+    fireEvent.click(await screen.findByText('pre（已停用）', { selector: '.ant-select-item-option-content' }))
+    expect(screen.getByText('https://pre.example.invalid')).toBeInTheDocument()
+    expect(screen.queryByText(longUrl)).not.toBeInTheDocument()
+    expect(screen.getByText('网站服务')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('env-edit-pre'))
+    expect(screen.getByLabelText('环境名')).toHaveValue('pre')
+    expect(screen.getByLabelText('地址 1')).toHaveValue('https://pre.example.invalid')
+  })
+
   it('新增环境提交服务地址、超时和参数默认值', async () => {
     const user = userEvent.setup({ delay: null })
     listEnvironments.mockResolvedValue([])
@@ -245,6 +268,63 @@ describe('环境管理', () => {
 })
 
 describe('测试账号凭据', () => {
+  it.each([
+    ['张建雨', '123456'],
+    ['u', 'p'],
+    ['', ''],
+    ['  用户  ', '  pw\t末尾  '],
+  ])('新增账号原样提交被测凭据 %s', async (username, password) => {
+    const user = userEvent.setup({ delay: null })
+    listEnvironments.mockResolvedValue([testEnv])
+    createAccount.mockResolvedValue(gsbAccount)
+    renderSection(<AccountSection projectId="main/gsb" />)
+    await user.click(await screen.findByTestId('account-create-open'))
+    expect(screen.queryByLabelText('展示名')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('业务角色')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('引用名'), { target: { value: 'gsb' } })
+    await user.click(screen.getByRole('combobox', { name: '登录流程' }))
+    await user.click(
+      await screen.findByText('gsb_login', { selector: '.ant-select-item-option-content' }),
+    )
+    fireEvent.change(await screen.findByLabelText('username'), { target: { value: username } })
+    fireEvent.change(screen.getByLabelText('password'), { target: { value: password } })
+    await user.click(screen.getByTestId('account-save'))
+    await waitFor(() => {
+      expect(createAccount).toHaveBeenCalledWith(
+        'main/gsb',
+        'test',
+        expect.objectContaining({ credentials: { username, password } }),
+      )
+    })
+  })
+
+  it('无需凭据的登录流程可创建账号', async () => {
+    const user = userEvent.setup({ delay: null })
+    listEnvironments.mockResolvedValue([testEnv])
+    listLoginProfiles.mockResolvedValue({
+      commit_sha: 'abcdef0',
+      profiles: [{ name: 'gsb_login', credential_fields: [] }],
+    })
+    createAccount.mockResolvedValue(gsbAccount)
+    renderSection(<AccountSection projectId="main/gsb" />)
+    await user.click(await screen.findByTestId('account-create-open'))
+    expect(screen.queryByLabelText('展示名')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('业务角色')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('引用名'), { target: { value: 'gsb' } })
+    await user.click(screen.getByRole('combobox', { name: '登录流程' }))
+    await user.click(
+      await screen.findByText('gsb_login', { selector: '.ant-select-item-option-content' }),
+    )
+    await user.click(screen.getByTestId('account-save'))
+    await waitFor(() => {
+      expect(createAccount).toHaveBeenCalledWith(
+        'main/gsb',
+        'test',
+        expect.objectContaining({ credentials: {} }),
+      )
+    })
+  })
+
   it('列表不显示密码，点击查看后才能看到并切换明文', async () => {
     const user = userEvent.setup({ delay: null })
     listEnvironments.mockResolvedValue([testEnv])
@@ -254,8 +334,10 @@ describe('测试账号凭据', () => {
       credentials: { username: 'buyer-user', password: 'secret-pass' },
     })
     renderSection(<AccountSection projectId="main/gsb" />)
-    expect(await screen.findByText('gsb')).toBeInTheDocument()
+    expect(await screen.findByTestId('account-edit-gsb')).toBeInTheDocument()
     expect(screen.getByTestId('account-table')).not.toHaveTextContent('secret-pass')
+    expect(screen.getByTestId('account-table')).toHaveTextContent('登录账号')
+    expect(screen.getByTestId('account-table')).toHaveTextContent('buyer-user')
     expect(getAccountCredentials).not.toHaveBeenCalled()
 
     await user.click(screen.getByTestId('account-edit-gsb'))
@@ -283,7 +365,6 @@ describe('测试账号凭据', () => {
     getAccount.mockResolvedValue({ ...gsbAccount, revision: 2, display_name: '新采购' })
     renderSection(<AccountSection projectId="main/gsb" />)
     await user.click(await screen.findByTestId('account-edit-gsb'))
-    fireEvent.change(await screen.findByLabelText('展示名'), { target: { value: '门店' } })
     await user.click(screen.getByTestId('account-save'))
     expect(await screen.findByTestId('revision-conflict')).toHaveTextContent(
       '请刷新后再保存',
@@ -292,7 +373,7 @@ describe('测试账号凭据', () => {
       'main/gsb',
       'test',
       'gsb',
-      expect.objectContaining({ revision: 1, display_name: '门店' }),
+      expect.objectContaining({ revision: 1, enabled: true }),
     )
     expect(updateAccount.mock.calls[0][3]).not.toHaveProperty('credentials')
 
@@ -382,18 +463,17 @@ describe('测试账号凭据', () => {
     })
     renderSection(<AccountSection projectId="main/gsb" />)
     await user.click(await screen.findByTestId('account-edit-gsb'))
-    fireEvent.change(await screen.findByLabelText('展示名'), { target: { value: '门店' } })
     await user.click(screen.getByTestId('account-save'))
     expect(await screen.findByTestId('revision-conflict')).toBeInTheDocument()
     await user.click(screen.getByTestId('revision-refresh'))
     await user.click(screen.getByTestId('account-cancel'))
     await user.click(screen.getByTestId('account-edit-other'))
-    expect(await screen.findByLabelText('展示名')).toHaveValue('另一个')
+    expect(await screen.findByLabelText('引用名')).toHaveValue('other')
 
     await act(async () => {
       pending.resolve({ ...gsbAccount, display_name: 'from-account-A', revision: 9 })
     })
-    expect(screen.getByLabelText('展示名')).toHaveValue('另一个')
+    expect(screen.getByLabelText('引用名')).toHaveValue('other')
     expect(screen.getByTestId('editing-revision')).toHaveTextContent('版本 4')
   })
 
@@ -516,7 +596,6 @@ describe('测试账号凭据', () => {
 
     await user.click(await screen.findByTestId('account-edit-gsb'))
     await user.click(await screen.findByTestId('reveal-credentials'))
-    fireEvent.change(await screen.findByLabelText('展示名'), { target: { value: '门店' } })
     await user.click(screen.getByTestId('account-save'))
     expect(await screen.findByTestId('revision-conflict')).toBeInTheDocument()
     expect(screen.queryByLabelText('password')).not.toBeInTheDocument()
@@ -568,7 +647,6 @@ describe('测试账号凭据', () => {
     renderSection(<AccountSection projectId="main/gsb" />)
 
     await user.click(await screen.findByTestId('account-edit-gsb'))
-    fireEvent.change(await screen.findByLabelText('展示名'), { target: { value: '门店' } })
     await user.click(screen.getByTestId('account-save'))
     expect(await screen.findByTestId('revision-conflict')).toBeInTheDocument()
 
@@ -593,7 +671,7 @@ describe('缓存项目切换', () => {
         <button type="button" data-testid="switch-cached-project" onClick={() => setProjectId('main/second')}>
           切换到已缓存项目
         </button>
-        <ProjectConfigPanel projectId={projectId} open onOpenChange={() => undefined} />
+        <ProjectConfigPanel projectId={projectId} />
       </>
     )
   }
@@ -648,19 +726,19 @@ describe('缓存项目切换', () => {
     expect(screen.queryByText('加载账号…')).not.toBeInTheDocument()
     expect(screen.queryByDisplayValue('project-A-user')).not.toBeInTheDocument()
     expect(screen.queryByTestId('account-editor')).not.toBeInTheDocument()
-    expect(await screen.findByText('第二项目')).toBeInTheDocument()
+    expect(await screen.findByTestId('account-table')).toBeInTheDocument()
 
     await user.click(screen.getByTestId('account-edit-gsb'))
-    expect(screen.getByLabelText('展示名')).toHaveValue('第二项目')
+    expect(screen.getByRole('switch', { name: '启用账号' })).toHaveAttribute('aria-checked', 'false')
     expect(screen.queryByLabelText('username')).not.toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('展示名'), { target: { value: '第二项目已改' } })
+    await user.click(screen.getByRole('switch', { name: '启用账号' }))
     await user.click(screen.getByTestId('account-save'))
     await waitFor(() => {
       expect(updateAccount).toHaveBeenCalledWith(
         'main/second',
         'test',
         'gsb',
-        expect.objectContaining({ display_name: '第二项目已改', revision: 5 }),
+        expect.objectContaining({ enabled: true, revision: 5 }),
       )
     })
     const saved = updateAccount.mock.calls.at(-1)?.[3] as { credentials?: unknown }
@@ -736,7 +814,6 @@ describe('直接请求的 401', () => {
     getAccount.mockRejectedValue(new ApiHttpError(401, '未登录', ''))
     const { client } = renderAuthed(<AccountSection projectId="main/gsb" />)
     await user.click(await screen.findByTestId('account-edit-gsb'))
-    fireEvent.change(await screen.findByLabelText('展示名'), { target: { value: '门店' } })
     await user.click(screen.getByTestId('account-save'))
     expect(await screen.findByTestId('revision-refresh')).toBeInTheDocument()
     await user.click(screen.getByTestId('revision-refresh'))
@@ -762,4 +839,28 @@ describe('直接请求的 401', () => {
     expect(screen.queryByTestId('env-editor')).not.toBeInTheDocument()
     expect(client.getQueryData(authKeys.me)).toBeNull()
   })
+})
+
+it('按点分引用显示账号分组，同名 primary 的完整引用保持独立', async () => {
+  listEnvironments.mockResolvedValue([testEnv])
+  listAccounts.mockResolvedValue([
+    { ...gsbAccount, account_name: 'gsb.b2.primary' },
+    { ...gsbAccount, account_name: 'gsb.b1.primary' },
+  ])
+  renderSection(<AccountSection projectId="main/demo" />)
+  expect(await screen.findByText('gsb / b1')).toBeInTheDocument()
+  expect(screen.getByText('gsb / b2')).toBeInTheDocument()
+  expect(screen.getByText('gsb.b1.primary')).toBeInTheDocument()
+  expect(screen.getByText('gsb.b2.primary')).toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('account-create-open'))
+  fireEvent.change(screen.getByLabelText('引用名'), { target: { value: 'gsb.b2.backup' } })
+  fireEvent.mouseDown(screen.getByTestId('login-profile-select').querySelector('.ant-select-selector')!)
+  fireEvent.click(await screen.findByText('gsb_login', { selector: '.ant-select-item-option-content' }))
+  fireEvent.change(await screen.findByLabelText('username'), { target: { value: 'u' } })
+  fireEvent.change(screen.getByLabelText('password'), { target: { value: 'p' } })
+  createAccount.mockResolvedValue({ ...gsbAccount, account_name: 'gsb.b2.backup' })
+  fireEvent.click(screen.getByTestId('account-save'))
+  await waitFor(() => expect(createAccount).toHaveBeenCalledWith('main/demo', 'test', expect.objectContaining({
+    account_name: 'gsb.b2.backup', credentials: { username: 'u', password: 'p' },
+  })))
 })

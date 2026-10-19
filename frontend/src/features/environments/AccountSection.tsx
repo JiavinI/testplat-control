@@ -26,8 +26,8 @@ import {
 } from './hooks'
 import {
   sameCredentials,
+  splitAccountReference,
   validateAccountName,
-  validateCredentialValue,
 } from './names'
 import { isRevisionConflict, REVISION_CONFLICT_MESSAGE } from './revision'
 import type { TestAccount } from './types'
@@ -35,8 +35,6 @@ import type { TestAccount } from './types'
 interface AccountDraft {
   mode: 'create' | 'edit'
   account_name: string
-  display_name: string
-  business_role: string
   login_profile: string
   originalProfile: string
   enabled: boolean
@@ -47,8 +45,6 @@ function blankAccount(): AccountDraft {
   return {
     mode: 'create',
     account_name: '',
-    display_name: '',
-    business_role: '',
     login_profile: '',
     originalProfile: '',
     enabled: true,
@@ -60,8 +56,6 @@ function draftFromAccount(row: TestAccount): AccountDraft {
   return {
     mode: 'edit',
     account_name: row.account_name,
-    display_name: row.display_name ?? '',
-    business_role: row.business_role ?? '',
     login_profile: row.login_profile,
     originalProfile: row.login_profile,
     enabled: row.enabled,
@@ -71,7 +65,7 @@ function draftFromAccount(row: TestAccount): AccountDraft {
 
 /**
  * 测试账号。列表不展示密码。
- * 凭据只在点击「查看凭据」后进入本组件状态，不进 Query 缓存。
+ * 除列表白名单中的登录用户名外，凭据只在点击「查看凭据」后进入本组件状态，不进 Query 缓存。
  */
 export function AccountSection({ projectId }: { projectId: string }) {
   const environments = useEnvironments(projectId)
@@ -167,7 +161,7 @@ function AccountTable({
   projectId: string
   env: string
   accounts: ReturnType<typeof useAccounts>
-  profiles: Array<{ name: string; credential_fields: string[] }>
+  profiles: Array<{ name: string; credential_fields: string[]; unavailable_reason?: string | null }>
   profilesLoading: boolean
   profilesError: unknown
   editorOpen: boolean
@@ -416,8 +410,6 @@ function AccountTable({
       setFormError(credentialsResult.error)
       return
     }
-    const displayName = draft.display_name.trim() || null
-    const businessRole = draft.business_role.trim() || null
     try {
       if (draft.mode === 'create') {
         const nameError = validateAccountName(draft.account_name.trim())
@@ -431,8 +423,6 @@ function AccountTable({
         }
         await createMutation.mutateAsync({
           account_name: draft.account_name.trim(),
-          display_name: displayName,
-          business_role: businessRole,
           login_profile: draft.login_profile,
           credentials: credentialsResult.credentials,
           enabled: draft.enabled,
@@ -446,8 +436,6 @@ function AccountTable({
           name: draft.account_name,
           body: {
             revision: draft.revision,
-            display_name: displayName,
-            business_role: businessRole,
             login_profile: draft.login_profile,
             enabled: draft.enabled,
             ...(credentialsResult.credentials
@@ -509,20 +497,29 @@ function AccountTable({
   }
 
   const rows = accounts.data ?? []
+  const groups = [...new Set(rows.map((row) => splitAccountReference(row.account_name).group))]
   const columns: ColumnsType<TestAccount> = [
-    { title: '账号名', dataIndex: 'account_name', key: 'account_name' },
     {
-      title: '展示名',
-      dataIndex: 'display_name',
-      key: 'display_name',
-      render: (value: string | null) => value || '—',
+      title: '分组',
+      key: 'group',
+      filters: groups.map((group) => ({ text: group || '未分组', value: group })),
+      onFilter: (value, row) => splitAccountReference(row.account_name).group === value,
+      sorter: (a, b) => a.account_name.localeCompare(b.account_name),
+      defaultSortOrder: 'ascend',
+      render: (_value, row) => splitAccountReference(row.account_name).group.replaceAll('.', ' / ') || '未分组',
     },
     {
-      title: '业务角色',
-      dataIndex: 'business_role',
-      key: 'business_role',
-      render: (value: string | null) => value || '—',
+      title: '引用名',
+      key: 'reference',
+      render: (_value, row) => splitAccountReference(row.account_name).reference,
     },
+    {
+      title: '登录账号',
+      dataIndex: 'login_username',
+      key: 'login_username',
+      render: (value: string | null | undefined) => value === '' ? '（空账号）' : value ?? '—',
+    },
+    { title: '完整引用', dataIndex: 'account_name', key: 'account_name' },
     { title: '登录流程', dataIndex: 'login_profile', key: 'login_profile' },
     {
       title: '启用',
@@ -575,6 +572,7 @@ function AccountTable({
         columns={columns}
         dataSource={rows}
         pagination={false}
+        scroll={{ x: 960 }}
         data-testid="account-table"
         locale={{ emptyText: '这个环境还没有测试账号' }}
       />
@@ -651,28 +649,19 @@ function AccountTable({
                 版本 {draft.revision}
               </Typography.Paragraph>
             ) : null}
-            <Typography.Text>账号名</Typography.Text>
+            <Typography.Text>引用名</Typography.Text>
             <Input
-              aria-label="账号名"
+              aria-label="引用名"
+              placeholder="例如 gsb.b2.primary"
               style={{ margin: '4px 0 12px' }}
               value={draft.account_name}
               disabled={draft.mode === 'edit'}
               onChange={(event) => setDraft({ ...draft, account_name: event.target.value })}
             />
-            <Typography.Text>展示名</Typography.Text>
-            <Input
-              aria-label="展示名"
-              style={{ margin: '4px 0 12px' }}
-              value={draft.display_name}
-              onChange={(event) => setDraft({ ...draft, display_name: event.target.value })}
-            />
-            <Typography.Text>业务角色</Typography.Text>
-            <Input
-              aria-label="业务角色"
-              style={{ margin: '4px 0 12px' }}
-              value={draft.business_role}
-              onChange={(event) => setDraft({ ...draft, business_role: event.target.value })}
-            />
+            <Typography.Paragraph type="secondary">
+              按 平台.分组.引用名 分类，例如 gsb.b2.primary（采购商）、gsb.b1.primary（供应商）。
+              接口的 auth 使用完整引用。
+            </Typography.Paragraph>
             <Typography.Paragraph style={{ marginBottom: 4 }}>登录流程</Typography.Paragraph>
             <Select
               aria-label="登录流程"
@@ -681,9 +670,12 @@ function AccountTable({
               loading={profilesLoading}
               value={draft.login_profile || undefined}
               placeholder="选择 Git 登录流程"
-              options={profiles.map((item) => ({ value: item.name, label: item.name }))}
+              options={profiles.map((item) => ({ value: item.name, label: `${item.name}${item.unavailable_reason ? '（待适配）' : ''}` }))}
               onChange={(value) => setDraft({ ...draft, login_profile: value })}
             />
+            {profiles.find((item) => item.name === draft.login_profile)?.unavailable_reason ? (
+              <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={profiles.find((item) => item.name === draft.login_profile)?.unavailable_reason} />
+            ) : null}
             <Space style={{ marginBottom: 12 }}>
               <span>启用</span>
               <Switch
@@ -755,16 +747,9 @@ function resolveCredentials(input: {
   if (mode === 'edit' && profileChanged && revealed === null) {
     return { error: '更换登录流程后请先查看并填写凭据' }
   }
-  if (fields.length === 0) {
-    return { error: '该登录流程没有可填写的凭据字段' }
-  }
   const next: Record<string, string> = {}
   for (const field of fields) {
     const value = credentialDraft[field] ?? ''
-    const fieldError = validateCredentialValue(value)
-    if (fieldError) {
-      return { error: `${field}：${fieldError}` }
-    }
     next[field] = value
   }
   if (mode === 'edit' && revealed && !profileChanged && sameCredentials(next, pickFields(revealed, fields))) {

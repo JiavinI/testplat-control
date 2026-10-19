@@ -10,7 +10,8 @@
 - 配置本身有错（YAML 非法、schema 不符、``none`` 身份、大小写重复头名、占位符非法、
   ``default_identity`` 指向不存在的身份、headers/login 互斥违反等）→ 直接抛
   ``InvalidEnvironmentError``（preflight 422）。
-- 秘密层面的问题（变量缺失/为空/过短/不在白名单）→ 该身份降级为 ``UnavailableAuth``，
+- 秘密层面的问题（凭据字段缺失，以及历史环境变量为空/过短/含控制字符/不在白名单）
+  → 该身份降级为 ``UnavailableAuth``，
   只在资产真正用到它时由 Engine 报 422；未用到的身份不影响执行（设计稿 §5.3）。
 - 秘密值只在本模块内短暂以 ``str`` 存在，立即包进 ``SecretStr``；任何异常消息、
   ``public_reason``、``log_reason``、日志都只含身份名 / header 名 / 变量名 / 策略名，
@@ -57,9 +58,11 @@ from testplat_engine import (
     Validity,
 )
 
+from testplat_control.services.account_reference import ACCOUNT_REFERENCE_RE
+
 logger = logging.getLogger(__name__)
 
-# 秘密最小长度：与 Engine MIN_SECRET_LENGTH 一致；Control 先拦截，绝不触发 Engine 构造期拒绝。
+# 历史 TESTPLAT_* 环境变量路径的兼容规则；Web 被测账号凭据不使用这个长度限制。
 MIN_SECRET_LENGTH = 8
 # 身份名：小写字母开头，便于在资产 `auth:` 中书写；`none` 是保留名（Q6），单独拒绝。
 IDENTITY_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -241,7 +244,7 @@ def _check_variable(name: str, source: Mapping[str, str]) -> tuple[str | None, s
     """检查单个秘密（Q5：每个名字单独检查）。
 
     ``environ`` 模式要求 ``TESTPLAT_`` 白名单，来源是调用方传入的环境映射。
-    ``credential`` 模式按字段名查账号凭据字典，不读进程环境。
+    ``credential`` 模式按字段名查账号凭据字典，不读进程环境，不校验值的业务规则。
 
     Returns:
         ``(原始值, None)`` 或 ``(None, 只含名字的不可用原因)``。
@@ -257,6 +260,8 @@ def _check_variable(name: str, source: Mapping[str, str]) -> tuple[str | None, s
     raw = source.get(name)
     if raw is None:
         return None, f"{label} 未设置"
+    if _SECRET_KIND.get() == "credential":
+        return raw, None
     if raw == "":
         return None, f"{label} 为空"
     if len(raw) < MIN_SECRET_LENGTH:
@@ -1120,8 +1125,8 @@ def _load_auth_document(
 
     materials: dict[str, AuthMaterial] = {}
     for identity, body in identities_raw.items():
-        if not isinstance(identity, str) or not IDENTITY_NAME_RE.fullmatch(identity):
-            raise _schema_error(env, "身份名必须匹配 ^[a-z][a-z0-9_]*$")
+        if not isinstance(identity, str) or not ACCOUNT_REFERENCE_RE.fullmatch(identity):
+            raise _schema_error(env, "身份名需由点分隔的变量名组成，例如 gsb.b2.primary")
         if identity == RESERVED_IDENTITY:
             raise _schema_error(env, "none 是保留名，不能作为身份名")
         if not isinstance(body, dict):
@@ -1152,7 +1157,7 @@ def _load_auth_document(
 
     default_identity = loaded.get("default_identity")
     if default_identity is not None:
-        if not isinstance(default_identity, str) or not IDENTITY_NAME_RE.fullmatch(
+        if not isinstance(default_identity, str) or not ACCOUNT_REFERENCE_RE.fullmatch(
             default_identity
         ):
             raise _schema_error(env, "default_identity 必须是合法身份名")

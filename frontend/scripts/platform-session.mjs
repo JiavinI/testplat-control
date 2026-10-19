@@ -14,7 +14,7 @@ export async function submitPlatformAuth(page, { username, password, mode }) {
   await page.getByTestId('auth-username').fill(username)
   await page.getByTestId('auth-password').fill(password)
   await page.getByTestId('auth-submit').click()
-  const landed = page.getByTestId('project-list-grouped')
+  const landed = page.getByTestId('current-operator')
   const failed = page.getByTestId('login-error')
   const winner = await Promise.race([
     landed.waitFor({ timeout: 20000 }).then(() => 'ok'),

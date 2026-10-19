@@ -22,6 +22,9 @@ from testplat_control.main import app
 from testplat_control.services import execution_service
 from tests.case_support import create_project, project_api_base
 
+# 历史 Git 配置兼容测试；生产默认关闭。
+pytestmark = pytest.mark.legacy_git_config
+
 
 class _LocalHandler(BaseHTTPRequestHandler):
     """本地目标服务：成功、断言失败、慢响应。"""

@@ -21,6 +21,9 @@ from testplat_control.deps import get_engine_port
 from testplat_control.main import app
 from tests.case_support import create_project, project_api_base
 
+# 历史 Git 配置兼容测试；生产默认关闭。
+pytestmark = pytest.mark.legacy_git_config
+
 client = TestClient(app)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

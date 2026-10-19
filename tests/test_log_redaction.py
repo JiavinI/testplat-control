@@ -48,6 +48,9 @@ from testplat_control.engine_bootstrap import EngineBootstrapError
 from testplat_control.main import app
 from tests.case_support import create_project, project_api_base, write_assets, write_env
 
+# 历史 Git 配置兼容测试；生产默认关闭。
+pytestmark = pytest.mark.legacy_git_config
+
 PASSWORD = "pw-LOGLEAK-password-9f3a"
 TOKEN = "tok-LOGLEAK-token-71bc"
 COOKIE = "sid-LOGLEAK-cookie-55de"

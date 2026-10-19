@@ -13,6 +13,7 @@ from testplat_control.services.project_access import (
     get_project,
     get_repos_config,
 )
+from testplat_control.services.workspaces import workspace_response
 
 router = APIRouter(prefix="/repos/{repo}/projects/{project}", tags=["assets"])
 
@@ -54,8 +55,12 @@ async def get_assets_tree(
 ) -> AssetNodeResponse:
     """获取项目的资产树（当前 commit 快照）。"""
     row = get_project(db, repo, project)
-    _, assets_root, _ = ensure_snapshot_dirs(get_repos_config(request), row)
-    tree = AssetService(assets_root).scan_assets()
+    _, assets_root, config_root = ensure_snapshot_dirs(get_repos_config(request), row)
+    context = workspace_response(db, row)
+    tree = AssetService(
+        assets_root, config_root,
+        business_project=None if context is None else context["project"],
+    ).scan_assets()
     return AssetNodeResponse.model_validate(tree)
 
 
@@ -69,8 +74,12 @@ async def get_asset_details(
 ) -> AssetDetailsResponse:
     """获取单个资产详情。"""
     row = get_project(db, repo, project)
-    _, assets_root, _ = ensure_snapshot_dirs(get_repos_config(request), row)
-    asset = AssetService(assets_root).get_asset(asset_id)
+    _, assets_root, config_root = ensure_snapshot_dirs(get_repos_config(request), row)
+    context = workspace_response(db, row)
+    asset = AssetService(
+        assets_root, config_root,
+        business_project=None if context is None else context["project"],
+    ).get_asset(asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     return AssetDetailsResponse.model_validate(asset)

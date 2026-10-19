@@ -9,6 +9,8 @@ describe('formatRunFailure', () => {
       '账号 gsb 在环境 pre 缺失或不可用。身份不存在: gsb',
     )
     expect(extractAccountName('身份 gsb 不可用: 账号 gsb 在环境 test 已停用')).toBe('gsb')
+    expect(extractAccountName('身份不存在: gsb.b2.primary')).toBe('gsb.b2.primary')
+    expect(extractAccountName('账号 gsb.b1.primary 的登录流程 gsb_login 不存在')).toBe('gsb.b1.primary')
   })
 
   it('无关错误保持原文', () => {

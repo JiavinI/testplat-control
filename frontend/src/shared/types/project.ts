@@ -3,7 +3,16 @@
  * Phase 4.0：项目只读，来自 Git 清单；已移除 assets_root / config_root / 单 env 字段。
  */
 
+export interface WorkspaceContext {
+  platform: string
+  platform_name: string
+  project: string
+  project_name: string
+  configuration_project_id: string
+}
+
 export interface ProjectResponse {
+  workspace?: WorkspaceContext | null
   id: string
   repo: string
   project: string

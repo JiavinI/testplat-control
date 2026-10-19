@@ -6,6 +6,7 @@ import { ProjectListTable } from '@/features/projects/ProjectListTable'
 import { useProjectList } from '@/features/projects/hooks'
 import { useRepoList, useSyncRepo } from '@/features/repos/hooks'
 import type { ProjectResponse, RepoResponse } from '@/shared/types/project'
+import { sectionPath } from '@/shared/project/sections'
 import { syncResultLabel } from '@/shared/project/display'
 import {
   EmptyState,
@@ -103,7 +104,7 @@ export function ProjectListPage() {
         groups={groups}
         loading={refreshing && !loading}
         syncingRepo={syncMutation.isPending ? (syncMutation.variables ?? null) : null}
-        onOpen={(p) => navigate(`/projects/${p.repo}/${p.project}`)}
+        onOpen={(p) => navigate(sectionPath('configuration', p.id))}
         onSync={(key) => {
           void handleSync(key)
         }}
@@ -120,10 +121,10 @@ export function ProjectListPage() {
         <div>
           <span className="tp-page-kicker">Projects</span>
           <Typography.Title level={3} className="tp-page-title" style={{ margin: 0 }}>
-            项目列表
+            仓库同步
           </Typography.Title>
           <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-            从已登记的 Git 用例仓库同步项目；选择环境后在工作台运行 api / case。
+            同步 Git 资产仓库与项目清单；点击项目进入该项目配置。
           </Typography.Text>
         </div>
         <Button

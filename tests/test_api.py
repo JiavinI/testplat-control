@@ -39,7 +39,8 @@ def test_sync_and_list_projects(tmp_path: Path) -> None:
     assert body["repo"] == ctx["repo"]
     assert body["project"] == ctx["project"]
     assert body["commit_sha"] == ctx["commit_sha"]
-    assert "test" in body["envs"]
+    assert body["envs"] == []
+    assert body["default_env"] is None
     assert "assets_root" not in body
     assert "config_root" not in body
     assert "env" not in body or body.get("env") is None or "env" not in body

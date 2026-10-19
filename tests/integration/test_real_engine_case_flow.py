@@ -30,6 +30,9 @@ from tests.case_support import (
     write_env,
 )
 
+# 历史 Git 配置兼容测试；生产默认关闭。
+pytestmark = pytest.mark.legacy_git_config
+
 SERVER_SECRET = "srv-secret-token-9f31"
 
 

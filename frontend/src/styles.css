@@ -334,3 +334,281 @@ h4.tp-page-title {
 .tp-request-snapshot {
   max-width: 100%;
 }
+
+/* 功能导航与工作区分离，项目选择是功能内部的上下文。 */
+.tp-shell__body { display: flex; flex: 1; min-width: 0; }
+.tp-primary-nav {
+  width: 168px; flex: 0 0 168px; padding: 20px 12px;
+  border-right: 1px solid #e7e5e4; background: #fff;
+}
+.tp-primary-nav__item {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  margin-bottom: 6px; border-radius: 10px; color: #57534e; text-decoration: none;
+}
+.tp-primary-nav__item:hover, .tp-primary-nav__item.is-active { color: #4f5f4e; background: #eef2ec; }
+.tp-primary-nav__item.is-active { font-weight: 600; }
+
+/* -------------------------------------------------------------------------- */
+/* 工作台统一紧凑顶栏：消除层叠冗余，紧凑排版                                  */
+/* -------------------------------------------------------------------------- */
+
+.tp-workspace-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #e7e5e4;
+}
+
+.tp-workspace-toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tp-workspace-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.tp-toolbar-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #57534e;
+}
+
+.tp-context-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3b4c3a;
+  background: #eef2ec;
+  border: 1px solid #c9d6c5;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.tp-commit-sha.ant-typography {
+  font-size: 12px;
+  color: #44403c;
+  background: #f5f5f4;
+  border: 1px solid #e7e5e4;
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
+/* 资产浏览侧栏与树排版 */
+.tp-workspace-aside {
+  background: #ffffff;
+  border: 1px solid #e7e5e4;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.tp-asset-tree-card.ant-card {
+  border: none !important;
+  background: transparent !important;
+}
+
+.tp-asset-tree-card .ant-card-head {
+  border-bottom: 1px solid #f0ede9 !important;
+}
+
+.tp-asset-search .ant-input,
+.tp-asset-search .ant-input-affix-wrapper {
+  border-radius: 8px !important;
+  font-size: 13px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 资产树（AssetTree）鼠尾草绿主题与工整对齐                                  */
+/* -------------------------------------------------------------------------- */
+
+.tp-asset-tree.ant-tree {
+  background: transparent;
+  color: #292524;
+  font-size: 13px;
+}
+
+.tp-asset-tree .ant-tree-treenode {
+  padding: 1px 0;
+  width: 100%;
+}
+
+.tp-asset-tree .ant-tree-node-content-wrapper {
+  border-radius: 6px;
+  padding: 3px 6px;
+  min-height: 28px;
+  line-height: 22px;
+  transition: background 0.12s ease, color 0.12s ease;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 悬浮态：柔和石色灰 */
+.tp-asset-tree .ant-tree-node-content-wrapper:hover {
+  background: #f5f5f4 !important;
+  color: #1c1917;
+}
+
+/* 选中态：鼠尾草绿浅底 + 左侧标志色高亮条 + 文字深绿 */
+.tp-asset-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  background: #eef2ec !important;
+  color: #273626 !important;
+  font-weight: 600;
+  position: relative;
+}
+
+.tp-asset-tree .ant-tree-node-content-wrapper.ant-tree-node-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: #6b7f6a;
+  border-radius: 2px;
+}
+
+/* 展开收起箭头与图标美化 */
+.tp-asset-tree .ant-tree-switcher {
+  color: #a8a29e;
+  line-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tp-asset-tree .ant-tree-switcher:hover {
+  color: #57534e;
+}
+
+.tp-tree-icon {
+  color: #78716c;
+  font-size: 13px;
+  margin-inline-end: 6px;
+}
+
+.tp-tree-icon--open {
+  color: #6b7f6a;
+}
+
+.tp-tree-icon--file {
+  color: #8c827a;
+}
+
+.tp-tree-node-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tp-tree-node-text {
+  font-size: 13px;
+  color: inherit;
+}
+
+/* HTTP Method 微型 Badge */
+.tp-method-badge.ant-tag {
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 16px;
+  height: 18px;
+  padding: 0 4px;
+  margin: 0;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  border: none;
+}
+
+.tp-method-badge--get.ant-tag {
+  background: #e8f5e9 !important;
+  color: #1b5e20 !important;
+}
+
+.tp-method-badge--post.ant-tag {
+  background: #e8f0fe !important;
+  color: #1558d6 !important;
+}
+
+.tp-method-badge--delete.ant-tag {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+}
+
+.tp-method-badge--put.ant-tag,
+.tp-method-badge--patch.ant-tag,
+.tp-method-badge--other.ant-tag {
+  background: #fef3c7 !important;
+  color: #b45309 !important;
+}
+
+/* 空白态统一设计 */
+.tp-empty-pane {
+  padding: 40px 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.tp-empty-pane .ant-empty-description {
+  color: #78716c;
+  font-size: 13px;
+}
+
+@media (max-width: 767px) {
+  .tp-shell__body { flex-direction: column; }
+  .tp-primary-nav {
+    display: flex; width: 100%; flex: none; padding: 8px; gap: 4px;
+    overflow-x: auto; border-right: 0; border-bottom: 1px solid #e7e5e4;
+  }
+  .tp-primary-nav__item { white-space: nowrap; padding: 10px; margin-bottom: 0; }
+  .tp-shell__content { padding: 10px !important; }
+  .tp-shell__panel { padding: 12px !important; }
+}
+
+@media (max-width: 767px) {
+  .tp-shell__header { padding-inline: 12px !important; gap: 8px !important; }
+  .tp-shell__brand { flex-shrink: 0; white-space: nowrap; font-size: 16px !important; }
+  .tp-shell__header > .ant-typography:nth-child(2) { display: none; }
+  [data-testid="current-operator"] {
+    max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tp-primary-nav__item { flex: 1; justify-content: center; font-size: 13px; padding: 10px 6px; }
+  .tp-primary-nav__item .anticon { display: none; }
+}
+
+/* 接口工作区：完整 URL 和响应跟随当前环境。 */
+.tp-api-url {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  background: #fafaf9;
+}
+
+/* 环境详情直接展示完整地址；编辑表单给 URL 留足宽度。 */
+.tp-service-hosts { display: grid; gap: 16px; }
+.tp-service-hosts section { min-width: 0; }
+.tp-service-host { display: grid; grid-template-columns: minmax(130px, 180px) minmax(0, 1fr); gap: 12px; padding: 12px; border-bottom: 1px solid #e7e5e4; }
+.tp-service-host__url { overflow-wrap: anywhere; white-space: pre-wrap; }
+.tp-host-editor-row { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto; gap: 12px; align-items: end; margin-bottom: 12px; }
+.tp-host-editor-row label { min-width: 0; display: grid; gap: 4px; }
+.tp-parameter-value { display: block; overflow-wrap: anywhere; white-space: pre-wrap; max-width: 360px; font-family: ui-monospace, monospace; }
+@media (max-width: 600px) {
+  .tp-service-host, .tp-host-editor-row { grid-template-columns: minmax(0, 1fr); }
+  .tp-host-editor-row { padding-bottom: 12px; border-bottom: 1px solid #e7e5e4; }
+  .tp-host-editor-row > button { justify-self: end; }
+}

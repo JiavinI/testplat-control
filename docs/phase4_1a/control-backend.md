@@ -38,7 +38,14 @@ OpenAPI：`openapi-phase4_1a.json`。相对 Phase 4.0 的路径与 schema 摘要
 
 - 环境唯一键 `(project_id, env)`。账号唯一键 `(project_id, env, account_name)`。
 - 环境名：`^[a-z0-9][a-z0-9_-]{0,63}$`，且不能以 `_` 开头。账号名：`^[a-z][a-z0-9_]{0,63}$`，保留 `none`。展示名和业务角色可以是中文。保存后不能改名，用 `enabled` 停用。
-- 凭据字段值至少 8 个字符。`api_hosts` 的值必须是不含用户信息的 http(s) URL。
+- 账号表单和列表只展示「引用名」（对应 `account_name`），供用例引用；不再提供展示名和业务角色输入。
+- 被测账号凭据原样保存与传递，不校验长度、非空、空白或字符内容；是否合法由被测系统判断。
+  无需凭据的登录流程允许空对象。平台只检查凭据映射结构、字符串类型和流程字段名。
+  `api_hosts` 的值必须是不含用户信息的 http(s) URL。
+  登录凭据短于 8 位时，按值脱敏匹配完整字段值；较长凭据仍支持子串脱敏。
+  本地联调需配套包含短凭据支持的 Engine：
+  `uv run --with-editable ../testplat-engine uvicorn testplat_control.main:app`。
+  当前锁定的远程 Engine 0.5.0 尚无此修改；远程交付前需发布 Engine 并更新锁定版本。
 - 环境 `timeout_seconds` 为空表示运行时用默认 30；写入 30 表示环境显式指定 30。
 - 账号或环境的修改在同一事务里递增**环境** revision，账号另有自己的 revision。冲突文案：「配置版本冲突，请刷新后再保存」。
 - `config_changes` 只记字段名。凭据变更的 `credential_note` 为「已修改」，不记原值。
@@ -63,7 +70,7 @@ OpenAPI：`openapi-phase4_1a.json`。相对 Phase 4.0 的路径与 schema 摘要
 - `testplat_control.services.auth_loader.build_auth_from_document`：纯数据构造。`${secret:字段名}` 只查传入的凭据字典，不读 `os.environ`，也不把凭据写回环境变量。校验与 `SecretStr` 仍走原来的 auth_loader。
 - `testplat_control.services.run_config.resolve_run_config`：项目 + 环境 + 已固定的 commit 目录 → Engine `environment`、`AuthTable`、有效超时 / 参数、非秘密摘要。
 
-每个启用账号按自己的 `login_profile` 解析，AuthTable 的身份名是账号名（例如 `gsb`）。多个账号不合并成一个全局秘密字典。停用账号放进表中作为 `UnavailableAuth`，避免旧登录缓存绕过停用。未引用且未配全的账号不阻断本次运行；被引用的缺失或停用在预检失败，不回退 `TESTPLAT_GSB_*`。
+每个启用账号按自己的 `login_profile` 解析，AuthTable 的身份名是完整账号引用（例如 `gsb.b2.primary`，前缀 `gsb.b2` 为分组，末段 `primary` 为组内引用名；同一环境可并存 `gsb.b1.primary`）。多个账号不合并成一个全局秘密字典。停用账号放进表中作为 `UnavailableAuth`，避免旧登录缓存绕过停用。未引用且未配全的账号不阻断本次运行；被引用的缺失或停用在预检失败，不回退 `TESTPLAT_GSB_*`。
 
 参数在同一次冻结里合成，不再读第二次环境。单接口：请求 `params` > 该接口声明过的环境 `case_params` > 资产 `inputs.default`。环境里其他接口的默认键不会使本接口报未知参数；请求体显式给出的未知键仍然 422。环境默认值可以补上该接口的必填项。Case：请求 `params` > 环境 `case_params`，case 资产参数仍由 Engine 再往下叠。
 
@@ -117,3 +124,11 @@ OpenAPI：`openapi-phase4_1a.json`。相对 Phase 4.0 的路径与 schema 摘要
 项目还没有 Web 环境时，运行配置来自 Git 环境文件和历史 `load_auth`（会读 `TESTPLAT_*`）。这是显式的兼容模式：判断条件只有「该项目是否已有 Web 环境行」，不是猜测。正常 Web 使用以数据库为准。`auth_loader.build_auth_from_document` 继续给 Web 登录流程用，不删除。退出条件：集成阶段的 Web 资产和新矩阵成为门禁后，把 Git 回退收成显式兼容开关或移除；在此之前不删这条路径。
 
 `scripts/phase4_0_matrix.py`、`scripts/phase4_0_e2e_real_assets.py` 以及 auth / login 矩阵目前没有平台登录，直接运行会未登录。登录迁移不在本批。历史阶段的 OpenAPI 与文档保持原样，只代表当时的版本。
+
+## 单接口临时请求内容
+
+`POST .../assets/{asset_id}/run` 支持可选 `request_override: {"body": ...}`。Body 整体替换，不与 YAML 合并、不渲染占位符；未传时保持原来的模板运行。完整覆盖时模板 inputs 不再必填，显式传入的 params 仍校验名称和类型。JSON 支持对象、数组、标量与 null；Query/Form 按一层标量键值发送；Raw 按字符串发送。覆盖只能包含 body，不能更换 auth、host、method 或断言。接口定义仍来自固定的 Git commit，覆盖不写回 Assets；执行记录保存实际发送内容。
+
+页面在「使用 YAML 模板」与「编辑完整请求内容」间切换，后者可增删任意字段，并可从 YAML 恢复。账号创建和保存不发起业务登录；运行引用 login 身份时按需登录、提取并注入登录态，有效会话可复用。
+
+此增量依赖本地 Engine 的 `ApiExecutionRequest.request_override`；本地联调继续通过 `uv run --with-editable ../testplat-engine` 启动。远程锁定的 v0.5.0 尚未包含此扩展，发布前须提交 Engine 并更新 Control 的依赖锁定。

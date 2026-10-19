@@ -67,6 +67,19 @@ class Project(Base):
         )
 
 
+class WorkspaceBinding(Base):
+    """显式的平台 / 业务项目运行上下文；配置归属可共享，旧 Project ID 不变。"""
+
+    __tablename__ = "workspace_bindings"
+
+    project_id: str = Column(String(160), ForeignKey("projects.id"), primary_key=True)
+    platform: str = Column(String(64), nullable=False)
+    platform_name: str = Column(String(128), nullable=False)
+    business_project: str = Column(String(64), nullable=False)
+    business_project_name: str = Column(String(128), nullable=False)
+    configuration_project_id: str = Column(String(160), ForeignKey("projects.id"), nullable=False)
+
+
 class ExecutionRecord(Base):
     """执行记录表；Phase 4.0 增加 env / repo / commit_sha / operator。"""
 
@@ -154,6 +167,36 @@ class ProjectEnvironment(Base):
         return (
             f"ProjectEnvironment(project_id={self.project_id!r}, env={self.env!r}, "
             f"enabled={self.enabled!r}, revision={self.revision!r})"
+        )
+
+
+class ParameterSet(Base):
+    """按实际工作区、资产和作用域保存的业务参数；不包含账号凭据。"""
+
+    __tablename__ = "parameter_sets"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "asset_type", "asset_id", "scope", "env_key",
+            name="uq_parameter_set_scope",
+        ),
+    )
+
+    id: str = Column(String(36), primary_key=True)
+    project_id: str = Column(String(160), ForeignKey("projects.id"), nullable=False)
+    asset_type: str = Column(String(16), nullable=False)  # api | case
+    asset_id: str = Column(String(255), nullable=False)
+    scope: str = Column(String(32), nullable=False)  # asset_default | environment_override
+    env_key: str = Column(String(64), nullable=False, default="")
+    values = Column(JSON, nullable=False, default=dict)
+    revision: int = Column(Integer, nullable=False, default=1)
+    updated_by: str | None = Column(String(64), nullable=True)
+    created_at: datetime = Column(DateTime, nullable=False)
+    updated_at: datetime = Column(DateTime, nullable=False)
+
+    def __repr__(self) -> str:
+        return (
+            f"ParameterSet(project_id={self.project_id!r}, asset_id={self.asset_id!r}, "
+            f"scope={self.scope!r}, env_key={self.env_key!r}, revision={self.revision!r})"
         )
 
 

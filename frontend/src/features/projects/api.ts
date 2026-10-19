@@ -8,7 +8,7 @@ import {
 } from '@/shared/api/validate'
 import { ApiParseError } from '@/shared/api/errors'
 import { projectResourcePath, splitProjectId } from '@/shared/project/ids'
-import type { ProjectResponse } from '@/shared/types/project'
+import type { ProjectResponse, WorkspaceContext } from '@/shared/types/project'
 
 function requireBoolean(
   obj: Record<string, unknown>,
@@ -45,9 +45,22 @@ function requireStringArray(
   })
 }
 
+function parseWorkspace(value: unknown): WorkspaceContext | null {
+  if (value === undefined || value === null) return null
+  assertObject(value, 'WorkspaceContext')
+  return {
+    platform: requireString(value, 'platform', 'WorkspaceContext'),
+    platform_name: requireString(value, 'platform_name', 'WorkspaceContext'),
+    project: requireString(value, 'project', 'WorkspaceContext'),
+    project_name: requireString(value, 'project_name', 'WorkspaceContext'),
+    configuration_project_id: requireString(value, 'configuration_project_id', 'WorkspaceContext'),
+  }
+}
+
 function parseProject(payload: unknown, label = 'ProjectResponse'): ProjectResponse {
   assertObject(payload, label)
   return {
+    ...(payload.workspace == null ? {} : { workspace: parseWorkspace(payload.workspace) }),
     id: requireString(payload, 'id', label),
     repo: requireString(payload, 'repo', label),
     project: requireString(payload, 'project', label),

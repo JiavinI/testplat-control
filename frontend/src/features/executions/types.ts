@@ -3,7 +3,7 @@
  * 字段名与可空语义保持一致，避免前端另发明契约。
  */
 
-export type ParamType = 'string' | 'number' | 'boolean'
+export type ParamType = 'string' | 'number' | 'boolean' | 'object' | 'array'
 
 export type RunStatus = 'success' | 'failed'
 
@@ -76,12 +76,30 @@ export interface ParamInfo {
 export interface ParamsResponse {
   asset_id: string
   params: ParamInfo[]
+  asset_defaults?: Record<string, unknown>
+}
+
+export interface ParameterContext {
+  project_id: string
+  asset_type: 'api' | 'case'
+  asset_id: string
+  env: string
+  commit_sha: string
+  environment_revision: number
+  git_defaults: Record<string, unknown>
+  shared_environment: Record<string, unknown>
+  asset_default: { values: Record<string, unknown>; revision: number }
+  environment_override: { values: Record<string, unknown>; revision: number }
+  effective: Record<string, unknown>
+  sources: Record<string, string>
 }
 
 export interface RunRequest {
   /** 必填：须在项目 envs 内，否则后端 422 */
   env: string
-  params: Record<string, string | number | boolean>
+  params: Record<string, unknown>
+  identity?: string
+  request_override?: { body: unknown }
 }
 
 export interface RunResponse {
@@ -158,6 +176,7 @@ export interface ExecutionListQuery {
 }
 
 export type ApiExecutionPanelProps = {
+  parameterContext?: ParameterContext
   projectId: string
   assetId: string
   /** 运行必填 env；由工作台环境下拉传入 */
@@ -167,9 +186,12 @@ export type ApiExecutionPanelProps = {
    * 已有默认值时必填项可以留空，空白不写入本次请求，显式输入仍然优先。
    */
   caseParams?: Record<string, unknown>
+  requestDefinition?: Record<string, unknown>
+  runDisabled?: boolean
 }
 
 export type ExecutionHistoryProps = {
+  assetTypeScope?: 'api' | 'case'
   projectId: string
   assetId?: string
   /** 项目可选环境，供历史筛选下拉 */
@@ -292,7 +314,10 @@ export interface CaseExecutionRecordDetail {
 }
 
 export type CaseExecutionPanelProps = {
+  parameterContext?: ParameterContext
   projectId: string
   caseId: string
   env: string
+  assetDefaults?: Record<string, unknown>
+  caseParams?: Record<string, unknown>
 }

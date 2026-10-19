@@ -41,7 +41,7 @@ async function openProject(page) {
 async function openConfig(page) {
   const manager = page.getByTestId('environment-manager')
   if (!(await manager.isVisible().catch(() => false))) {
-    await page.getByText('环境与账号', { exact: true }).click()
+    await page.goto(`${BASE}/configuration/${REPO}/${PROJECT}?tab=environments`, { waitUntil: 'networkidle' })
   }
   await manager.waitFor({ timeout: 20000 })
 }
@@ -67,9 +67,7 @@ async function createAccount(page) {
   await page.getByRole('tab', { name: '测试账号' }).click()
   await page.getByTestId('account-manager').waitFor()
   await page.getByTestId('account-create-open').click()
-  await page.getByRole('textbox', { name: '账号名', exact: true }).fill('gsb')
-  await page.getByRole('textbox', { name: '展示名', exact: true }).fill('采购员')
-  await page.getByRole('textbox', { name: '业务角色', exact: true }).fill('商家')
+  await page.getByRole('textbox', { name: '引用名', exact: true }).fill('gsb')
   await page.getByTestId('login-profile-select').click()
   await page.locator('.ant-select-item-option').filter({ hasText: 'gsb_login' }).click()
   await page.getByTestId('credential-username').waitFor()
@@ -81,6 +79,7 @@ async function createAccount(page) {
 }
 
 async function runBalance(page, narrow) {
+  await openProject(page)
   await page.waitForFunction(() => {
     const el = document.querySelector('[data-testid="workspace-env-select"]')
     return Boolean(el) && !el.className.includes('ant-select-disabled')

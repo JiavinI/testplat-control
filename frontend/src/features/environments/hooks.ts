@@ -29,11 +29,12 @@ export const environmentKeys = {
   profiles: (projectId: string) => [...environmentKeys.all, 'profiles', projectId] as const,
 }
 
-function useInvalidateProjectConfig(projectId: string) {
+function useInvalidateProjectConfig() {
   const client = useQueryClient()
   return () => {
-    void client.invalidateQueries({ queryKey: environmentKeys.list(projectId) })
-    void client.invalidateQueries({ queryKey: projectKeys.detail(projectId) })
+    void client.invalidateQueries({ queryKey: environmentKeys.all })
+    void client.invalidateQueries({ queryKey: projectKeys.all })
+    void client.invalidateQueries({ queryKey: ['executions', 'parameterContext'] })
   }
 }
 
@@ -70,7 +71,7 @@ export function useLoginProfiles(
 }
 
 export function useCreateEnvironment(projectId: string) {
-  const invalidate = useInvalidateProjectConfig(projectId)
+  const invalidate = useInvalidateProjectConfig()
   return useMutation({
     mutationFn: (body: EnvironmentBody) => createEnvironment(projectId, body),
     onSuccess: invalidate,
@@ -78,7 +79,7 @@ export function useCreateEnvironment(projectId: string) {
 }
 
 export function useUpdateEnvironment(projectId: string) {
-  const invalidate = useInvalidateProjectConfig(projectId)
+  const invalidate = useInvalidateProjectConfig()
   const client = useQueryClient()
   return useMutation({
     mutationFn: (input: { env: string; body: EnvironmentUpdate }) =>
@@ -92,7 +93,7 @@ export function useUpdateEnvironment(projectId: string) {
 
 export function useCreateAccount(projectId: string, env: string) {
   const client = useQueryClient()
-  const invalidate = useInvalidateProjectConfig(projectId)
+  const invalidate = useInvalidateProjectConfig()
   return useMutation({
     mutationFn: (body: AccountBody) => createAccount(projectId, env, body),
     // 请求体含凭据，不留在 mutation 缓存。
@@ -106,7 +107,7 @@ export function useCreateAccount(projectId: string, env: string) {
 
 export function useUpdateAccount(projectId: string, env: string) {
   const client = useQueryClient()
-  const invalidate = useInvalidateProjectConfig(projectId)
+  const invalidate = useInvalidateProjectConfig()
   return useMutation({
     mutationFn: (input: { name: string; body: AccountUpdate }) =>
       updateAccount(projectId, env, input.name, input.body),

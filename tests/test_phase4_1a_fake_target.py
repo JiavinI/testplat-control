@@ -200,7 +200,11 @@ class _Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length) if length else b""
-        query = {key: values[0] for key, values in parse_qs(parsed.query).items() if values}
+        query = {
+            key: values[0]
+            for key, values in parse_qs(parsed.query, keep_blank_values=True).items()
+            if values
+        }
         capture.add(
             {
                 "method": method,
@@ -359,14 +363,29 @@ def _queries(capture: _Capture, path: str) -> list[dict[str, str]]:
     return [item["query"] for item in capture.snapshot() if item["path"] == path]
 
 
-def test_fake_target_carries_host_params_and_credentials(world: dict) -> None:
+@pytest.mark.parametrize(
+    ("username", "password"),
+    [
+        (USER_A, PASS_A),
+        ("张建雨", "123456"),
+        ("u", "p"),
+        ("", ""),
+        ("  用户\t  ", "pw\r\n\x00末尾 "),
+    ],
+)
+def test_fake_target_carries_host_params_and_credentials(
+    world: dict, username: str, password: str
+) -> None:
     """登录走 unified_login，业务走 gsb；参数与凭据字段进入请求，且不回退环境变量。"""
     client: TestClient = world["client"]
     login: _Server = world["login"]
     business: _Server = world["business"]
     base = world["ctx"]["base"]
     _env(client, base, login.base, business.base, case_params={"keyword": "from-env"})
-    _account(client, base)
+    _account(client, base, username=username, password=password)
+    stored = client.get(f"{base}/environments/test/accounts/gsb/credentials")
+    assert stored.status_code == 200
+    assert stored.json()["credentials"] == {"username": username, "password": password}
 
     omitted = client.post(
         f"{base}/assets/api.gsb.balance/run",
@@ -377,7 +396,7 @@ def test_fake_target_carries_host_params_and_credentials(world: dict) -> None:
     assert omitted.json()["auth"]["identity"] == "gsb"
     assert omitted.json()["auth"]["session_source"] == "login"
     login_qs = _queries(login.capture, "/site/login")
-    assert login_qs == [{"username": USER_A, "password": PASS_A, "source": "go2"}]
+    assert login_qs == [{"username": username, "password": password, "source": "go2"}]
     assert FALLBACK not in json.dumps(login_qs)
     assert _queries(business.capture, "/site/login") == []
     posted = [item for item in business.capture.snapshot() if item["path"] == "/balance"]
@@ -414,6 +433,42 @@ def test_fake_target_carries_host_params_and_credentials(world: dict) -> None:
     assert again.status_code == 200, again.text
     assert _queries(login.capture, "/site/login")[-1]["password"] == NEW_PASS
     assert again.json()["auth"]["session_source"] == "login"
+
+    updated = client.put(
+        f"{base}/environments/test/accounts/gsb",
+        json={"revision": 2, "credentials": {"username": username, "password": password}},
+    )
+    assert updated.status_code == 200, updated.text
+    stored_again = client.get(f"{base}/environments/test/accounts/gsb/credentials")
+    assert stored_again.json()["credentials"] == {"username": username, "password": password}
+
+
+def test_login_profile_without_credentials_can_run(world: dict) -> None:
+    from tests.repo_support import commit_all, sync_repo
+
+    client = world["client"]
+    ctx = world["ctx"]
+    profile_path = ctx["repo_path"] / "projects/demo/config/auth/_profiles.yaml"
+    profile_path.write_text(
+        PROFILE.replace("${secret:username}", "").replace("${secret:password}", ""),
+        encoding="utf-8",
+    )
+    commit_all(ctx["repo_path"])
+    sync_repo(client, ctx["repo"])
+    _env(client, ctx["base"], world["login"].base, world["business"].base)
+    created = client.post(
+        f"{ctx['base']}/environments/test/accounts",
+        json={"account_name": "gsb", "login_profile": "gsb_login", "credentials": {}},
+    )
+    assert created.status_code == 201, created.text
+    run = client.post(
+        f"{ctx['base']}/assets/api.gsb.balance/run", json={"env": "test", "params": {}}
+    )
+    assert run.status_code == 200, run.text
+    assert run.json()["auth"]["session_source"] == "login"
+    assert _queries(world["login"].capture, "/site/login") == [
+        {"username": "", "password": "", "source": "go2"}
+    ]
 
 
 def test_timeout_comes_from_request_then_environment(world: dict) -> None:
@@ -487,6 +542,112 @@ def test_case_param_overlay_and_cache_scope(world: dict) -> None:
     assert resolved.timeout_seconds == 2
 
 
+def test_parameter_preview_defaults_match_real_requests(
+    world: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """传给 Engine 的参数保留类型；隔离目标收到既有模板渲染后的字符串值。"""
+    from testplat_control.adapters.package_engine import PackageEngineAdapter
+    from tests.repo_support import commit_all, sync_repo, write_tree
+
+    submitted = []
+    execute = PackageEngineAdapter.execute
+
+    async def capture_execute(self, request):
+        submitted.append(request.to_dict()["params"])
+        return await execute(self, request)
+
+    monkeypatch.setattr(PackageEngineAdapter, "execute", capture_execute)
+    client, ctx = world["client"], world["ctx"]
+    base = ctx["base"]
+    write_tree(ctx["repo_path"], {
+        "projects/demo/api/gsb/preview.yaml": """\
+id: api.gsb.preview
+type: api
+name: 参数预览验收接口
+host: gsb
+method: POST
+url: /balance
+auth: none
+request:
+  type: json
+  inputs:
+    keyword: {type: string, required: true, default: ""}
+    count: {type: number, required: true, default: 0}
+    active: {type: boolean, required: true, default: false}
+  body:
+    keyword: "${keyword}"
+    count: "${count}"
+    active: "${active}"
+success:
+  status_code: 200
+""",
+        "projects/demo/scenarios/gsb/preview.case.yaml": """\
+schema_version: "0.2"
+id: case.gsb.preview
+name: Preview fixture
+params:
+  keyword: from-case
+  filter: {a: 7, b: 8}
+  active: true
+steps:
+  - step_id: send
+    type: api
+    api_id: api.gsb.preview
+    params:
+      keyword: "${params.keyword}"
+      count: "${params.filter.a}"
+      active: "${params.active}"
+""",
+    })
+    commit_all(ctx["repo_path"], "add parameter preview fixtures")
+    assert sync_repo(client, ctx["repo"])["ok"]
+    _env(client, base, world["login"].base, world["business"].base)
+    preview = client.get(f"{base}/assets/api.gsb.preview/params")
+    assert preview.status_code == 200
+    assert preview.json()["asset_defaults"] == {"keyword": "", "count": 0, "active": False}
+
+    def sent_body() -> dict:
+        events = world["business"].capture.snapshot()
+        return json.loads([event["body"] for event in events if event["path"] == "/balance"][-1])
+
+    first = client.post(f"{base}/assets/api.gsb.preview/run", json={"env": "test", "params": {}})
+    assert first.status_code == 200, first.json().get("detail")
+    assert first.json()["status"] == "success"
+    assert submitted[-1] == preview.json()["asset_defaults"]
+    assert sent_body() == {"keyword": "", "count": "0", "active": "False"}
+    environment = client.get(f"{base}/environments/test").json()
+    updated = client.put(f"{base}/environments/test", json={
+        "revision": environment["revision"],
+        "case_params": {
+            "keyword": "from-env", "count": 4, "active": True, "filter": {"a": 5, "b": 6},
+        },
+    })
+    assert updated.status_code == 200
+    for params, expected in [
+        ({}, {"keyword": "from-env", "count": 4, "active": True}),
+        ({"count": 0, "active": False}, {"keyword": "from-env", "count": 0, "active": False}),
+    ]:
+        response = client.post(
+            f"{base}/assets/api.gsb.preview/run", json={"env": "test", "params": params}
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+        assert submitted[-1] == expected
+        # 预览输入不等于最终请求体：当前模板插值将 number／boolean 字符串化。
+        assert sent_body() == {key: str(value) for key, value in expected.items()}
+
+    case_response = client.post(f"{base}/cases/case.gsb.preview/run", json={
+        "env": "test",
+        "params": {"keyword": "", "filter": {"a": 0}, "active": False, "optional": None},
+    })
+    assert case_response.status_code == 200
+    assert case_response.json()["status"] == "success"
+    # Case 步骤的引用解析保留类型，区别于当前单接口的模板插值。
+    assert sent_body() == {"keyword": "", "count": 0, "active": False}
+    assert submitted[-1]["filter"] == {"a": 0}
+    assert submitted[-1]["optional"] is None
+
+
 def test_projects_isolate_accounts_and_hosts(world: dict) -> None:
     """A2：同名账号在两个项目使用各自地址和凭据；操作人不是测试账号。"""
     client: TestClient = world["client"]
@@ -529,6 +690,29 @@ def test_projects_isolate_accounts_and_hosts(world: dict) -> None:
     assert other_body == [{"keyword": "other"}]
     assert FALLBACK not in json.dumps(login.capture.snapshot())
     assert FALLBACK not in json.dumps(business.capture.snapshot())
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_missing_web_host_does_not_use_git(
+    world: dict,
+    monkeypatch: pytest.MonkeyPatch,
+    legacy: bool,
+) -> None:
+    """即使 Git 有可用 host，Web 环境缺少 host 也必须在联网前失败。"""
+    monkeypatch.setattr(settings, "testplat_legacy_git_config", legacy)
+    client, base = world["client"], world["ctx"]["base"]
+    response = client.post(f"{base}/environments", json={"env": "test", "api_hosts": {}})
+    assert response.status_code == 201
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("已有 Web 环境不可读取 Git 配置")
+
+    monkeypatch.setattr("testplat_control.services.run_config.load_auth", forbidden)
+    monkeypatch.setattr("testplat_control.services.run_config.load_project_environment", forbidden)
+    blocked = client.post(f"{base}/assets/api.gsb.anon/run", json={"env": "test"})
+    assert blocked.status_code == 422
+    assert world["login"].capture.snapshot() == []
+    assert world["business"].capture.snapshot() == []
 
 
 def test_unreferenced_incomplete_account_does_not_block(world: dict) -> None:
@@ -576,3 +760,140 @@ def test_unreferenced_incomplete_account_does_not_block(world: dict) -> None:
     assert PASS_A not in blocked.text
     assert FALLBACK not in blocked.text
     assert _queries(login.capture, "/site/login") == []
+
+
+def test_grouped_account_reference_selects_exact_identity(world: dict) -> None:
+    """同名 primary 分属 b1/b2；auth 精确选择 b2，实际触发登录和业务请求。"""
+    from tests.repo_support import commit_all, sync_repo
+
+    client, ctx = world["client"], world["ctx"]
+    for path in (ctx["repo_path"] / "projects/demo/api").rglob("*.yaml"):
+        path.write_text(path.read_text().replace("auth: gsb\n", "auth: gsb.b2.primary\n"))
+    commit_all(ctx["repo_path"], "use grouped account reference")
+    sync_repo(client, ctx["repo"])
+    base = ctx["base"]
+    _env(client, base, world["login"].base, world["business"].base)
+    _account(client, base, name="gsb.b1.primary", username=USER_B, password=PASS_B)
+    _account(client, base, name="gsb.b2.primary")
+    response = client.post(f"{base}/assets/api.gsb.balance/run", json={"env": "test"})
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "success"
+    assert response.json()["auth"]["identity"] == "gsb.b2.primary"
+    assert len(_queries(world["login"].capture, "/site/login")) == 1
+    assert _queries(world["login"].capture, "/site/login")[0]["username"] == USER_A
+    assert any(item["path"] == "/balance" for item in world["business"].capture.snapshot())
+    assert PASS_A not in response.text
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {
+            "new_field": 12,
+            "nested": {"enabled": False},
+            "items": [1, None],
+            "literal": "${keyword}",
+        },
+        {},
+        [1, False, None],
+        None,
+    ],
+)
+def test_temporary_json_body_is_sent_and_recorded_without_changing_assets(
+    world: dict, body: Any
+) -> None:
+    client, ctx = world["client"], world["ctx"]
+    base = ctx["base"]
+    _env(client, base, world["login"].base, world["business"].base)
+    _account(client, base)
+    with SessionLocal() as db:
+        project = db.get(Project, ctx["project_id"])
+        _, root, _ = ensure_snapshot_dirs(app.state.repo_sync.config, project)
+    source = root / "api/gsb/balance.yaml"
+    original = source.read_bytes()
+    response = client.post(
+        f"{base}/assets/api.gsb.balance/run",
+        json={
+            "env": "test",
+            "request_override": {"body": body},
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "success"
+    sent = [item for item in world["business"].capture.snapshot() if item["path"] == "/balance"][-1]
+    assert json.loads(sent["body"]) == body
+    assert sent["x_token"] == TOKEN
+    assert response.json()["result"]["request"]["body"] == body
+    record = client.get(f"{base}/execution-records/{response.json()['record_id']}")
+    assert record.status_code == 200
+    assert record.json()["result"]["request"]["body"] == body
+    assert source.read_bytes() == original
+    normal = client.post(
+        f"{base}/assets/api.gsb.balance/run",
+        json={"env": "test", "params": {"keyword": "original"}},
+    )
+    assert normal.json()["result"]["request"]["body"] == {"keyword": "original"}
+
+
+@pytest.mark.parametrize(
+    ("request_type", "body", "expected"),
+    [
+        (
+            "query",
+            {"new": "a&b", "active": False, "count": 2},
+            {"new": "a&b", "active": "false", "count": "2"},
+        ),
+        ("form", {"new": "a&b", "active": False}, {"new": "a&b", "active": ["false"]}),
+        ("raw", "arbitrary text\n${literal}", "arbitrary text\n${literal}"),
+    ],
+)
+def test_temporary_request_supports_query_form_and_raw(
+    world: dict, request_type: str, body: Any, expected: Any
+) -> None:
+    from tests.repo_support import commit_all, sync_repo
+
+    client, ctx = world["client"], world["ctx"]
+    path = ctx["repo_path"] / "projects/demo/api/gsb/balance.yaml"
+    source = (
+        path.read_text()
+        .replace("type: json", f"type: {request_type}")
+        .replace("required: false", "required: true")
+    )
+    if request_type == "raw":
+        source = source.replace(
+            '  body:\n    keyword: "${keyword}"', '  content_type: text/plain\n  body: "${keyword}"'
+        )
+    path.write_text(source)
+    commit_all(ctx["repo_path"], "request type")
+    sync_repo(client, ctx["repo"])
+    base = ctx["base"]
+    _env(client, base, world["login"].base, world["business"].base)
+    _account(client, base)
+    response = client.post(
+        f"{base}/assets/api.gsb.balance/run",
+        json={"env": "test", "request_override": {"body": body}},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "success"
+    sent = [item for item in world["business"].capture.snapshot() if item["path"] == "/balance"][-1]
+    if request_type == "query":
+        assert sent["query"] == expected
+        assert sent["body"] == ""
+    elif request_type == "form":
+        assert parse_qs(sent["body"]) == {"new": ["a&b"], "active": ["false"]}
+    else:
+        assert sent["body"] == expected
+
+
+def test_temporary_request_cannot_change_auth_or_method(world: dict) -> None:
+    client, ctx = world["client"], world["ctx"]
+    base = ctx["base"]
+    _env(client, base, world["login"].base, world["business"].base)
+    _account(client, base)
+    for override in ({}, {"body": {}, "auth": "none"}, {"body": {}, "method": "DELETE"}):
+        response = client.post(
+            f"{base}/assets/api.gsb.balance/run", json={"env": "test", "request_override": override}
+        )
+        assert response.status_code == 422
+    assert world["login"].capture.snapshot() == []
+    assert world["business"].capture.snapshot() == []

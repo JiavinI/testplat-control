@@ -40,6 +40,41 @@ def test_ensure_engine_compatible_succeeds_for_installed_0_5() -> None:
     assert version.startswith("0.5")
 
 
+def test_ensure_engine_compatible_rejects_old_request_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """版本号满足约束时仍检查请求覆盖契约，避免错误安装静默丢字段。"""
+    import testplat_engine as eng
+
+    class LegacyRequest:
+        pass
+
+    monkeypatch.setattr(eng, "ApiExecutionRequest", LegacyRequest)
+    with pytest.raises(EngineBootstrapError, match="request_override.*scripts/dev.sh"):
+        ensure_engine_compatible()
+
+
+@pytest.mark.parametrize("version", ["0.5.0", "0.5.1"])
+def test_ensure_engine_compatible_rejects_pre_structured_versions(monkeypatch, version):
+    """正式依赖不能回退到缺少调用身份与结构化模板的旧 0.5.x。"""
+    monkeypatch.setattr("testplat_control.engine_bootstrap.version", lambda _dist: version)
+    with pytest.raises(EngineBootstrapError, match="版本不兼容"):
+        ensure_engine_compatible()
+
+
+def test_ensure_engine_compatible_requires_caller_identity(monkeypatch):
+    """同版本错误包缺少 identity 也必须在启动时拒绝。"""
+    import testplat_engine as eng
+
+    class LegacyRequest:
+        def __init__(self, *, request_override=None):
+            pass
+
+    monkeypatch.setattr(eng, "ApiExecutionRequest", LegacyRequest)
+    with pytest.raises(EngineBootstrapError, match="identity.*结构化"):
+        ensure_engine_compatible()
+
+
 def test_ensure_engine_compatible_rejects_0_4(monkeypatch: pytest.MonkeyPatch) -> None:
     """Phase 3.3d 起 0.4.x 不再兼容：缺少跨执行缓存与九键 auth。"""
     monkeypatch.setattr("testplat_control.engine_bootstrap.version", lambda _dist: "0.4.0")

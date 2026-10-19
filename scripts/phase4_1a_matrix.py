@@ -1168,7 +1168,11 @@ def main() -> int:
             if not src.is_dir():
                 raise RuntimeError("assets_checkout_missing")
             dest = work / "assets-copy"
-            shutil.copytree(src, dest, ignore=shutil.ignore_patterns(".venv", "__pycache__"))
+            # 历史门槛只验证固定提交，不把当前工作树的新契约混入旧快照。
+            subprocess.run(
+                ["git", "clone", "--no-local", "--quiet", str(src), str(dest)],
+                check=True, capture_output=True, timeout=60,
+            )
             env = os.environ.copy()
             env["GIT_TERMINAL_PROMPT"] = "0"
 

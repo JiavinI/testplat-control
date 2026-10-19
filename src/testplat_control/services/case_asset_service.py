@@ -19,6 +19,9 @@ import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+from fastapi import HTTPException
 
 SCENARIOS_DIR = "scenarios"
 CASE_SUFFIX = ".case.yaml"
@@ -84,3 +87,22 @@ def find_case_file(assets_root: Path, case_id: str) -> CaseFileInfo | None:
                 modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC),
             )
     return None
+
+
+def case_parameter_defaults(
+    assets_root: Path, case_id: str, *, required: bool = False,
+) -> dict[str, Any]:
+    """复用资产树通用元数据投影 params，不校验或规范化 Case 语义。
+
+    完整 schema、id 和步骤引用仍由 Engine 预检；不存在时运行保持原 Engine 错误路径。
+    """
+    from testplat_control.services.asset_service import AssetService
+
+    info = find_case_file(assets_root, case_id)
+    if info is None:
+        if required:
+            raise HTTPException(status_code=404, detail="Case not found")
+        return {}
+    node = AssetService(assets_root).get_asset(case_id)
+    params = (node.metadata or {}).get("params") if node is not None else None
+    return dict(params) if isinstance(params, dict) else {}

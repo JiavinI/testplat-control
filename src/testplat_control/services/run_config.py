@@ -5,7 +5,7 @@ AuthTable、有效超时与参数，以及可持久化的非秘密摘要。
 
 已有 Web 环境时：api_hosts 与账号只来自数据库；``${secret:字段名}`` 按账号凭据
 字典解析，不读 ``TESTPLAT_*``，也不把凭据写进 ``os.environ``。
-尚无 Web 环境时：仍走 Git 环境文件与历史 auth 文件，供 4.0 夹具继续运行。
+正常 Web 缺少数据库环境时拒绝运行；仅显式兼容模式允许无 Web 环境的旧项目读取 Git。
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from testplat_engine import AuthTable, UnavailableAuth
 
+from testplat_control.config import settings
 from testplat_control.database.models import Project, ProjectEnvironment, TestAccount
 from testplat_control.services.auth_loader import (
     AuthLoadResult,
@@ -30,6 +31,13 @@ from testplat_control.services.auth_loader import (
 from testplat_control.services.crypto import MasterKeyError, decrypt_credentials
 from testplat_control.services.env_loader import load_project_environment
 from testplat_control.services.login_profiles import ProfileFileError, load_profile_catalog
+from testplat_control.services.parameter_sets import (
+    begin_snapshot,
+    compose_parameters,
+    read_parameter_layers,
+    redact_parameters,
+)
+from testplat_control.services.workspaces import configuration_project, workspace_response
 
 logger = logging.getLogger(__name__)
 
@@ -192,10 +200,26 @@ def resolve_run_config(
     request_timeout: float | None,
     declared_names: set[str] | None = None,
     asset_defaults: dict[str, Any] | None = None,
+    asset_type: str | None = None,
+    asset_id: str | None = None,
 ) -> ResolvedRunConfig:
     """冻结同一环境版本下的账号、参数和摘要。调用方读完后结束会话事务。"""
-    web = _load_consistent_web(db, project.id, env)
+    # 正常资产运行跨环境与参数集读同一事务；历史独立配置调用保留原 revision 重读路径。
+    if asset_type is not None and asset_id is not None:
+        begin_snapshot(db)
+    owner = configuration_project(db, project)
+    web = _load_consistent_web(db, owner.id, env)
     if web is None:
+        has_web = (
+            db.query(ProjectEnvironment.id)
+            .filter(ProjectEnvironment.project_id == owner.id)
+            .first()
+            is not None
+        )
+        if not settings.testplat_legacy_git_config or has_web:
+            raise HTTPException(
+                status_code=422, detail=f"数据库环境未配置: {env}，请到配置中创建并启用"
+            )
         return _legacy(
             project,
             env,
@@ -221,6 +245,7 @@ def resolve_run_config(
         catalog = load_profile_catalog(config_root)
     except ProfileFileError as exc:
         raise HTTPException(status_code=422, detail=exc.message) from None
+    context = workspace_response(db, project)
     auth = _auth_from_accounts(
         env=env,
         project=project,
@@ -228,15 +253,22 @@ def resolve_run_config(
         decrypted=decrypted,
         catalog_profiles={item.name: item.body for item in catalog.profiles},
         login_plugins=catalog.login_plugins,
+        workspace_project=None if context is None else context["project"],
     )
     timeout = effective_timeout(request_timeout, web.timeout_seconds)
     case_params = dict(web.case_params)
-    params = params_for_run(
-        case_params,
-        request_params,
-        declared_names=declared_names,
-        asset_defaults=asset_defaults,
+    saved, override, revisions = ({}, {}, {})
+    if asset_type is not None and asset_id is not None:
+        saved, override, revisions = read_parameter_layers(
+            db, project_id=project.id, asset_type=asset_type, asset_id=asset_id, env=env,
+        )
+    effective, sources = compose_parameters(
+        asset_defaults or {}, saved, case_params, override, request_params, names=declared_names,
     )
+    # Case 资产基线仍由 Engine 合成；Control 提供其上的覆盖层。
+    params = effective if declared_names is not None else compose_parameters(
+        {}, saved, case_params, override, request_params,
+    )[0]
     api_hosts = dict(web.api_hosts)
     account_revisions = {item.account_name: item.revision for item in accounts}
     snapshot = _snapshot(
@@ -248,10 +280,21 @@ def resolve_run_config(
         accounts=accounts,
         catalog_fields={item.name: list(item.credential_fields) for item in catalog.profiles},
     )
+    if context is not None:
+        snapshot["workspace"] = context
+    if asset_type is not None and asset_id is not None:
+        snapshot["parameters"] = {
+            "asset_type": asset_type, "asset_id": asset_id,
+            "revisions": revisions, "effective": redact_parameters(effective),
+            "sources": sources,
+        }
     # 明文凭据不要留在返回值上；AuthTable 内是 SecretStr。
     decrypted.clear()
     return ResolvedRunConfig(
-        environment={"api_hosts": api_hosts},
+        environment={
+            "api_hosts": api_hosts,
+            **({"business_project": context["project"]} if context is not None else {}),
+        },
         auth=auth,
         params=params,
         timeout_seconds=timeout,
@@ -270,7 +313,7 @@ def _legacy(
     declared_names: set[str] | None = None,
     asset_defaults: dict[str, Any] | None = None,
 ) -> ResolvedRunConfig:
-    """没有 Web 环境行时沿用 Git 文件。平台账号路径不会进入这里。"""
+    """仅显式兼容且项目完全没有数据库环境时读取 Git。"""
     from testplat_engine import EngineError
 
     try:
@@ -318,6 +361,7 @@ def _auth_from_accounts(
     decrypted: dict[str, dict[str, str]],
     catalog_profiles: dict[str, dict[str, Any]],
     login_plugins: tuple[str, ...],
+    workspace_project: str | None = None,
 ) -> AuthLoadResult | None:
     """每个启用账号单独解析自己的凭据，身份名是账号名。"""
     if not accounts:
@@ -335,8 +379,11 @@ def _auth_from_accounts(
                 public_reason=f"账号 {name} 的登录流程 {account.login_profile} 不存在"
             )
             continue
+        if "unavailable" in profile:
+            identities[name] = UnavailableAuth(public_reason=profile["unavailable"]["reason"])
+            continue
         document = {
-            "identities": {name: deepcopy(profile)},
+            "identities": {name: _workspace_values(deepcopy(profile), workspace_project)},
             "login_plugins": list(login_plugins),
         }
         secrets = decrypted.get(name, {})
@@ -366,6 +413,19 @@ def _auth_from_accounts(
         logger.error("构造账号身份表失败 env=%s exc_type=%s", env, type(exc).__name__)
         raise HTTPException(status_code=422, detail="鉴权配置无效") from None
     return AuthLoadResult(table=table, login_plugins=login_plugins)
+
+
+def _workspace_values(node: Any, project: str | None) -> Any:
+    """只替换独立的业务项目占位符，不渲染 URL、凭据或业务请求参数。"""
+    if isinstance(node, dict):
+        return {key: _workspace_values(value, project) for key, value in node.items()}
+    if isinstance(node, list):
+        return [_workspace_values(value, project) for value in node]
+    if node == "${workspace:project}":
+        if project is None:
+            raise HTTPException(status_code=422, detail="登录流程需要明确的平台项目关系")
+        return project
+    return node
 
 
 def _snapshot(

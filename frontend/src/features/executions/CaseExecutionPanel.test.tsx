@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfigProvider, App as AntApp } from 'antd'
@@ -101,19 +101,21 @@ const failedSkipped: CaseRunResponse = {
   },
 }
 
-function renderPanel(caseId = 'case.demo.create_then_get') {
+function renderPanel(caseId = 'case.demo.create_then_get', defaults?: { asset: Record<string, unknown>; environment: Record<string, unknown> }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
-  return render(
+  const tree = (env: string) => (
     <ConfigProvider theme={{ token: { motion: false } }}>
       <AntApp>
         <QueryClientProvider client={client}>
-          <CaseExecutionPanel projectId="main/demo" caseId={caseId} env="test" />
+          <CaseExecutionPanel projectId="main/demo" caseId={caseId} env={env} assetDefaults={defaults?.asset} caseParams={defaults?.environment} />
         </QueryClientProvider>
       </AntApp>
-    </ConfigProvider>,
+    </ConfigProvider>
   )
+  const view = render(tree('test'))
+  return { ...view, changeEnvironment: (env: string) => view.rerender(tree(env)) }
 }
 
 beforeEach(() => {
@@ -128,6 +130,41 @@ afterEach(() => {
 })
 
 describe('CaseExecutionPanel', () => {
+  it('场景预览按顶层替换，提交仅本次输入，切换环境清除草稿', async () => {
+    runCase.mockResolvedValue(successResponse)
+    const view = renderPanel('case.demo.create_then_get', {
+      asset: { keyword: 'asset', filter: { a: 1, b: 2 }, active: true, password: 'fake-hidden-secret' },
+      environment: { keyword: 'from-env', count: 7 },
+    })
+    expect(screen.getByTestId('parameter-effective-keyword')).toHaveTextContent('from-env')
+    expect(screen.getByTestId('parameter-preview')).not.toHaveTextContent('fake-hidden-secret')
+    const input = { filter: { a: 0 }, active: false, count: 0, nullable: null }
+    fireEvent.change(screen.getByLabelText('本次场景参数'), { target: { value: JSON.stringify(input) } })
+    expect(screen.getByTestId('parameter-effective-filter')).toHaveTextContent('{"a":0}')
+    expect(screen.getByTestId('parameter-effective-filter')).not.toHaveTextContent('"b"')
+    expect(screen.getByTestId('parameter-effective-nullable')).toHaveTextContent('null')
+    fireEvent.click(screen.getByRole('button', { name: '执行 Case' }))
+    await waitFor(() => expect(runCase).toHaveBeenCalledWith('main/demo', 'case.demo.create_then_get', { env: 'test', params: input }))
+    view.changeEnvironment('pre')
+    expect(screen.getByLabelText('本次场景参数')).toHaveValue('')
+    expect(screen.getByTestId('parameter-effective-count')).toHaveTextContent('环境覆盖（兼容共享）')
+    fireEvent.click(screen.getByRole('button', { name: '执行 Case' }))
+    await waitFor(() => expect(runCase).toHaveBeenLastCalledWith('main/demo', 'case.demo.create_then_get', { env: 'pre', params: {} }))
+  })
+
+  it('无效 JSON 或非对象不发送请求，清除后恢复预览', () => {
+    renderPanel()
+    for (const text of ['{bad', '[]', 'null', '7']) {
+      fireEvent.change(screen.getByLabelText('本次场景参数'), { target: { value: text } })
+      expect(screen.getByRole('button', { name: '执行 Case' })).toBeDisabled()
+      expect(screen.queryByTestId('parameter-preview')).not.toBeInTheDocument()
+    }
+    expect(runCase).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '清除本次场景输入' }))
+    expect(screen.getByRole('button', { name: '执行 Case' })).toBeEnabled()
+    expect(screen.getByTestId('parameter-preview')).toBeInTheDocument()
+  })
+
   it('success：展示汇总与步骤，不预渲染全部 JSON', async () => {
     const user = userEvent.setup({ delay: null })
     runCase.mockResolvedValue(successResponse)

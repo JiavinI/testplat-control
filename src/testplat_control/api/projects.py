@@ -5,10 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from testplat_control.api.schemas import ProjectResponse
+from testplat_control.api.schemas import ProjectResponse, WorkspaceResponse
 from testplat_control.database.models import Project
 from testplat_control.database.session import get_db
 from testplat_control.services.project_access import get_project, visible_envs
+from testplat_control.services.workspaces import workspace_response
 
 router = APIRouter(tags=["projects"])
 
@@ -58,4 +59,11 @@ async def get_project_by_id(
 def _with_envs(db: Session, project: Project) -> ProjectResponse:
     envs, default_env = visible_envs(db, project)
     response = ProjectResponse.from_model(project)
-    return response.model_copy(update={"envs": envs, "default_env": default_env})
+    workspace = workspace_response(db, project)
+    return response.model_copy(
+        update={
+            "envs": envs,
+            "default_env": default_env,
+            "workspace": None if workspace is None else WorkspaceResponse(**workspace),
+        }
+    )

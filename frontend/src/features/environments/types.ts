@@ -1,4 +1,4 @@
-/** 与后端 EnvironmentResponse / AccountResponse / LoginProfilesResponse 对齐。列表不含凭据。 */
+/** 与后端 DTO 对齐。账号列表仅包含登录用户名，不含密码或完整凭据。 */
 
 export interface ProjectEnvironment {
   env: string
@@ -29,6 +29,8 @@ export interface EnvironmentUpdate {
 
 export interface TestAccount {
   account_name: string
+  /** 登录用户名；旧服务未提供时为空。不包含其他凭据。 */
+  login_username?: string | null
   display_name: string | null
   business_role: string | null
   login_profile: string
@@ -39,8 +41,8 @@ export interface TestAccount {
 
 export interface AccountBody {
   account_name: string
-  display_name: string | null
-  business_role: string | null
+  display_name?: string | null
+  business_role?: string | null
   login_profile: string
   credentials: Record<string, string>
   enabled: boolean
@@ -59,6 +61,7 @@ export interface AccountUpdate {
 export interface LoginProfile {
   name: string
   credential_fields: string[]
+  unavailable_reason?: string | null
 }
 
 export interface LoginProfiles {

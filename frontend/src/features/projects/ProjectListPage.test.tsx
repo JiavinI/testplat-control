@@ -63,7 +63,7 @@ function renderPage() {
             <Routes>
               <Route path="/projects" element={<ProjectListPage />} />
               <Route
-                path="/projects/:repo/:project"
+                path="/configuration/:repo/:project"
                 element={<div data-testid="workspace-route">workspace</div>}
               />
             </Routes>
@@ -153,13 +153,13 @@ describe('ProjectListPage Phase 4.0', () => {
     expect(await screen.findByText(/同步失败：认证失败/)).toBeInTheDocument()
   })
 
-  it('打开工作台走两段式路由', async () => {
+  it('打开项目配置走两段式路由', async () => {
     const user = userEvent.setup({ delay: null })
     listProjects.mockResolvedValue([sampleProject])
     listRepos.mockResolvedValue([sampleRepo])
     renderPage()
     await screen.findByText('alpha')
-    await user.click(screen.getByRole('button', { name: '打开工作台 alpha' }))
+    await user.click(screen.getByRole('button', { name: '打开配置 alpha' }))
     expect(await screen.findByTestId('workspace-route')).toBeInTheDocument()
   })
 

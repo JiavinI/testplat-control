@@ -23,7 +23,10 @@ class AssetNode:
 class AssetService:
     """资产扫描和管理服务"""
 
-    def __init__(self, assets_root: Path):
+    def __init__(
+        self, assets_root: Path, config_root: Path | None = None,
+        business_project: str | None = None,
+    ):
         """
         初始化资产服务。
 
@@ -31,6 +34,8 @@ class AssetService:
             assets_root: 资产根目录路径
         """
         self.assets_root = Path(assets_root)
+        self.config_root = config_root
+        self.business_project = business_project
         self._asset_cache: dict[str, AssetNode] = {}
 
     def scan_assets(self) -> AssetNode:
@@ -77,6 +82,27 @@ class AssetService:
         root = self._build_tree(self.assets_root, prefix="")
         root.id = "assets"
         root.name = "assets"
+        if self.config_root is not None:
+            # The manifest can reuse API assets while selecting a different login config.
+            root.children = [node for node in root.children or [] if node.id != "config"]
+            self._asset_cache = {
+                key: node
+                for key, node in self._asset_cache.items()
+                if key != "config" and not key.startswith("config.")
+            }
+            config = AssetService(self.config_root).scan_assets()
+
+            def attach(node: AssetNode, is_root: bool = False) -> None:
+                node.id = "config" if is_root else f"config.{node.id}"
+                node.path = "config" if is_root else f"config/{node.path}"
+                if is_root:
+                    node.name = "config"
+                self._asset_cache[node.id] = node
+                for child in node.children or []:
+                    attach(child)
+
+            attach(config, True)
+            root.children.append(config)
         return root
 
     def get_asset(self, asset_id: str) -> AssetNode | None:
@@ -142,6 +168,13 @@ class AssetService:
                 child_rel_path_str = str(child_rel_path).replace("\\", "/")
 
                 child_node = self._build_tree(item, prefix=child_prefix)
+                # 项目过滤后没有可见接口的目录也隐藏，避免 GO2 展示空的 E3E3 专属目录。
+                if (
+                    self.business_project is not None
+                    and child_prefix.startswith("api.")
+                    and not child_node.children
+                ):
+                    continue
                 children.append(child_node)
                 # 缓存目录节点
                 self._asset_cache[child_prefix] = child_node
@@ -166,6 +199,13 @@ class AssetService:
                     file_id = case_id
 
                 metadata = self._extract_file_metadata(item)
+                # 公共契约无 projects；专属契约只出现在适用业务项目的 API 树中。
+                projects = metadata.get("projects")
+                if (
+                    self.business_project is not None and projects
+                    and self.business_project not in projects
+                ):
+                    continue
                 # 如果没有 api_id，使用生成的 file_id
                 if "api_id" not in metadata:
                     metadata["api_id"] = file_id

@@ -99,8 +99,8 @@ async function runViewport(browser, vp, mode) {
   await submitPlatformAuth(page, { username: USER, password: PASS, mode })
   await seedEnv(page)
 
-  // 1) 项目列表含同步
-  await page.goto(`${BASE}/projects`, { waitUntil: 'networkidle' })
+  // 1) 配置菜单下的仓库同步
+  await page.goto(`${BASE}/configuration/repositories`, { waitUntil: 'networkidle' })
   await page.getByTestId('project-list-grouped').waitFor({ timeout: 20000 }).catch(() => {})
   // 同步按钮
   const syncBtn = page.getByTestId(`sync-repo-${REPO}`)

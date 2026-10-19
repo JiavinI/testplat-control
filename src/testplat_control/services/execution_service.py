@@ -252,6 +252,8 @@ async def run_single_api(
     declared_names: set[str] | None = None,
     asset_defaults: dict[str, Any] | None = None,
     validate_params: Callable[[dict[str, Any]], None] | None = None,
+    request_override: dict[str, Any] | None = None,
+    identity: str | None = None,
 ) -> ExecutionRecord:
     """编排一次单 API 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。
 
@@ -271,6 +273,8 @@ async def run_single_api(
             timeout_seconds=timeout_seconds,
             declared_names=declared_names,
             asset_defaults=asset_defaults,
+            asset_type="api",
+            asset_id=asset_id,
         )
         if validate_params is not None:
             validate_params(resolved.params)
@@ -284,6 +288,8 @@ async def run_single_api(
                 params=resolved.params,
                 timeout_seconds=resolved.timeout_seconds,
                 auth=auth,
+                **({"request_override": request_override} if request_override is not None else {}),
+                **({"identity": identity} if identity is not None else {}),
             )
         except (TypeError, ValueError) as exc:
             _log_request_build_error(project_id=project_id, asset_id=asset_id, exc=exc)
@@ -394,6 +400,7 @@ async def run_case(
     config_root: Path,
     timeout_seconds: float | None = None,
     operator: str | None = None,
+    asset_defaults: dict[str, Any] | None = None,
 ) -> ExecutionRecord:
     """编排一次 Case 执行；全程使用调用方给定的 ``commit_sha`` 快照目录。"""
     project_id = str(project.id)
@@ -406,6 +413,9 @@ async def run_case(
             config_root,
             params=params,
             timeout_seconds=timeout_seconds,
+            asset_type="case",
+            asset_id=case_id,
+            asset_defaults=asset_defaults,
         )
         auth = None if resolved.auth is None else resolved.auth.table
         engine = _engine_for_auth(engine, resolved.auth, project)
@@ -496,6 +506,8 @@ def _resolve(
     timeout_seconds: float | None,
     declared_names: set[str] | None = None,
     asset_defaults: dict[str, Any] | None = None,
+    asset_type: str | None = None,
+    asset_id: str | None = None,
 ) -> ResolvedRunConfig:
     """冻结本次运行材料。配置错误在进入 Engine 之前返回，不写记录。"""
     return resolve_run_config(
@@ -507,4 +519,6 @@ def _resolve(
         request_timeout=timeout_seconds,
         declared_names=declared_names,
         asset_defaults=asset_defaults,
+        asset_type=asset_type,
+        asset_id=asset_id,
     )
