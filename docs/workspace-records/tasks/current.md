@@ -10,11 +10,13 @@
 
 边界：不部署或更新原预览、不改原数据库/账号/密钥、不打标签或发布包、不执行真实订单或资金请求；用户原报告保留且不纳入提交。
 
-状态：用户已验收通过，合并放行验证全部完成。Engine main a4d9500、Assets main c41e987 已推送；Control 功能 1bcb841 已提交推送，远程 Engine 0.5.2 精确锁定与最低版本一致，干净检出无 editable/PYTHONPATH 全量 421 通过、Assets 6 与完整静态校验通过。最终文档与合并提交以三仓远程 main 为准。
+状态：三仓功能已合入远程 main 并核对。Control f7a050d、Engine a4d9500、Assets c41e987；本机三仓已切换 main。Control 精确锁定远程 Engine 7ae2c013a976da62074d4f4d28b86e8220bbed6d（0.5.2），最低版本与启动诊断一致。
 
-GitHub 令牌的 createPullRequest 权限被拒，Git 推送权限正常，因此采用临时干净检出、普通 git merge --no-ff 与非强制 main 推送；不绕过主线保护、不改写历史。Engine 正式安装 436 测试通过；前端沿用本切片 194、lint/build 验证，本轮仅依赖与文档收尾，没有新前端行为改动。comment pass 已完成。
+验证：Engine 正式安装全量 436、Control 干净检出正式远程包全量 421、Assets 6 通过，完整静态校验通过。Engine 来自 site-packages、direct_url 提交一致、无 editable/PYTHONPATH，runtime 检查通过。前端沿用本切片 194、lint/build 验证，本轮没有新前端行为改动；ruff、diff 和 comment pass 完成。
 
-交付：[2026-10-19 交付记录](../testplat-control/docs/stage-delivery-2026-10-19.md)。原预览/数据库/账号/主密钥未改，用户报告未纳入提交；代码合并不会自动部署。下一切片需先确认目标，不自动升级原预览。
+GitHub createPullRequest 在当时令牌权限下被拒，因此三仓功能经普通 git merge --no-ff 和非强制推送合入 main；没有绕过保护或改写历史。代码合并完成后用户开通 PR 权限，最终交接记录通过独立文档 PR 收尾，功能合并提交保持不变。
+
+交付：[2026-10-19 交付记录](../testplat-control/docs/stage-delivery-2026-10-19.md)。原预览/数据库/账号/主密钥未改，用户报告保留且未纳入提交。独立预览继续保留，未部署或发布包。下一切片先确认目标，不自动升级原预览。
 
 ---
 

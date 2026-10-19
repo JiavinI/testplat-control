@@ -15,9 +15,9 @@
 | --- | --- | --- |
 | Engine | 7ae2c013a976da62074d4f4d28b86e8220bbed6d | a4d9500c1fa41c80595e3b4812c92586b9864b0f |
 | Assets | da3235d（迁移） | c41e987caaf5d85b7803eeefc17d35d250a11d25 |
-| Control | 1bcb841（功能与远程锁定） | 本记录随工作分支合入 main；最终 SHA 以远程 main 为准 |
+| Control | 1bcb841（功能与远程锁定） | f7a050dfa63c2b0b9a6b369ab2e88d95eaac9a4e（功能合并；之后仅交接文档 PR） |
 
-GitHub 当前令牌允许 Git 推送，但创建 PR 返回 `Resource not accessible by personal access token`。因此使用临时干净检出执行普通 `git merge --no-ff` 并非强制推送 main，保留两亲合并记录；未使用管理员绕过、force 或改写已有历史。
+当时代码合并使用的 GitHub 令牌允许 Git 推送，但创建 PR 返回 `Resource not accessible by personal access token`。因此使用临时干净检出执行普通 `git merge --no-ff` 并非强制推送 main，保留两亲合并记录；未使用管理员绕过、force 或改写已有历史。三仓功能合并完成后，用户开通 PR 权限，本次最终交付记录通过独立文档 PR 合入。
 
 ## 验证与安装
 
