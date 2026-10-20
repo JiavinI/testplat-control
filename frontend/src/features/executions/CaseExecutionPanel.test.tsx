@@ -131,38 +131,47 @@ afterEach(() => {
 
 describe('CaseExecutionPanel', () => {
   it('场景预览按顶层替换，提交仅本次输入，切换环境清除草稿', async () => {
+    const user = userEvent.setup({ delay: null })
     runCase.mockResolvedValue(successResponse)
     const view = renderPanel('case.demo.create_then_get', {
       asset: { keyword: 'asset', filter: { a: 1, b: 2 }, active: true, password: 'fake-hidden-secret' },
       environment: { keyword: 'from-env', count: 7 },
     })
+    await user.click(screen.getByRole('button', { name: '本次参数' }))
+    await user.click(screen.getByRole('button', { name: 'JSON' }))
     expect(screen.getByTestId('parameter-effective-keyword')).toHaveTextContent('from-env')
     expect(screen.getByTestId('parameter-preview')).not.toHaveTextContent('fake-hidden-secret')
     const input = { filter: { a: 0 }, active: false, count: 0, nullable: null }
-    fireEvent.change(screen.getByLabelText('本次场景参数'), { target: { value: JSON.stringify(input) } })
+    fireEvent.change(screen.getByLabelText('本次场景参数 JSON'), { target: { value: JSON.stringify(input) } })
+    fireEvent.click(screen.getByRole('button', { name: '应用 JSON' }))
     expect(screen.getByTestId('parameter-effective-filter')).toHaveTextContent('{"a":0}')
     expect(screen.getByTestId('parameter-effective-filter')).not.toHaveTextContent('"b"')
     expect(screen.getByTestId('parameter-effective-nullable')).toHaveTextContent('null')
+    fireEvent.click(screen.getByRole('button', { name: /完成/ }))
     fireEvent.click(screen.getByRole('button', { name: '执行 Case' }))
     await waitFor(() => expect(runCase).toHaveBeenCalledWith('main/demo', 'case.demo.create_then_get', { env: 'test', params: input }))
     view.changeEnvironment('pre')
-    expect(screen.getByLabelText('本次场景参数')).toHaveValue('')
+    fireEvent.click(screen.getByRole('button', { name: '本次参数' }))
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }))
+    expect(screen.getByLabelText('本次场景参数 JSON')).toHaveValue('{}')
     expect(screen.getByTestId('parameter-effective-count')).toHaveTextContent('环境覆盖（兼容共享）')
     fireEvent.click(screen.getByRole('button', { name: '执行 Case' }))
     await waitFor(() => expect(runCase).toHaveBeenLastCalledWith('main/demo', 'case.demo.create_then_get', { env: 'pre', params: {} }))
   })
 
-  it('无效 JSON 或非对象不发送请求，清除后恢复预览', () => {
+  it('无效 JSON 或非对象不会应用，清除后恢复预览', () => {
     renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: '本次参数' }))
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }))
     for (const text of ['{bad', '[]', 'null', '7']) {
-      fireEvent.change(screen.getByLabelText('本次场景参数'), { target: { value: text } })
-      expect(screen.getByRole('button', { name: '执行 Case' })).toBeDisabled()
-      expect(screen.queryByTestId('parameter-preview')).not.toBeInTheDocument()
+      fireEvent.change(screen.getByLabelText('本次场景参数 JSON'), { target: { value: text } })
+      fireEvent.click(screen.getByRole('button', { name: '应用 JSON' }))
+      expect(screen.getAllByRole('alert').some((alert) => /JSON|对象/.test(alert.textContent ?? ''))).toBe(true)
     }
-    expect(runCase).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: '清除本次场景输入' }))
+    fireEvent.click(screen.getByRole('button', { name: '清除本次覆盖' }))
+    fireEvent.click(screen.getByRole('button', { name: /完成/ }))
     expect(screen.getByRole('button', { name: '执行 Case' })).toBeEnabled()
-    expect(screen.getByTestId('parameter-preview')).toBeInTheDocument()
+    expect(runCase).not.toHaveBeenCalled()
   })
 
   it('success：展示汇总与步骤，不预渲染全部 JSON', async () => {
@@ -178,7 +187,61 @@ describe('CaseExecutionPanel', () => {
       params: {},
     })
     // 未点开步骤时，折叠面板内 JSON 可能仍在 DOM；以可点开的 header 为准
-    expect(screen.getByText('create', { selector: 'code' })).toBeInTheDocument()
+    expect(screen.getByText('1 · create', { selector: 'code' })).toBeInTheDocument()
+  })
+
+  it('嵌套运行结果按 trace 顺序编号，并可查看子 API 请求与响应', async () => {
+    const user = userEvent.setup({ delay: null })
+    runCase.mockResolvedValue({
+      ...successResponse,
+      result: {
+        ...successResponse.result,
+        steps: [{
+          step_id: 'create-flow',
+          name: '创建并确认',
+          type: 'flow',
+          status: 'success',
+          duration_seconds: 0.03,
+          request: null,
+          response: null,
+          error: null,
+          output: null,
+          skip_reason: null,
+          trace: {
+            node_id: 'root-call',
+            parent_id: null,
+            asset_id: 'flow.create_and_confirm',
+            inputs: {},
+            outputs: {},
+            bindings: [],
+            children: [{
+              step_id: 'create-api',
+              name: '提交创建请求',
+              type: 'api',
+              status: 'success',
+              duration_seconds: 0.02,
+              request: { method: 'POST', url: 'http://x/child', body: { name: 'demo' } },
+              response: { status_code: 201, body: { id: 'created-1' } },
+              error: null,
+              output: 'created',
+              skip_reason: null,
+            }],
+          },
+        }],
+        summary: { total: 1, success: 1, failed: 0, skipped: 0 },
+      },
+    })
+
+    renderPanel('case.demo.create_then_get')
+    await user.click(screen.getByRole('button', { name: '执行 Case' }))
+    await screen.findByTestId('case-result-view')
+    await user.click(screen.getByRole('button', { name: /1 · create-flow/ }))
+    expect(screen.getByText('1.1', { selector: 'code' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /1\.1.*提交创建请求/ }))
+
+    expect(screen.getByText('POST http://x/child')).toBeInTheDocument()
+    expect(screen.getByLabelText('create-api request')).toBeInTheDocument()
+    expect(screen.getByLabelText('create-api response')).toHaveTextContent('created-1')
   })
 
   it('failed+skipped：突出首个失败，区分 skipped', async () => {

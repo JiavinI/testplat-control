@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 /**
  * 与后端 run / execution / Case schemas 对齐的 DTO。
  * 字段名与可空语义保持一致，避免前端另发明契约。
@@ -199,7 +201,63 @@ export type ExecutionHistoryProps = {
 }
 
 /** GET /projects/{id}/cases/{case_id} */
+export interface ScenarioDefinition {
+  schema_version: '0.3'
+  id: string
+  kind: 'case' | 'flow'
+  name: string | null
+  params: Record<string, unknown>
+  inputs: Record<string, unknown>
+  outputs: Record<string, unknown>
+  steps: ScenarioStepDefinition[]
+}
+
+export interface ScenarioStepDefinition {
+  step_id: string
+  type: 'api' | 'flow' | 'map' | 'extract' | 'decimal' | 'assert' | 'transform'
+  asset_id: string
+  name: string | null
+  params: Record<string, unknown>
+  output: string | null
+  identity: string | null
+  definition?: ScenarioDefinition | null
+  source?: string
+  selector?: Record<string, unknown>
+  cardinality?: string
+  value_type?: string
+  nullable?: boolean
+  operation?: string
+  operands?: unknown
+  scale?: number
+  rounding?: string
+  path?: (string | number)[]
+}
+
+export interface ScenarioBinding {
+  target_path: string
+  reference: string
+  source_node_id: string | null
+  value: unknown
+  value_type: string
+}
+
+export interface ScenarioTrace {
+  node_id: string
+  parent_id: string | null
+  asset_id: string
+  inputs: Record<string, unknown>
+  outputs: unknown
+  bindings: ScenarioBinding[]
+  children: CaseStepResult[]
+  iteration_index?: number
+  extracts?: Record<string, unknown>[]
+  calculations?: Record<string, unknown>[]
+  assertions?: Record<string, unknown>[]
+  transforms?: Record<string, unknown>[]
+}
+
 export interface CaseAssetDetail {
+  definition?: ScenarioDefinition | null
   case_id: string
   path: string
   file_name: string
@@ -254,6 +312,7 @@ export interface CaseStepError {
 }
 
 export interface CaseStepResult {
+  trace?: ScenarioTrace | null
   step_id: string
   name: string | null
   type: string
@@ -275,6 +334,7 @@ export interface CaseSystemError {
 }
 
 export interface CaseResult {
+  result_version?: string
   case_id: string
   status: RunStatus
   duration_seconds: number
@@ -314,10 +374,13 @@ export interface CaseExecutionRecordDetail {
 }
 
 export type CaseExecutionPanelProps = {
+  definition?: ScenarioDefinition | null
+  assets?: import('@/features/assets').AssetNode[]
   parameterContext?: ParameterContext
   projectId: string
   caseId: string
   env: string
   assetDefaults?: Record<string, unknown>
   caseParams?: Record<string, unknown>
+  parameterSettings?: ReactNode
 }

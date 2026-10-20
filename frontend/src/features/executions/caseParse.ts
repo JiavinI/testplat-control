@@ -12,6 +12,9 @@ import {
   requireString,
 } from '@/shared/api/validate'
 import type {
+  ScenarioStepDefinition,
+  ScenarioDefinition,
+  ScenarioTrace,
   CaseAssetDetail,
   CaseExecutionRecordDetail,
   CaseResult,
@@ -25,6 +28,95 @@ import type {
   CaseSystemError,
   ExecutionDisplay,
 } from './types'
+
+function parseDefinition(value: unknown, label: string): ScenarioDefinition {
+  assertObject(value, label)
+  if (value.schema_version !== '0.3' || (value.kind !== 'case' && value.kind !== 'flow')) {
+    throw new ApiParseError(`${label} 版本或类型非法`, String(value.schema_version))
+  }
+  assertObject(value.params, `${label}.params`)
+  assertObject(value.inputs, `${label}.inputs`)
+  assertObject(value.outputs, `${label}.outputs`)
+  assertArray(value.steps, `${label}.steps`)
+  return {
+    schema_version: '0.3', kind: value.kind,
+    id: requireString(value, 'id', label), name: requireNullableString(value, 'name', label),
+    params: value.params, inputs: value.inputs, outputs: value.outputs,
+    steps: value.steps.map((step, index) => {
+      const path = `${label}.steps[${index}]`
+      assertObject(step, path)
+      if (!['api', 'flow', 'map', 'extract', 'decimal', 'assert', 'transform'].includes(String(step.type))) throw new ApiParseError(`${path}.type 非法`, String(step.type))
+      assertObject(step.params, `${path}.params`)
+      return { step_id: requireString(step, 'step_id', path), type: step.type as ScenarioStepDefinition['type'],
+        asset_id: requireString(step, 'asset_id', path), name: requireNullableString(step, 'name', path),
+        params: step.params, output: requireNullableString(step, 'output', path),
+        identity: requireNullableString(step, 'identity', path),
+        ...parseConfiguration(step, path),
+        ...(step.definition ? { definition: parseDefinition(step.definition, `${path}.definition`) } : {}),
+      }
+    }),
+  }
+}
+
+/** Validate display data only; Engine owns DSL validation and execution. */
+function parseConfiguration(step: Record<string, unknown>, label: string): Partial<ScenarioStepDefinition> {
+  const result: Partial<ScenarioStepDefinition> = {}
+  for (const key of ['source', 'cardinality', 'value_type', 'operation', 'rounding'] as const) {
+    if (step[key] != null) result[key] = requireString(step, key, label)
+  }
+  if (step.selector != null) { assertObject(step.selector, `${label}.selector`); result.selector = step.selector }
+  if (step.nullable != null) {
+    if (typeof step.nullable !== 'boolean') throw new ApiParseError(`${label}.nullable 非法`, '')
+    result.nullable = step.nullable
+  }
+  if ('operands' in step) result.operands = step.operands
+  if (step.scale != null) result.scale = requireInteger(step, 'scale', label)
+  if (step.path != null) {
+    assertArray(step.path, `${label}.path`)
+    if (!step.path.every(part => typeof part === 'string' || Number.isInteger(part))) throw new ApiParseError(`${label}.path 非法`, '')
+    result.path = step.path as (string | number)[]
+  }
+  return result
+}
+
+function parseTrace(value: unknown, label: string): ScenarioTrace {
+  assertObject(value, label)
+  assertObject(value.inputs, `${label}.inputs`)
+  if (!('outputs' in value)) throw new ApiParseError(`${label}.outputs 缺失`, '')
+  assertArray(value.bindings, `${label}.bindings`)
+  assertArray(value.children, `${label}.children`)
+  return {
+    node_id: requireString(value, 'node_id', label), parent_id: requireNullableString(value, 'parent_id', label),
+    asset_id: requireString(value, 'asset_id', label), inputs: value.inputs, outputs: value.outputs,
+    children: value.children.map((step, index) => parseStepResult(step, index)),
+    ...parseEvidence(value, label),
+    bindings: value.bindings.map((binding, index) => {
+      const path = `${label}.bindings[${index}]`
+      assertObject(binding, path)
+      return { target_path: requireString(binding, 'target_path', path),
+        reference: requireString(binding, 'reference', path),
+        source_node_id: requireNullableString(binding, 'source_node_id', path),
+        value: binding.value, value_type: requireString(binding, 'value_type', path) }
+    }),
+  }
+}
+
+function parseEvidence(value: Record<string, unknown>, label: string): Partial<ScenarioTrace> {
+  const result: Partial<ScenarioTrace> = {}
+  if (value.iteration_index != null) {
+    const index = requireInteger(value, 'iteration_index', label)
+    if (index < 0) throw new ApiParseError(`${label}.iteration_index 非法`, '')
+    result.iteration_index = index
+  }
+  for (const key of ['extracts', 'calculations', 'assertions', 'transforms'] as const) {
+    if (value[key] != null) {
+      const entries = value[key]
+      assertArray(entries, `${label}.${key}`)
+      result[key] = entries.map((entry, index) => { assertObject(entry, `${label}.${key}[${index}]`); return entry })
+    }
+  }
+  return result
+}
 
 function parseCaseStepStatus(value: string, label: string): CaseStepStatus {
   if (value !== 'success' && value !== 'failed' && value !== 'skipped') {
@@ -170,6 +262,7 @@ function parseStepResult(value: unknown, index: number): CaseStepResult {
     `${label}.status`,
   )
   return {
+    ...(value.trace ? { trace: parseTrace(value.trace, `${label}.trace`) } : {}),
     step_id: requireString(value, 'step_id', label),
     name: optionalNullableString(value, 'name', label),
     type: requireString(value, 'type', label),
@@ -226,6 +319,7 @@ export function parseCaseResult(payload: unknown, label = 'CaseResult'): CaseRes
   }
   assertArray(payload.steps, `${label}.steps`)
   return {
+    ...('result_version' in payload ? { result_version: requireString(payload, 'result_version', label) } : {}),
     case_id: requireString(payload, 'case_id', label),
     status: statusRaw,
     duration_seconds: requireNumber(payload, 'duration_seconds', label),
@@ -245,6 +339,7 @@ export function parseCaseResult(payload: unknown, label = 'CaseResult'): CaseRes
 export function parseCaseAssetDetail(payload: unknown): CaseAssetDetail {
   assertObject(payload, 'CaseAssetDetail')
   return {
+    ...(payload.definition ? { definition: parseDefinition(payload.definition, 'CaseAssetDetail.definition') } : {}),
     case_id: requireString(payload, 'case_id', 'CaseAssetDetail'),
     path: requireString(payload, 'path', 'CaseAssetDetail'),
     file_name: requireString(payload, 'file_name', 'CaseAssetDetail'),

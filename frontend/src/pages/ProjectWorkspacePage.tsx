@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Button,
@@ -11,7 +11,7 @@ import {
 import {
   FolderOpenOutlined,
 } from '@ant-design/icons'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   AssetBrowser,
   AssetDetailPanel,
@@ -43,6 +43,11 @@ import {
 } from '@/shared/project/envPreference'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
 
+// Temporary design comparison: keep its code/styles out of production builds.
+const ScenarioWorkbenchPrototype = import.meta.env.DEV
+  ? lazy(() => import('@/features/executions/ScenarioWorkbenchPrototype'))
+  : null
+
 /** 窄屏用抽屉挂载资产树；jsdom stub 的 matchMedia 恒为 false，测试走桌面布局 */
 function useIsNarrowViewport(query = '(max-width: 767px)'): boolean {
   const [narrow, setNarrow] = useState(false)
@@ -73,6 +78,7 @@ export function ProjectWorkspacePage({
   alerts,
 }: ProjectWorkspacePageProps) {
   const { repo = '', project: projectKey = '' } = useParams()
+  const [searchParams] = useSearchParams()
   const projectId = repo && projectKey ? joinProjectId(repo, projectKey) : ''
   const projectQuery = useProject(projectId)
   const environmentQuery = useEnvironments(section === 'pages' ? '' : projectId)
@@ -116,6 +122,14 @@ export function ProjectWorkspacePage({
     }
     return findAssetById(scopedTree, selectedAssetId)
   }, [scopedTree, selectedAssetId])
+
+  // A shareable prototype link may select a case without altering normal routes.
+  useEffect(() => {
+    const prototypeAsset = searchParams.get('asset')
+    if (import.meta.env.DEV && section === 'scenarios' && searchParams.has('variant') && prototypeAsset && scopedTree && findAssetById(scopedTree, prototypeAsset)) {
+      setSelectedAssetId(prototypeAsset)
+    }
+  }, [scopedTree, searchParams, section])
 
   const isCase =
     selectedFromTree !== null && isRunnableCaseAsset(selectedFromTree)
@@ -295,9 +309,12 @@ export function ProjectWorkspacePage({
       ) : null}
 
       {isCase && selectedFromTree && selectedEnv && canRun ? (
-        <StoredParameters key={`${projectId}:${selectedFromTree.id}:${selectedEnv}:${project.commit_sha}`} projectId={projectId} assetType="case" assetId={selectedFromTree.id} env={selectedEnv} commit={project.commit_sha ?? ''}>
-          {(context) =>
+        <StoredParameters key={`${projectId}:${selectedFromTree.id}:${selectedEnv}:${project.commit_sha}`} projectId={projectId} assetType="case" assetId={selectedFromTree.id} env={selectedEnv} commit={project.commit_sha ?? ''} settingsPlacement="child">
+          {(context, settings) =>
         <CaseExecutionPanel
+          definition={caseDetailQuery.data?.definition}
+          assets={treeQuery.data?.children ?? []}
+          parameterSettings={settings}
           parameterContext={context}
           key={`${projectId}:case:${selectedFromTree.id}:${selectedEnv}`}
           projectId={projectId}
@@ -455,7 +472,16 @@ export function ProjectWorkspacePage({
           </aside>
         ) : null}
 
-        {centerColumn}
+        {ScenarioWorkbenchPrototype && section === 'scenarios' && searchParams.has('variant') && isCase && caseDetailQuery.data?.definition ? (
+          <Suspense fallback={<LoadingState tip="加载交互原型…" />}><ScenarioWorkbenchPrototype
+            key={`${projectId}:${selectedFromTree?.id}:${selectedEnv}:${project.commit_sha}`}
+            projectId={projectId}
+            commit={project.commit_sha ?? ''}
+            definition={caseDetailQuery.data.definition}
+            assets={treeQuery.data?.children ?? []}
+            env={selectedEnv ?? ''}
+          /></Suspense>
+        ) : centerColumn}
       </div>
 
       <Drawer

@@ -14,9 +14,9 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "packaging>=24.0",
-    # GSB 调用身份与结构化模板需要 Engine 0.5.2；保留九键 auth / cache_scope。
+    # 场景 schema 0.3 需要 Engine 0.6.0；保留九键 auth / cache_scope。
     # 具体 commit 由 uv sources 锁定；见文件下方 [tool.uv.sources] 说明。
-    "testplat-engine>=0.5.2,<0.6",
+    "testplat-engine>=0.6.0,<0.7",
     "pydantic-settings>=2.16.0",
     "cryptography>=50.0.2",
     "argon2-cffi>=25.1.0",
@@ -39,9 +39,9 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-# 远程精确锁定：GSB 结构化模板与调用身份所需的 Engine 0.5.2。
+# 远程精确锁定：场景 schema 0.3 与公开描述入口所需的 Engine 0.6.0。
 # 包含请求覆盖及凭据透传扩展；无需本地 editable，不依赖分支后续移动。
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "7ae2c013a976da62074d4f4d28b86e8220bbed6d" }
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "bddb200a7e21804db0a6032e35c635b977168caf" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

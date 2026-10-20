@@ -1,18 +1,4 @@
-"""Case 相关的 HTTP 契约（OpenAPI 的权威来源）。
-
-本模块只描述**形状**，不解释语义：
-
-- 步骤 / Case 结果的字段与 Engine 0.2 的 ``StepOutcome`` / ``CaseExecutionOutcome.to_dict()``
-  一一对应，``summary`` 由 Engine 计算，Control 不重算、不修正。
-- Case 资产详情只含文件级元信息。Engine 0.2 没有公开的 Case 描述/摘要接口
-  （loader 只在 Engine 内部子模块），而 Control 不得维护第二套 Case 语义解析器，
-  所以这里**不**返回 name/tags/steps 等需要理解 YAML 语义才能得到的内容。
-  Engine 将来公开描述接口后，应在这里新增显式的 ``definition`` 字段（而不是塞进 dict）。
-
-``request`` / ``response`` / ``headers`` / ``body`` 来自被测系统，天然是自由 JSON，
-这是契约中仅有的开放位置；其余字段全部是有类型的。这些值在 Engine 的 DTO 构造期
-已递归脱敏，Control 原样转发，不再次加工。
-"""
+"""场景描述与结果契约；流程规则由 Engine 公开描述和执行入口负责。"""
 
 from __future__ import annotations
 
@@ -90,12 +76,105 @@ class CaseStepError(BaseModel):
     path: str | None = Field(None, description="variable_resolution：无法解析的引用路径")
 
 
+class ScenarioBinding(BaseModel):
+    target_path: str
+    reference: str
+    source_node_id: str | None = None
+    value: Any = None
+    value_type: Literal["null", "boolean", "integer", "number", "string", "object", "array"]
+
+
+class ScenarioTrace(BaseModel):
+    node_id: str
+    parent_id: str | None = None
+    asset_id: str
+    inputs: dict[str, Any]
+    outputs: Any
+    bindings: list[ScenarioBinding]
+    children: list[CaseStepResult]
+    iteration_index: int | None = Field(None, ge=0)
+    extracts: list[dict[str, Any]] | None = None
+    calculations: list[dict[str, Any]] | None = None
+    assertions: list[dict[str, Any]] | None = None
+    transforms: list[dict[str, Any]] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_evidence(self, handler):
+        data = handler(self)
+        for key in ("iteration_index", "extracts", "calculations", "assertions", "transforms"):
+            if key not in self.model_fields_set:
+                data.pop(key, None)
+        return data
+
+
+class ScenarioStepDefinition(BaseModel):
+    step_id: str
+    type: Literal["api", "flow", "map", "extract", "decimal", "assert", "transform"]
+    asset_id: str
+    name: str | None = None
+    params: dict[str, Any]
+    output: str | None = None
+    identity: str | None = None
+    definition: ScenarioDefinition | None = None
+    source: str | None = None
+    selector: dict[str, Any] | None = None
+    cardinality: str | None = None
+    value_type: str | None = None
+    nullable: bool | None = None
+    operation: str | None = None
+    operands: Any = None
+    scale: int | None = None
+    rounding: str | None = None
+    path: list[str | int] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_configuration(self, handler):
+        data = handler(self)
+        for key in (
+            "source",
+            "selector",
+            "cardinality",
+            "value_type",
+            "nullable",
+            "operation",
+            "operands",
+            "scale",
+            "rounding",
+            "path",
+        ):
+            if key not in self.model_fields_set:
+                data.pop(key, None)
+        return data
+
+
+class ScenarioDefinition(BaseModel):
+    schema_version: Literal["0.3"]
+    id: str
+    kind: Literal["case", "flow"]
+    name: str | None = None
+    params: dict[str, Any]
+    inputs: dict[str, Any]
+    outputs: dict[str, Any]
+    steps: list[ScenarioStepDefinition]
+
+
 class CaseStepResult(BaseModel):
     """单个声明步骤的结果；顺序与 Case 资产 steps 声明顺序一一对应。"""
 
-    step_id: str = Field(..., description="步骤 ID（Case 内唯一）")
+    trace: ScenarioTrace | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_legacy_trace(self, handler):
+        data = handler(self)
+        if self.trace is None:
+            data.pop("trace", None)
+        return data
+
+    step_id: str = Field(..., description="步骤 ID（同一调用内唯一）")
     name: str | None = Field(None, description="步骤展示名；缺省时前端回退到 step_id")
-    type: str = Field(..., description="步骤类型；第一批恒为 api")
+    type: str = Field(
+        ..., description="步骤类型：api / flow / map / extract / decimal / assert / transform"
+    )
     status: StepStatus = Field(..., description="success / failed / skipped")
     duration_seconds: float = Field(..., ge=0, description="步骤耗时（秒）；skipped 恒为 0")
     request: CaseStepRequest | None = Field(None, description="请求快照；skipped/变量失败为 null")
@@ -148,6 +227,15 @@ class CaseResult(BaseModel):
     - Phase 3.3b：``logins`` 只在 Case / 单 API 结果顶层（A7）；无登录时仍为 ``[]``（A8）。
     """
 
+    result_version: Literal["0.3"] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_legacy_version(self, handler):
+        data = handler(self)
+        if self.result_version is None:
+            data.pop("result_version", None)
+        return data
+
     case_id: str = Field(..., description="Case ID")
     status: CaseStatus = Field(..., description="success 当且仅当全部步骤 success")
     duration_seconds: float = Field(..., ge=0, description="Engine 计时的 Case 总耗时（秒）")
@@ -196,7 +284,16 @@ class CaseRunResponse(BaseModel):
 
 
 class CaseAssetDetailResponse(BaseModel):
-    """Case 资产详情：仅文件级元信息（见模块文档字符串关于摘要来源的说明）。"""
+    """文件元信息；支持描述能力的 Engine 额外提供新版定义。"""
+
+    definition: ScenarioDefinition | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_unavailable_definition(self, handler):
+        data = handler(self)
+        if self.definition is None:
+            data.pop("definition", None)
+        return data
 
     case_id: str = Field(..., description="Case ID，由规范路径推导，例如 case.demo.login")
     path: str = Field(..., description="相对 assets_root 的路径（POSIX 分隔符）")
@@ -266,3 +363,7 @@ class CaseExecutionRecordDetailResponse(BaseModel):
             account_revisions=getattr(record, "account_revisions", None),
             config_snapshot=getattr(record, "config_snapshot", None),
         )
+
+
+ScenarioTrace.model_rebuild()
+ScenarioStepDefinition.model_rebuild()

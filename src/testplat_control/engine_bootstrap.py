@@ -25,8 +25,8 @@ from packaging.version import InvalidVersion, Version
 
 logger = logging.getLogger(__name__)
 
-# GSB 调用身份与结构化模板的最低版本；与 pyproject 中约束一致。
-ENGINE_VERSION_SPEC = SpecifierSet(">=0.5.2,<0.6")
+# 场景schema 0.3及公开描述能力的最低版本；与pyproject约束一致。
+ENGINE_VERSION_SPEC = SpecifierSet(">=0.6.0,<0.7")
 ENGINE_DISTRIBUTION = "testplat-engine"
 LOGIN_STRATEGY_GROUP = "testplat_engine.login_strategies"
 _REQUIRED_EXPORTS = (
@@ -53,6 +53,7 @@ _REQUIRED_EXPORTS = (
     "LoginContext",
     "LoginResult",
     "EnginePort",
+    "describe_case",
     "__version__",
 )
 
@@ -197,7 +198,7 @@ def ensure_engine_compatible(login_plugins: Sequence[str] = ()) -> str:
     if parsed not in ENGINE_VERSION_SPEC:
         raise EngineBootstrapError(
             f"testplat-engine 版本不兼容: 当前 {check_version}，"
-            f"需要满足 {ENGINE_VERSION_SPEC}（GSB 调用身份与结构化模板）。"
+            f"需要满足 {ENGINE_VERSION_SPEC}（场景 0.3、GSB 调用身份与结构化模板）。"
         )
 
     missing = [name for name in _REQUIRED_EXPORTS if not hasattr(eng, name)]
@@ -207,6 +208,9 @@ def ensure_engine_compatible(login_plugins: Sequence[str] = ()) -> str:
             + ", ".join(missing)
             + f"。当前版本 {check_version}。"
         )
+
+    if not callable(eng.describe_case):
+        raise EngineBootstrapError("testplat-engine 的公开场景描述入口 describe_case 不可调用。")
 
     if "request_override" not in inspect.signature(eng.ApiExecutionRequest).parameters:
         raise EngineBootstrapError(

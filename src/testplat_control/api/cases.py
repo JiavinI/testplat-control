@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import logging
 
+import testplat_engine
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
+from testplat_engine import EngineError
 
 from testplat_control.api.case_schemas import (
     CaseAssetDetailResponse,
@@ -22,7 +24,7 @@ from testplat_control.database.session import get_db
 from testplat_control.deps import get_engine_port
 from testplat_control.ports.engine import EnginePort
 from testplat_control.services.case_asset_service import case_parameter_defaults, find_case_file
-from testplat_control.services.execution_service import run_case
+from testplat_control.services.execution_service import map_engine_error_http_status, run_case
 from testplat_control.services.parameter_sets import begin_snapshot
 from testplat_control.services.platform_auth import PlatformPrincipal
 from testplat_control.services.project_access import (
@@ -60,13 +62,26 @@ async def get_case_detail(
     request: Request,
     db: Session = Depends(get_db),
 ) -> CaseAssetDetailResponse:
-    """获取 Case 资产的文件级元信息。"""
+    """获取 Case 文件信息及 Engine 提供的新版场景定义。"""
     row = get_project(db, repo, project)
     _, assets_root, _ = ensure_snapshot_dirs(get_repos_config(request), row)
     info = find_case_file(assets_root, case_id)
     if info is None:
         raise HTTPException(status_code=404, detail="Case not found")
+    definition = None
+    # 正式锁定的旧 Engine 没有描述能力，保持原有文件详情；本地候选显式启用。
+    describe = getattr(testplat_engine, "describe_case", None)
+    if describe is not None:
+        try:
+            described = describe(case_id, assets_root)
+            if described is not None:
+                definition = described
+        except EngineError as exc:
+            raise HTTPException(
+                status_code=map_engine_error_http_status(exc), detail=exc.public_message
+            ) from exc
     return CaseAssetDetailResponse(
+        definition=definition,
         case_id=info.case_id,
         path=info.path,
         file_name=info.file_name,
