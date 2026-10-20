@@ -31,7 +31,7 @@ describe('当前资产参数保存', () => {
     const user = userEvent.setup()
     setup()
     await screen.findByTestId('effective')
-    await user.click(screen.getByRole('button', { name: '维护 test 覆盖' }))
+    await user.click(screen.getByRole('button', { name: '维护 test 环境差异' }))
     fireEvent.change(screen.getByLabelText('持久化参数 JSON'), { target: { value: '{"count":0,"active":false}' } })
     saveParameterSet.mockImplementation(async () => {
       getParameterContext.mockResolvedValue({ ...initial, environment_override: { values: { count: 0, active: false }, revision: 1 }, effective: { count: 0, active: false } })
@@ -40,7 +40,7 @@ describe('当前资产参数保存', () => {
     await user.click(screen.getByRole('button', { name: '保存参数' }))
     await waitFor(() => expect(screen.getByTestId('effective')).toHaveTextContent('"count":0'))
     expect(saveParameterSet).toHaveBeenCalledWith('main/demo', 'api', 'api.demo', 'test', { scope: 'environment_override', values: { count: 0, active: false }, revision: 0, commit_sha: 'abc' })
-    await user.click(screen.getByRole('button', { name: '维护 test 覆盖' }))
+    await user.click(screen.getByRole('button', { name: '维护 test 环境差异' }))
     expect(screen.getByLabelText('持久化参数 JSON')).toHaveValue(JSON.stringify({ count: 0, active: false }, null, 2))
     fireEvent.change(screen.getByLabelText('持久化参数 JSON'), { target: { value: '{}' } })
     await user.click(screen.getByRole('button', { name: '保存参数' }))

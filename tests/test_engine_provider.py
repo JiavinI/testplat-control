@@ -34,10 +34,10 @@ def test_fake_injection_via_dependency_overrides_without_monkeypatch() -> None:
         app.dependency_overrides.pop(get_engine_port, None)
 
 
-def test_ensure_engine_compatible_succeeds_for_installed_0_5() -> None:
-    """已安装 0.5.x Interface（含 cache_scope / 九键 auth）时启动诊断通过。"""
+def test_ensure_engine_compatible_succeeds_for_installed_0_6() -> None:
+    """已安装 0.6.x（含场景描述、cache_scope / 九键 auth）时启动诊断通过。"""
     version = ensure_engine_compatible()
-    assert version.startswith("0.5")
+    assert version.startswith("0.6")
 
 
 def test_ensure_engine_compatible_rejects_old_request_contract(
@@ -54,9 +54,9 @@ def test_ensure_engine_compatible_rejects_old_request_contract(
         ensure_engine_compatible()
 
 
-@pytest.mark.parametrize("version", ["0.5.0", "0.5.1"])
-def test_ensure_engine_compatible_rejects_pre_structured_versions(monkeypatch, version):
-    """正式依赖不能回退到缺少调用身份与结构化模板的旧 0.5.x。"""
+@pytest.mark.parametrize("version", ["0.5.0", "0.5.1", "0.5.2", "0.7.0"])
+def test_ensure_engine_compatible_rejects_versions_outside_scenario_release(monkeypatch, version):
+    """正式依赖只接受包含场景能力的0.6发布线。"""
     monkeypatch.setattr("testplat_control.engine_bootstrap.version", lambda _dist: version)
     with pytest.raises(EngineBootstrapError, match="版本不兼容"):
         ensure_engine_compatible()
@@ -144,7 +144,7 @@ def test_ensure_engine_compatible_fail_fast_on_missing_package(
 def test_ensure_engine_compatible_fail_fast_on_bad_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """版本不在 0.5.x 时 fail-fast。"""
+    """版本不在 0.6.x 时 fail-fast。"""
     monkeypatch.setattr(
         "testplat_control.engine_bootstrap.version",
         lambda _dist: "9.0.0",
@@ -196,4 +196,17 @@ def test_ensure_engine_compatible_fail_fast_on_bad_create_engine(
 
     monkeypatch.setattr(eng, "create_engine", lambda **_kwargs: _Bad())
     with pytest.raises(EngineBootstrapError, match="async"):
+        ensure_engine_compatible()
+
+
+@pytest.mark.parametrize("missing", [True, False])
+def test_ensure_engine_compatible_requires_scenario_description(monkeypatch, missing):
+    """版本满足时，缺失或不可调用的场景描述入口也应启动失败。"""
+    import testplat_engine as eng
+
+    if missing:
+        monkeypatch.delattr(eng, "describe_case")
+    else:
+        monkeypatch.setattr(eng, "describe_case", None)
+    with pytest.raises(EngineBootstrapError, match="describe_case"):
         ensure_engine_compatible()

@@ -9,7 +9,8 @@ import type { ParameterContext } from './types'
 type Scope = 'asset_default' | 'environment_override'
 type Props = {
   projectId: string; assetType: 'api' | 'case'; assetId: string; env: string; commit: string
-  children: (context: ParameterContext | undefined) => ReactNode
+  settingsPlacement?: 'inline' | 'child'
+  children: (context: ParameterContext | undefined, settings?: ReactNode) => ReactNode
 }
 
 export function StoredParameters(props: Props) {
@@ -24,19 +25,22 @@ export function StoredParameters(props: Props) {
   if (query.isError) return <ErrorState title="参数配置加载失败" error={query.error} onRetry={() => { void query.refetch() }} />
   if (query.data.commit_sha !== props.commit) return <Alert type="warning" message="资产版本已更新，请刷新工作区后运行或维护参数" />
   const context = query.data
+  const settings = <>
+    <Space wrap>
+      <Typography.Text>参数维护</Typography.Text>
+      <Button size="small" onClick={() => setEditing({ scope: 'asset_default', context })}>维护默认值</Button>
+      <Button size="small" onClick={() => setEditing({ scope: 'environment_override', context })}>维护 {props.env} 环境差异</Button>
+      <Button size="small" onClick={() => { void query.refetch() }}>重新加载</Button>
+    </Space>
+    <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
+      默认值适用于各环境；环境差异仅影响 {props.env} 的当前资产。修改会保存到团队共享参数。
+    </Typography.Paragraph>
+  </>
   return <>
-    <div className="tp-surface" style={{ padding: 12 }}>
-      <Space wrap>
-        <Typography.Text>当前资产参数</Typography.Text>
-        <Button size="small" onClick={() => setEditing({ scope: 'asset_default', context })}>维护默认值</Button>
-        <Button size="small" onClick={() => setEditing({ scope: 'environment_override', context })}>维护 {props.env} 覆盖</Button>
-        <Button size="small" onClick={() => { void query.refetch() }}>刷新参数</Button>
-      </Space>
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
-        仅影响当前平台、项目和资产；默认值适用于各环境，环境覆盖仅适用于 {props.env}。兼容共享环境值继续生效。
-      </Typography.Paragraph>
-    </div>
-    {props.children(context)}
+    {props.settingsPlacement === 'child' ? null : <div className="tp-surface" style={{ padding: 12 }}>
+      {settings}
+    </div>}
+    {props.children(context, settings)}
     {editing ? <ParameterEditor key={`${editing.scope}:${editing.context.env}`} {...props} scope={editing.scope} context={editing.context} onClose={() => setEditing(null)} /> : null}
   </>
 }

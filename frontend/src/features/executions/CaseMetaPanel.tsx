@@ -1,4 +1,4 @@
-import { Descriptions, Empty, Tag, Typography } from 'antd'
+import { Collapse, Descriptions, Empty, Typography } from 'antd'
 import { ApiHttpError } from '@/shared/api/errors'
 import { ErrorState, LoadingState } from '@/shared/ui/AsyncState'
 import type { CaseAssetDetail } from './types'
@@ -26,7 +26,7 @@ function formatModifiedAt(value: string): string {
 }
 
 /**
- * Case 运行前只展示文件元信息；不渲染 YAML，不推导 tags/步骤。
+ * 场景执行页只保留轻量标题；文件元信息按需查看。
  */
 export function CaseMetaPanel({
   caseId,
@@ -60,16 +60,9 @@ export function CaseMetaPanel({
   }
 
   return (
-    <div data-testid="case-meta-panel">
-      <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>
-        {detail.file_name}
-      </Typography.Title>
-      <div style={{ marginBottom: 12 }}>
-        <Tag>Case 文件</Tag>
-        <Tag color="blue">可运行</Tag>
-      </div>
-
-      <Descriptions size="small" column={1} bordered>
+    <div data-testid="case-meta-panel" className="tp-case-meta-compact">
+      <Typography.Text type="secondary">{detail.definition?.name ?? detail.file_name}</Typography.Text>
+      <Collapse size="small" ghost items={[{ key: 'metadata', label: '资产信息', children: <Descriptions size="small" column={{ xs: 1, sm: 2 }}>
         <Descriptions.Item label="case_id">
           <Typography.Text copyable code style={{ wordBreak: 'break-all' }}>
             {detail.case_id}
@@ -91,19 +84,11 @@ export function CaseMetaPanel({
         <Descriptions.Item label="修改时间">
           {formatModifiedAt(detail.modified_at)}
         </Descriptions.Item>
-      </Descriptions>
-
-      <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-        运行前不预览 YAML、tags 或步骤；步骤信息来自运行结果与历史详情。
-        {caseId !== detail.case_id ? (
-          <>
-            {' '}
-            树节点 ID（
-            <Typography.Text code>{caseId}</Typography.Text>
-            ）与详情 case_id 不一致时以详情为准。
-          </>
-        ) : null}
-      </Typography.Paragraph>
+      </Descriptions> }]} />
+      {!detail.definition ? <Typography.Text type="secondary">当前 Engine 未提供场景步骤描述。</Typography.Text> : null}
+      {caseId !== detail.case_id ? <Typography.Text type="secondary">
+        树节点 ID（<Typography.Text code>{caseId}</Typography.Text>）与详情 ID 不一致。
+      </Typography.Text> : null}
     </div>
   )
 }

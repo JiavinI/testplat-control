@@ -1,12 +1,12 @@
 # testplat-control
 
-2026-10-19 GSB 迁移已通过隔离验收。正式依赖精确锁定 Engine 0.5.2，支持结构化模板与调用者身份，无需本地 editable。迁移和独立预览说明见 [GSB 迁移说明](docs/gsb-api-migration-2026-10-19.md)。
+2026-10-19 GSB 迁移已通过隔离验收。正式依赖精确锁定 Engine 0.6.0，支持场景 schema 0.3、结构化模板与调用者身份，无需本地 editable。迁移和独立预览说明见 [GSB 迁移说明](docs/gsb-api-migration-2026-10-19.md)。
 
-测试平台控制面（FastAPI）。
+测试平台控制面（FastAPI）。场景展示与隔离验收见 [场景参数与公共流程](docs/scenario-parameters-local.md)。
 
-## 当前安装与开发（2026-10-19）
+## 当前安装与开发（2026-10-20）
 
-Control 通过远程精确提交安装 Engine **0.5.2**，已包含结构化模板、调用身份、项目限制、请求内容覆盖及凭据脱敏扩展，不需要相邻 Engine 或 editable 覆盖：
+Control 通过远程精确提交安装 Engine **0.6.0**，已包含场景描述、flow/map、提取、Decimal、断言、有序列表变换、结构化模板、调用身份、项目限制、请求内容覆盖及凭据脱敏扩展，不需要相邻 Engine 或 editable 覆盖：
 
 ```bash
 uv sync --locked --extra dev
@@ -26,12 +26,12 @@ bash scripts/verify-local-engine.sh
 
 `dev.sh` 使用 `uv run --isolated --locked --with-editable`，验证相邻 Engine 来源及契约，不改变锁文件或加载预览私有配置。可用 `TESTPLAT_ENGINE_SOURCE=/绝对路径/testplat-engine` 指定源码目录。[历史本地交付记录](docs/local-engine-delivery-2026-10-16.md) 保留当时的依赖状态与证据。
 
-## Engine 依赖（当前：Engine 0.5）
+## Engine 依赖（当前：Engine 0.6）
 
 Control 通过 Python 包依赖调用 `testplat-engine`，**禁止**运行时 `sys.path` 注入。
 
-- 兼容版本：`testplat-engine>=0.5.2,<0.6`
-- 启动时校验：包是否安装、版本是否兼容、Interface 符号齐全、包含 `request_override` 与 `identity` 契约，并**实际调用**公开 `create_engine()`，验证返回对象具备 async `execute`；失败则 fail-fast（不再把无效 runtime 延迟到首次执行 503）
+- 兼容版本：`testplat-engine>=0.6.0,<0.7`
+- 启动时校验：包是否安装、版本是否兼容、Interface 符号齐全、公开 describe_case 可调用、包含 `request_override` 与 `identity` 契约，并**实际调用**公开 `create_engine()`，验证返回对象具备 async `execute`；失败则 fail-fast（不再把无效 runtime 延迟到首次执行 503）
 - 默认 DI 提供 `PackageEngineAdapter`（仅解析已安装包的官方 `create_engine()`）
 - 测试 / 浏览器 Fake 门禁通过 `app.dependency_overrides[get_engine_port]` 或 `harness_fake` 注入 `FakeEngineAdapter`
 
@@ -43,12 +43,12 @@ Phase 3 文档里的 `>=0.2.0,<0.3` 与 commit `4715c61` 是当时的基线，�
 
 ```toml
 # pyproject.toml 中的 [tool.uv.sources]
-testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "7ae2c013a976da62074d4f4d28b86e8220bbed6d" }
+testplat-engine = { git = "https://github.com/JiavinI/testplat-engine.git", rev = "bddb200a7e21804db0a6032e35c635b977168caf" }
 ```
 
-> 该 rev 是已交付到 Git 远程的 Engine 0.5.2 功能提交，合并 main 后仍按精确 SHA 安装，不依赖分支移动。本次不打标签、发布包或部署。
+> 该 rev 是已交付到 Git 远程的 Engine 0.6.0 功能提交，按精确 SHA 安装，不依赖分支移动。本次不打标签、发布包或部署。
 
-- 版本约束：`>=0.5.2,<0.6`（与依赖声明一致）
+- 版本约束：`>=0.6.0,<0.7`（与依赖声明一致）
 - 安装以 **rev/commit** 为准，不依赖分支名漂移；禁止 `sys.path` 注入；本地开发通过上面的显式隔离 editable 入口
 
 `uv sync --locked --extra dev` 直接安装上述远程 Engine。`uv.lock` 由 uv 生成；本轮仅更新 Engine 的精确 Git 提交和版本，其余依赖版本未变。
@@ -122,7 +122,7 @@ Case 的语法校验与执行语义**归 Engine**；Control 只负责项目/环�
 
 ## 故障排查
 
-- **启动报未安装 / 版本不兼容 / 缺少 runtime**：执行 `bash scripts/dev.sh check` 核对本地 Engine 来源；远程锁定当前不含扩展，不能直接用于本轮启动。
+- **启动报未安装 / 版本不兼容 / 缺少 runtime**：执行 `uv sync --locked --extra dev` 后重新诊断；只有显式开发相邻源码时才用 `bash scripts/dev.sh check`。远程锁定版本已包含本轮扩展。
 - **启动即失败 / 不再延迟 503**：包只有 Interface、没有可用的 `create_engine()`，或返回值不是 EnginePort 时，lifespan 直接 fail-fast。
 - **业务 failed 却不是 200**：不应发生；检查是否把断言失败误映射成系统错误。
 - **e2e 打到真实网络**：门禁用 `harness_fake:app`；真实冒烟才用 `main:app` + 本地目标。

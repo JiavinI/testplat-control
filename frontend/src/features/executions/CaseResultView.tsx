@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react'
 import { stepAuthDisplayMode } from './auth'
 import { AuthSummary } from './AuthSummary'
 import { findFirstFailedStepIndex } from './caseParse'
+import { ScenarioEvidence } from './ScenarioEvidence'
+import { scenarioTypeLabel } from './scenarioDisplay'
 import { JsonBlock } from './JsonBlock'
 import { LoginFailedBanner } from './LoginFailedBanner'
 import { LoginProcessPanel } from './LoginProcessPanel'
@@ -29,7 +31,7 @@ export type CaseResultViewProps = {
   locateNote?: string | null
 }
 
-function StepDetail({ step }: { step: CaseStepResult }) {
+function StepDetail({ step, number }: { step: CaseStepResult; number: string }) {
   const loginFailed = isLoginFailedStep(step)
   const skipLabel = skipReasonLabel(step.skip_reason)
   return (
@@ -48,7 +50,7 @@ function StepDetail({ step }: { step: CaseStepResult }) {
       ) : null}
 
       {/* 步骤身份：null 需区分“匿名”与“未发请求（—）”，判定见 auth.ts */}
-      <div style={{ marginBottom: 8 }}>
+      {step.type === 'api' ? <div style={{ marginBottom: 8 }}>
         <Typography.Text type="secondary" style={{ marginRight: 8 }}>
           身份
         </Typography.Text>
@@ -57,7 +59,7 @@ function StepDetail({ step }: { step: CaseStepResult }) {
           mode={stepAuthDisplayMode(step)}
           testId={`step-auth-${step.step_id}`}
         />
-      </div>
+      </div> : null}
 
       {loginFailed && step.error ? (
         <LoginFailedBanner
@@ -90,7 +92,32 @@ function StepDetail({ step }: { step: CaseStepResult }) {
         </Typography.Paragraph>
       ) : null}
 
-      {step.status !== 'skipped' ? (
+      {step.trace ? (
+        <div>
+          <Typography.Text type="secondary">调用 {step.trace.node_id} · {step.trace.asset_id}</Typography.Text>
+          {step.trace.iteration_index !== undefined ? <Typography.Paragraph>遍历项 {step.trace.iteration_index + 1}（index={step.trace.iteration_index}）</Typography.Paragraph> : null}
+          <Typography.Paragraph strong>本次输入</Typography.Paragraph>
+          <JsonBlock value={step.trace.inputs} />
+          <Typography.Paragraph strong>参数引用与来源</Typography.Paragraph>
+          {step.trace.bindings.length ? <Descriptions size="small" column={1} items={step.trace.bindings.map((binding, index) => ({
+            key: index, label: `${binding.target_path} ← ${binding.reference}`,
+            children: <><Typography.Text type="secondary">来源 {binding.source_node_id ?? '局部绑定'} · {binding.value_type}</Typography.Text><JsonBlock value={binding.value} /></>,
+          }))} /> : <Typography.Paragraph type="secondary">无参数引用</Typography.Paragraph>}
+          <ScenarioEvidence trace={step.trace} />
+          <Typography.Paragraph strong>声明输出</Typography.Paragraph>
+          <JsonBlock value={step.trace.outputs} />
+          {step.trace.children.length > 0 ? <Collapse
+            defaultActiveKey={step.trace.children.filter((child) => child.status === 'failed').map((child) => child.trace?.node_id ?? child.step_id)}
+            items={step.trace.children.map((child, index) => ({
+              key: child.trace?.node_id ?? child.step_id,
+              label: <Space wrap><Typography.Text code>{number}.{index + 1}</Typography.Text><Tag>{scenarioTypeLabel(child.type)}</Tag><Typography.Text>{child.name ?? child.step_id}{child.trace?.iteration_index !== undefined ? ` · 第 ${child.trace.iteration_index + 1} 项` : ''}</Typography.Text><Tag color={stepStatusColor(child.status)}>{stepStatusLabel(child.status)}</Tag></Space>,
+              children: <StepDetail step={child} number={`${number}.${index + 1}`} />,
+            }))}
+          /> : null}
+        </div>
+      ) : null}
+
+      {step.status !== 'skipped' && (step.type === 'api' || step.request !== null || step.response !== null) ? (
         <>
           <Typography.Text strong>Request</Typography.Text>
           <RequestSnapshot
@@ -244,11 +271,12 @@ export function CaseResultView({ result, recordId, locateNote }: CaseResultViewP
                   code
                   style={{ wordBreak: 'break-all', maxWidth: '100%' }}
                 >
-                  {step.step_id}
+                  {index + 1} · {step.step_id}
                 </Typography.Text>
                 <Typography.Text style={{ wordBreak: 'break-word' }}>
                   {title}
                 </Typography.Text>
+                <Tag>{scenarioTypeLabel(step.type)}</Tag>
                 <Tag color={stepStatusColor(step.status)}>
                   {stepStatusLabel(step.status)}（{step.status}）
                 </Tag>
@@ -285,7 +313,7 @@ export function CaseResultView({ result, recordId, locateNote }: CaseResultViewP
             ]
               .filter(Boolean)
               .join(' ') || undefined,
-            children: <StepDetail step={step} />,
+            children: <StepDetail step={step} number={String(index + 1)} />,
           }
         })}
       />
