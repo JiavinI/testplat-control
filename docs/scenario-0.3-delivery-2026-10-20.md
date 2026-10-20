@@ -19,7 +19,7 @@ Control 当前按资产根扫描 case，没有 case 项目过滤。独立 GO2 �
 ## 验证证据
 
 - Engine 从提交的干净 git archive 构建 sdist→wheel，确认五个 scenario 模块入包。隔离安装 wheel 后模块来自 site-packages，包/模块版本 0.6.0、describe_case 可调用；全量 582 passed。ruff check/format 通过。
-- Control 从真实远程 SHA 隔离 locked 安装，未使用相邻 Engine、PYTHONPATH 或 editable 覆盖；模块来源 site-packages，启动兼容检查返回 0.6.0。Control+Assets 初次全量 495 passed（收集时 Assets 65 项）。
+- Control 从真实远程 SHA 隔离 locked 安装，未使用相邻 Engine、PYTHONPATH 或 editable 覆盖；模块来源 site-packages，启动兼容检查返回 0.6.0。Control+Assets 初次全量 495 passed（收集时 Assets 65 项）；最终从已提交代码的干净克隆运行 --isolated --locked --no-editable，全量 **525 passed**（Control 430 + Assets 95），保留既有 13 条警告。Engine direct_url.json 的 commit_id 与精确锁一致。
 - 资产启用前新增 3 项测试均预期失败；启用后及动态测试分别覆盖 candidate/active，Assets 全量 95 passed。检查 GO2 可见、E3E3 不可见、原配置/接口/smoke 保留；所有业务调用使用 MockTransport。
 - 正式精确锁下静态验证：10 个清单工作区、go2-pending 和 scenario-parameters 两示例 ALL PASSED；仅加载/描述，无业务请求。
 - 前端全量 211 passed，lint/build 通过；保留既有 bundle 体积提示。12 个改动 Python 文件 ruff check/format 通过。
@@ -40,4 +40,16 @@ npm run lint
 npm run build
 ```
 
-没有真实 GO2 下单、WAIT_PAY 状态或支付验收。原预览、数据库、账号、密钥及用户 PHASE2_3_REVIEW_REPORT.md 保留。分支推送及干净副本最终验证结果将在完成后追加；历史主线交付文档不代表本次主线已更新。
+## 已推送的功能提交与草稿 PR
+
+三仓均推送至 `codex/scenario-0-3-delivery`：
+
+| 仓库 | 通过干净验证的功能提交 | 草稿 PR |
+| --- | --- | --- |
+| Engine | bddb200a7e21804db0a6032e35c635b977168caf | [#16](https://github.com/JiavinI/testplat-engine/pull/16) |
+| Control | bde10d19e2f4fb1467a6020b8176eb22a8e91650 | [#46](https://github.com/JiavinI/testplat-control/pull/46) |
+| Assets | 03801e6736b3de06bb6b3a6d3946433ce60ae0f6 | [#2](https://github.com/JiavinI/testplat-assets/pull/2) |
+
+Control 后续仅追加本记录和工作区文档快照，功能提交不变。干净 Control/Assets 克隆中再次执行清单静态验证 ALL PASSED。验证日志在本机临时目录，不入库。
+
+没有真实 GO2 下单、WAIT_PAY 状态或支付验收。原预览、数据库、账号、密钥及用户 PHASE2_3_REVIEW_REPORT.md 保留。此次完成分支交付，主线仍未合并，原预览未部署；历史主线交付文档不代表本次主线已更新。

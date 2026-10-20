@@ -1,3 +1,238 @@
+# 已完成：场景 0.3 三仓分支交付
+
+更新：2026-10-20。按用户授权完成修复、回归、独立两轴复审和分支交付，无剩余阻断。
+交付：三仓 codex/scenario-0-3-delivery 均已推送；Engine 0.6.0 bddb200，Control 功能 bde10d1 精确锁该真实 Engine SHA，Assets 03801e6 启用 GO2 独立资产根。
+验收：专项12；干净Engine sdist/wheel安装582；干净Control/Assets locked/no-editable全量525（430+95）；前端211/lint/build；10工作区及两示例静态校验；locked浏览器三分支8/2/8假请求、历史/窄屏/页面错误0全部通过。改动Python ruff check/format通过。
+复审：Standards/Spec均放行，硬性问题0；非阻断代码重复权衡保留。报告见 docs/reviews/scenario-0.3-fix-recheck-2026-10-20.md、scenario-0.3-delivery-review-2026-10-20.md。
+边界：未合并主线、打标签、发布包、部署或执行真实业务；原预览/数据库/凭据及用户 PHASE2_3_REVIEW_REPORT.md 保留。现有预览不会因分支推送自动升级。
+交付详情：testplat-control/docs/scenario-0.3-delivery-2026-10-20.md（含功能SHA、草稿PR与复现）。
+下一建议切片：审阅三个草稿PR，按 Engine→Control→Assets 顺序安排主线集成；本轮不自动开启新开发、合并或升级预览。
+
+---
+
+# 当前任务：修复三项场景引用与预检缺陷
+
+更新：2026-10-20。用户要求修复独立复审发现，之前通过后交付的授权保留。
+目标：合法动态 map 可执行；已知 flow 输出缺参零请求拒绝；嵌套 expected 引用严格验证。
+验收：三项反例及混合已知/动态字段、合法动态路径回归通过，Engine/Assets全量及修复复审通过。
+范围：先完成修复切片及证据，再按既有授权推进交付；不部署、不真实业务请求，不修改原预览/凭据。
+状态：已完成。三项缺陷及复审发现的嵌套混合对象整体透传遗漏均已修复；Standards 无硬性问题（1项非阻断重复路径遍历气味），Spec 无剩余问题。
+验证：专项12 passed（新增嵌套正反例先红1 failed/1 passed，再绿）；Engine582 passed；Assets62 passed；Engine ruff check/format通过。全部隔离假请求，零真实业务。
+复审：docs/reviews/scenario-0.3-fix-recheck-2026-10-20.md。
+
+---
+
+# 已完成审查：场景 0.3 未通过，交付停止
+
+更新：2026-10-20。用户要求新会话审查，通过后交付；本切片先完成独立复审。
+目标：固定三仓现有 HEAD 与全部候选文件，复核断言修复、场景契约和交付准备条件。
+验收：Standards/Spec 独立审查和隔离验证完成，无未解决阻断后再推进交付切片。
+授权：用户已允许通过后的必要提交、推送、Control 精确锁与 Assets 启用；不部署、不执行真实业务、不混入用户报告和无关文件。
+状态：独立复审完成但未放行。Spec 新增两项 P1（map 已知 source + 动态绑定内部错误、已知 flow.outputs 缺失在请求后才失败）与一项 P2（嵌套 expected 引用绕过描述校验）；Standards 无新增硬性缺陷。未提交或推送，未改版本/锁/生产清单。三仓基线及既有工作区保留。
+验证：本轮 Engine 570 passed，Control+Assets 显式本地 Engine 488 passed，前端211 passed，lint/build及三仓 diff检查通过。三个新缺陷均已隔离复现。
+报告：`docs/reviews/scenario-0.3-independent-review-2026-10-20.md`。
+下一切片：修复三项发现并增加反例与合法动态路径回归，复审通过后才继续已授权的交付顺序。
+
+---
+
+# 已完成任务：修复场景断言审查发现
+
+更新：2026-10-20。用户同意修复本地交付审查的两项 Engine 发现。
+目标：实现严格递归 JSON 相等，并在任何业务请求前拒绝已知缺失的 assert 引用；flow assert 引用必须指向已声明输入。
+涉及：Engine 断言求值、场景定义校验与预检、假服务回归测试，以及根交付审查记录。
+边界：不改版本、正式依赖锁、Assets 生产清单，不提交/推送/合并/发版/部署，不执行真实业务。
+状态：本地完成。`equal` 递归比较 JSON 值的精确 Python 类型和内容；assert 引用的 flow.inputs 声明在加载时校验；运行前预检可用的已知引用，未知响应 alias 保留运行期检查，断言真假仍在执行到节点时判断。详见 `docs/reviews/scenario-0.3-delivery-review-2026-10-20.md`。
+验证：回归定向 11 passed；Engine 全量 570 passed；Assets 全量 62 passed（显式使用相邻本地 Engine）；Engine 全源 ruff check/format、git diff --check 通过。请求前缺参用 MockTransport 证明零请求。远程交付仍受 Engine 版本重复、Control 锁旧 commit 和能力门槛未更新阻断。
+下一切片建议：确定并实施本地版本与能力门槛升级，构建干净 Engine 包并审查候选文件；远程 Engine 交付和后续锁/Assets 激活须分步授权。
+
+---
+
+# 已完成任务：Assets schema 0.3 静态验证
+
+更新：2026-10-20。用户已同意上一推荐切片。
+目标：正式验证入口支持新版 case/flow 与七种节点，独立检查 examples 候选而不加入生产清单。
+涉及：Assets scripts/validate.py、新增 tests/test_validate_scenarios.py、README 与候选使用说明；复用 Engine 公开 describe_case，不重写 DSL。
+验收：旧 0.2、API-only 工作区保持兼容；候选与未被引用 flow 可验证；引用缺失、循环及非法配置失败；旧 Engine 明确拒绝新版资产；零业务请求且错误输出不含资产片段。
+边界：不改 Engine/Control、正式依赖锁、生产清单或现有预览，不执行真实业务、不提交推送发布。
+状态：本地完成。默认命令检查正式清单，新增 --candidate go2-pending / scenario-parameters 只检查独立候选。新版递归引用通过 Engine 描述验证并加载 API 契约；flow 在临时目录使用描述包装，原资产不变。旧 Engine 能力缺失时明确失败，旧 Case 0.2 继续严格加载；错误摘要只保留类型与可用行列。
+验证：Control 目录 bash scripts/dev.sh pytest -q ../testplat-assets/tests：62 passed（新增静态验证 25 项）。正式清单 10 工作区验证 ALL PASSED；GO2 1 case + 3 flow 候选命令 ALL PASSED，另一候选命令在测试中通过；ruff check/format 和三仓 diff 检查通过。测试禁止调用 Engine.execute，静态验证零业务请求；原有 GO2 动态测试仍用 MockTransport。以上使用相邻 Engine 本地候选，不代表正式远程依赖或真实业务验收。
+下一建议切片：准备三仓本地交付审查与依赖升级方案，核对 Engine 版本、公开接口、兼容与交付顺序；完成后再单独授权提交/推送/合并及资产启用。真实系统仍不执行。
+
+---
+
+# 已完成任务：Control schema 0.3 节点展示与 GO2 隔离浏览器验收
+
+更新：2026-10-20。用户同意下一推荐切片，本轮完成 Control 展示适配与隔离验收。
+
+目标：场景目录和详情识别 map/extract/decimal/assert/transform，运行与历史保留任意 JSON 输出、来源、嵌套迭代及失败证据。
+涉及：Control HTTP 契约、前端解析/配置/证据组件、集成与浏览器验收脚本；使用既有 GO2 候选和相邻 Engine。
+验收：静态 map 显示复用定义，运行显示实际迭代编号；失败自动逐层展开；提取命中数、金额规则、断言实际值/期望值及来源可见；API 请求/响应可展开；刷新历史一致；390px 无横向溢出。
+边界：不改 Engine/Assets 语义、生产清单、正式远程锁及既有预览数据库/身份；不访问真实被测系统，不提交、推送、合并、发布或部署。保留三仓原有未提交改动。
+状态：本地候选完成。七种步骤类型可显示各自配置；新增证据字段按存在性传递，旧契约保持兼容；trace.outputs 保留标量、数组、null、false、0；运行树区分 map 定义与实际迭代，失败祖先自动展开，局部步骤不显示空请求/响应。
+验证：Control 本地 Engine 候选全量 426 passed；前端全量首次 210 passed/1 failed（旧按钮文案断言），同步断言后该文件 4 passed；新场景测试 16 passed。lint/build、Python ruff check/format、脚本语法和三仓 diff 检查通过。独立浏览器三分支通过：成功 8 次内存假请求、第二项 SKU 缺失 2 次、后端金额不符 8 次；历史与当次结果一致、页面异常 0、390px 无页面横向溢出。构建仍有既有 bundle 体积提示。
+隔离性：浏览器使用真实 Control + 本地 Engine，内存 SQLite、临时 Git 快照、临时密钥及通过真实账号接口创建的虚构静态头账号；httpx.MockTransport 拦截全部业务请求，仅浏览器连接 loopback。验收后 5293/8223 和临时数据库/快照已清理，既有预览保留。报告和截图 `/tmp/testplat-pending-preview/`，复现详见最新交接。
+下一建议切片：升级 Assets 验证器支持 schema 0.3，先验证候选可被正式资产检查识别；之后再单独推进 Engine 正式交付、Control 精确锁定和资产启用。真实业务验收仍须另行授权。
+
+---
+
+# 已完成任务：GO2 多商品全款待支付场景候选
+
+更新：2026-10-20。用户同意下一步推荐，本轮按新 schema 重建资产并完成 Engine 假服务闭环。
+
+目标：case 集中维护商品与订单选项，通过显式 flow/map 解析商品、计算金额、创建一次待支付订单并核对后端权威预结算；使用当前七个 API 契约，不复制旧 YAML。
+涉及：Assets 独立候选 `examples/go2-pending`、Engine 必需的受限列表投影/正整数汇总，以及隔离集成测试和文档。
+验收：两供应商、有序商品与 SKU 唯一匹配、数量保持 JSON 整数；运费按整单计算一次；提交金额与后端金额 Decimal 相等，数量和订单号一致；建单前失败不创建，建单后失败不重复创建、不导出估算金额；嵌套 trace 可定位。
+边界：不加入生产清单，不改 Control、正式依赖锁、现有预览/数据库/凭据，不运行真实系统或支付；不提交、推送、合并、部署或发布。三仓已有改动保留。
+状态：本地候选完成。新增 1 case + 3 flow，业务取值集中到 common.order/private.items，所有 API 显式引用 gsb.b2.primary。Engine 增加 transform.project 与 positive_integer_sum，补齐列表拆分及请求前数量校验。七个 API 文件不变，测试只复制这些当前契约到临时根目录，不读取生产环境配置。
+验证：Assets 定向待支付测试 30 项、Assets 全量 37 项通过；Engine 全量 564 项通过；ruff check/format 和两仓 git diff --check 通过。两商品主链 8 次内存假请求，提交 11.20，导出假后端原值 11.200；零/多匹配、非法数量、费用缺失、业务拒绝、预结算不符/超时及第二项失败 trace 均覆盖。全部为 httpx.MockTransport 假目标，没有外部网络、真实订单或 WAIT_PAY 状态验收。
+下一步：单独适配 Control 对 map/extract/decimal/assert/transform 的定义、输入输出和失败证据展示，再做隔离浏览器验收；正式 Engine 交付、资产启用及真实业务验收另行授权。
+
+---
+
+# 已完成任务：Engine 场景断言
+
+更新：2026-10-20。用户同意继续实现断言，本轮完成四类受限断言。
+
+目标：schema 0.3 通过无网络 `assert` 步骤校验非空、相等、正整数和 Decimal 相等；失败保留实际值/期望值/操作符及引用来源，并停止后续步骤。
+涉及：Engine 场景加载、预检、执行、trace 与本机假服务测试。
+验收：断言只接受单一完整 actual 引用；相等类必须显式 expected；`equal` 保持 JSON 类型严格相等；`decimal_equal` 使用 Decimal 比较；失败节点为 assertion_failed，后续 skipped，零请求或已发生请求均保持准确记录；旧 Case 0.2 回归。
+边界：不实现通用表达式、范围比较、列表断言、完整业务资产、Control 展示或真实系统请求；不改预览数据库，不提交、推送或发布。
+状态：本地候选完成。新增 `assert` 步骤及 `scenario_assert.py`；trace.assertions 记录 operation、actual、expected、status，失败不发布 alias。
+验证：Engine 场景测试 70 项通过；Engine 全量 543 项通过；ruff check/format 与 `git diff --check` 通过。测试仅使用临时资产和本机假服务。
+下一步：按新契约重建 GO2 待支付场景资产，或另行评审 Control 对 extract/decimal/assert 详情的展示；完整业务和真实验收仍未开始。
+
+---
+
+# 已完成任务：Engine Decimal 金额运算
+
+更新：2026-10-20。用户同意分片建议，本轮只推进 Decimal 运算，场景断言作为下一切片。
+
+目标：schema 0.3 通过显式步骤精确计算商品价乘数量、金额相加与数组金额汇总，明确舍入点及 JSON 输出格式。
+涉及：Engine Decimal 模块、场景加载/描述/预检/执行/trace、隔离测试与 ADR-006。
+验收：add/multiply/sum 使用 Decimal；scale/rounding 必填；操作结束量化一次并输出固定小数位字符串；非法金额已知时零请求拒绝，动态失败保留 trace 并停止后续；map 所有已知项在首个子请求前预检；旧 Case 0.2 回归。
+边界：不增加场景断言、正整数业务校验、完整业务资产、UI 或跨平台目标；不访问真实被测系统、不改预览数据库、不提交、推送、合并或发布。
+状态：本地候选完成。支持 add、multiply、sum（可按静态 path 读取 map 每项金额）；scale=0..8，HALF_UP/HALF_EVEN/DOWN 显式配置；独立 Decimal 上下文和范围限制；trace.calculations/bindings 记录结果及来源。高精度输入使用十进制字符串；有限 JSON 数字按 Decimal(str(value)) 转换，不恢复上游丢失的精度。
+验证：场景与 Decimal 定向测试共 102 项通过，Engine 全量 538 项通过；`uv run ruff check src tests`、`uv run ruff format --check src tests`、`git diff --check` 通过。假服务收到计算后的字符串总额 `3.79`；动态非法金额与 map 后项非法金额均阻止下游请求。测试使用临时资产与本机假服务，不代表真实业务验收。
+下一步：单独实现可定位的场景断言（非空、相等、数量为正、Decimal 相等），再重建 GO2 待支付场景资产及 Control 展示。
+
+---
+
+# 已完成任务：Engine 受限数组提取与精准匹配
+
+更新：2026-10-20。基于已完成的有序 map 原语，继续实现 schema 0.3 的受限数组提取与精准匹配；不迁移完整建单业务。
+
+目标：在 Engine 场景中用结构化 path、绑定条件和显式命中基数，从 API/flow 输出提取业务值；保留 JSON 类型、来源和命中证据，并让 map 在首个迭代请求前完成所有已知项预检。
+涉及：Engine 场景 schema、递归预检、运行器、trace/描述契约与本机假服务测试。
+验收：source 为单一完整引用；selector 只允许对象键/非负数组下标、可选 AND 等值条件；one 必须恰好一条，many 保持顺序且可为空；缺失与 null 区分，0/false/空数组不丢失；失败不发布输出并停止后续；动态 map 子请求前预检全部项；旧 Case 0.2 和普通 API/flow 回归。
+边界：本轮不实现 Decimal、场景断言、完整建单资产、Control 展示、跨平台目标或真实系统请求；不提交、推送、合并、部署、发布或改动预览数据库。
+状态：已完成本地实现。新增 `extract` 步骤和结构化选择器模块；trace 记录 extracts、来源绑定、命中数和脱敏值；动态 map 在首个子请求前预检所有项。描述契约与 schema 文档同步更新。
+验证：`uv run pytest -q tests/engine/test_scenario.py` 44 项通过；Engine 全量 `uv run pytest -q` 480 项通过；`uv run ruff check src tests`、`uv run ruff format --check src tests`、`git diff --check` 通过。全部使用本机假服务和隔离临时资产，没有真实业务请求。
+下一步：单独设计并实现 Decimal 运算与场景断言，再按新契约重建 GO2 待支付场景资产。
+
+---
+
+# 当前任务：Engine 有序 map 编排原语
+
+更新：2026-10-20。继续实现 `go2/order/full_pay/items_create_pending.case.yaml` 所需能力；按用户要求依据 TestPlat 当前领域模型重设计，不复制旧 YAML。本切片只完成 Engine 的有序 map 原语。
+
+目标：在 schema 0.3 中把非空数组按序绑定到显式 flow 输入，使用局部 `item/index`，产生有序聚合输出及可定位的迭代 trace。
+涉及：Engine 场景 schema、递归预检、运行器、描述契约及假服务测试。
+验收：map 目标必须是 flow；source 是单一引用且在 map 开始时为非空数组；参数已知时首个请求前预检所有项，动态响应来源在其产生后、map 子请求前预检；每项串行、失败停止并保留跳过/失败迭代树；旧 Case 0.2 和普通 API/flow 行为回归。
+边界：本切片不迁移完整建单业务，不增加精确数组提取、Decimal 金额计算、场景断言、跨平台目标或 UI；不触发真实订单/支付/被测系统请求；不提交、推送、合并、部署、发布或改动预览数据库。保留三仓既有未提交改动。
+状态：Engine 有序 map 已本地实现，描述包含 source/嵌套 flow 契约；缺失或空数组在零请求预检拒绝；map 逐项调用 flow 并按输入顺序收集声明输出，局部 item/index 不进入调用外作用域。超时部分结果保留迭代及嵌套 trace，后续迭代标记 skipped。
+验证：`uv run pytest -q tests/engine/test_scenario.py` 16 项通过；Engine 全量 `uv run pytest -q` 452 项通过；ruff check/format 及 `git diff --check` 通过。均为本机假服务或原有隔离测试，不代表真实业务验收。
+下一步：实现受限数组提取与精准匹配，再实现 Decimal 运算及断言，之后按新 schema 重建 GO2 待支付场景资产，并扩展 Control 展示；每次只推进一个切片。
+
+---
+
+# 已完成任务：正式场景执行页采用 B 目录布局
+
+更新：2026-10-20。用户同意将 B「目录检查器」设计从 DEV 原型落入正式场景执行页，并补充要求最终运行结果可查看每步具体请求和响应。
+
+目标：测试人员打开场景后先看到有序步骤目录；选中步骤后在详情区查看操作标题、API/flow、身份和输入引用；运行参数从抽屉编辑；执行后按当次嵌套步骤编号查看真实请求/响应。
+
+涉及：Control 场景执行前端与对应测试。复用现有场景详情、参数上下文、运行 API 和 CaseResultView，不改 Engine/Assets 契约。
+
+验收：B 目录成为正式场景页默认布局；序号区分顶层与嵌套步骤，目录选择与详情联动；参数仅在抽屉内编辑并可切换字段/JSON，本次值送入现有运行请求；运行结果每个 API 节点仍可展开 Request/Response，flow 与子步骤显示和定义一致的层级编号；桌面和窄屏可用，无页面横向溢出。
+
+边界：不实现个人草稿或团队数据方案持久化，不保存共享默认值，不改变执行契约或真实结果数据；不提交、推送、合并、部署或发布；保留三仓已有未提交改动及现有隔离预览。
+
+状态：本地实现与隔离浏览器验收完成。正式场景执行页默认采用 B 目录 + 步骤详情；运行参数在抽屉中按字段或 JSON 修改，编辑值仅用于本次运行。结果按本次 trace 顺序展示顶层及嵌套步骤，并可展开 API 节点的 Request/Response。未实现草稿持久化或团队具名方案。
+
+验证：Control 场景相关测试 21 项通过；`npm run lint`、`npm run build`、`git diff --check` 和浏览器脚本语法检查通过。隔离浏览器验收覆盖桌面/手机、目录与详情联动、参数抽屉、嵌套结果和历史、Request/Response；假服务收到 3 次请求，页面异常 0、窄屏横向溢出 0。构建保留既有 bundle 体积提示，测试保留既有 Ant Design `Descriptions` 警告。未访问真实被测系统。详见 [2026-10-20 交接记录](../notes/handoff-2026-10-20.md)。
+
+下一步：整页 UI 专项重设计、个人草稿/团队具名方案持久化分别作为后续切片评审；本轮不提交或远程交付。
+
+---
+
+# 当前任务：场景工作台体验重设计（设计与原型）
+
+更新：2026-10-20。用户倾向 B「目录检查器」，要求去掉「步骤检查器」标题并继续优化原型样式；可借鉴参考图的信息密度，不照搬。B 已调整目录选中态、请求/身份信息与输入映射层级，整页正式 UI 后续另行设计。
+
+目标：让测试人员先看执行顺序，再编辑本次运行数据、发起执行并按嵌套编号定位结果；说明单次草稿与团队共享配置的边界。
+涉及：根需求文档和 Control 场景工作台前端原型。仅 DEV + `?variant=A|B|C&asset=<case-id>` 可见，原有页面不带 query 保持原样。
+验收：三个结构不同的原型可切换；使用隔离场景定义显示步骤/身份/API；参数编辑展示 key、支持 JSON；不触发真实运行或共享写入；窄屏与构建通过；文档标记未决共享能力。
+边界：本切片不改变真实参数持久化/API/Engine trace，不声明个人草稿或团队具名方案已实现；不提交/推送/部署，不修改其他预览数据库。
+状态：B 为当前优先迭代方向，仍是 DEV 临时原型，不代表正式页面布局定稿。右侧已移除步骤检查器标题，选中步骤详情直接呈现；左侧目录显示层级序号、步骤名与类型，详情突出请求目标、身份配置、输入映射及按需展开的原始 JSON。
+
+验证：之前三方案原型已通过 Control 前端 lint/build、页面相关 20 项测试及隔离浏览器验收。本轮 lint/build、场景测试 3 项通过；B 桌面/390px 验证目录选择、详情展示，横向溢出 0、页面异常 0。截图 `/tmp/testplat-scenario-preview/workbench-B-refresh.png`、`workbench-B-mobile-refresh.png`。生产 build 保留项目已有大 bundle 提示。
+
+下一步：继续收集 B 原型反馈；整页 UI 重设计和个人草稿/团队数据方案持久化分别拆片讨论，当前原型不写配置或持久化。
+
+---
+
+# 当前任务：公共流程与场景参数最小闭环
+
+更新：2026-10-20。用户“文档审核通过”确认切片 1，并回复“同意”授权独立隔离预览。
+
+目标：业务场景统一参数区维护 common/private，显式调用同一公共流程两次，输出传后续 API，展示调用隔离、变量来源及嵌套结果。
+涉及：Engine 新版场景契约/describe/预检/执行与结果；Control 契约与前端；隔离示例资产。
+验收：假服务验证调用隔离、类型传递、缺输入/循环引用零请求拒绝、flow 无独立入口、嵌套失败及历史脱敏；旧 Case 0.2 回归。
+边界：不移植完整建单场景，不增加 map/金额/UI/跨平台执行，不执行真实业务，不改预览数据库/凭据，不提交、推送或发布。正式远程依赖锁暂不变，本地候选验证需明确来源。
+状态：切片 1 本地实现、自动化验证和独立隔离浏览器验收完成，预览保留待用户体验。物理文件数量不属于需求，参数沿用现有按资产与环境保存能力。
+
+验证：Engine 448、Control 本地候选 424、前端 197、Assets 7 项通过；ruff、lint/build、diff 检查通过。详情/运行/历史保留嵌套 trace，重复调用隔离，旧 0.2 回归通过。依赖使用 scripts/dev.sh 显式加载相邻 Engine，正式远程锁及预览未更新；无浏览器端到端或真实业务验收。细节见最新交接。
+
+隔离预览：http://127.0.0.1:5283/scenarios/isolated/demo，选择 case.demo.repeat。后端 8213，内存库、虚构操作人、临时 Git 快照和 loopback 假目标；一次运行 3 次假请求，两次 flow 数量 1/2 隔离及下游传递通过，嵌套历史通过，页面异常 0，390px 无横向溢出。证据 /tmp/testplat-scenario-preview/report.json，复现与停止见 notes/handoff-2026-10-20.md。现有 5173/8000 和 5183/8013 原进程保留。
+
+下一步：用户体验当前独立隔离预览并反馈，不自动推进完整建单迁移或远程交付。
+
+---
+
+# 当前任务：业务场景 scenarios 核心需求分析
+
+更新：2026-10-19。用户要求先新会话分析，先理解旧目标场景与现有能力，形成可讨论设计。
+
+目标：以旧 `go2/order/full_pay/items_create_pending.case.yaml` 为基准，明确 case/flow、集中参数、跨平台身份、变量提取传递与嵌套运行记录；考虑后续 Web UI + API 扩展。
+
+涉及：只读检查三仓和源 testplat-new；仅更新工作区需求、任务与交接文档，不修改产品代码。
+
+验收：逐项列出源场景依赖、现有能力、具体缺口、变量作用域/覆盖/输出规则、运行树及分阶段验证路径。
+
+边界：不自动迁移场景、执行真实业务、提交、推送、发布或修改预览/数据库/凭据；源仓只读，保留用户报告。
+
+状态：分析文档已完成，用户已澄清“一个文件”指业务场景内集中展示和维护参数、步骤只引用，不要求单一物理文件；其余新增设计尚待讨论，未进入实现。见 [核心需求与设计草案](../docs/requirements/scenarios-core-design.md)。
+
+证据：静态解析 1 case + 4 flow，7 个 API 文件均已在新 Assets；两商品项对应主链 8 次业务调用（未执行）。已核对 Engine schema/runner/上下文/执行器、Control 配置/HTTP 契约/前端结果，以及旧 UI 和报告实现。没有运行测试或业务请求。
+
+下一建议切片：确认文档中的参数和目标绑定规则后，做“业务场景统一参数区 + 同一公共流程两次调用 + 输出传递 + 最小嵌套运行记录”的假服务闭环。完整旧建单场景、跨平台、UI、真实验收分别推进。
+
+---
+
+# 当前任务：更新 5173 原预览至已合并的 GSB 主线
+
+更新：2026-10-19。用户在得知原预览仍锁旧分支/快照后回复“同意”，授权切换资产 main、同步快照并更新后端与 Engine。
+
+目标：原入口 http://127.0.0.1:5173/apis/main/gsb 显示已迁移 API，GO2/E3E3 公共与专属目录正确，调用身份选择可读。
+
+边界：仅本机原预览升级；先备份数据库、仓库缓存和启动配置，在副本演练。保留账号、凭据密文、主密钥、会话、环境和历史；不执行真实业务请求，不部署远程、不发布包。
+
+状态：完成。原预览 `/apis/main/gsb` 现使用 Assets main `c41e987caaf5d85b7803eeefc17d35d250a11d25` 和远程锁定 Engine 0.5.2；8000 后端与 5173 Vite 代理健康。GO2 19 个、E3E3 23 个 API；公共接口与项目限制正确，身份选择及 quantity 必填表单可见。Playwright 页面异常/API 错误/窄屏溢出均为 0，业务 `/run` 请求 0 次。临时验证用户与会话已删除。
+
+保留性：更新前先做权限 0600 的数据库、仓库缓存、repos/env/startup 备份，并在副本中完整演练。原库同步后 `PRAGMA integrity_check=ok`、外键检查通过；platform_users、sessions、credentials、environments、parameter_sets、execution_records、workspace_bindings 等非 repo/project 表逐行不变；env.sh（含原密钥）字节未改。回滚资料位于 `.preview/phase4-1a/upgrades/20261019-193901-gsb-main`。未真实登录被测系统、未发业务请求、未部署或发版。
+
+---
+
 # 当前任务：合并已验收的 GSB 迁移至三仓主线
 
 更新：2026-10-19。用户确认“隔离环境验收通过，可以合并吧”，授权提交、推送与合并本轮三仓代码到默认 main。
